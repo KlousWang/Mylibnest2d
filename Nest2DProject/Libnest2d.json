@@ -1,0 +1,11 @@
+{
+ "Libs": [
+    "CreateTestDataAPI","Nest2D"
+  ],
+  "GlobalObjIns_Type": [
+    "gCreateTestData, CreateTestData_Data",
+	"gFile,File_Load",
+	"gNest2D,Nest_2D"
+  ],
+  "GlobalComponentIns_Type": []
+}
