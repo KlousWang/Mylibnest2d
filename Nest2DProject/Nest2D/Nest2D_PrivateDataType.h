@@ -10,3 +10,13 @@ struct TetLib2DItemDataType
 {
 
 };
+struct TetBoardBounds
+{
+    double MinX = 0.0;
+    double MinY = 0.0;
+    double MaxX = 0.0;
+    double MaxY = 0.0;
+    double Width = 0.0;
+    double Height = 0.0;
+    bool Valid = false;
+};

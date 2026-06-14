@@ -19,9 +19,89 @@ namespace ET {
 		CetExportPhoto::~CetExportPhoto()
 		{
 		}
+        static std::string MakeBoardSvgPath(const TetNestBoard& Board,double SvgHeight)
+        {
+            if (!Board.Enabled || Board.Vertices.size() < 3) {
+                return "";
+            }
+
+            std::ostringstream ss;
+
+            ss << "<path d=\"";
+
+            ss << "M "
+                << Board.Vertices[0].X
+                << ","
+                << (SvgHeight - Board.Vertices[0].Y)
+                << " ";
+
+            for (size_t i = 1; i < Board.Vertices.size(); ++i) {
+                ss << "L "
+                    << Board.Vertices[i].X
+                    << ","
+                    << (SvgHeight - Board.Vertices[i].Y)
+                    << " ";
+            }
+
+            ss << "z\" style=\"fill:none;stroke:red;stroke-width:2px;\"/>\n";
+
+            return ss.str();
+        }
+
+        static void InsertTextBeforeSvgEnd(const std::string& FilePath,const std::string& Text)
+        {
+            if (Text.empty()) {
+                return;
+            }
+
+            std::ifstream fin(FilePath.c_str(), std::ios::in | std::ios::binary);
+
+            if (!fin.is_open()) {
+                std::cout << "[SVG][WARN] cannot reopen svg: " << FilePath << std::endl;
+                return;
+            }
+
+            std::stringstream buffer;
+            buffer << fin.rdbuf();
+            std::string content = buffer.str();
+            fin.close();
+
+            size_t pos = content.rfind("</svg>");
+
+            if (pos == std::string::npos) {
+                std::cout << "[SVG][WARN] cannot find </svg> in: " << FilePath << std::endl;
+                return;
+            }
+
+            content.insert(pos, Text);
+
+            std::ofstream fout(FilePath.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
+
+            if (!fout.is_open()) {
+                std::cout << "[SVG][WARN] cannot write svg: " << FilePath << std::endl;
+                return;
+            }
+
+            fout << content;
+            fout.close();
+        }
 
 		int CetExportPhoto::ExportSvg(const std::vector<TetNestPolygon>& AItems, const TetNestOptions& AOptions, int AUsedBins) 
 		{
+            std::cout << "[SVG] Board.Enabled = "
+                << AOptions.Board.Enabled
+                << ", Board.Vertices.size = "
+                << AOptions.Board.Vertices.size()
+                << std::endl;
+
+            for (size_t i = 0; i < AOptions.Board.Vertices.size(); ++i) {
+                std::cout << "[SVG] Board Pt " << i
+                    << " = "
+                    << AOptions.Board.Vertices[i].X
+                    << ", "
+                    << AOptions.Board.Vertices[i].Y
+                    << std::endl;
+            }
 			std::cout << "[DLL]this is export svg1" << std::endl;
 			if (AItems.empty() || AUsedBins <= 0) return NEST2D_ERR_EXPORT_EMPTY_ITEMS;
 			if (AOptions.SvgPath.empty()) return NEST2D_ERR_EXPORT_NO_PATH;
@@ -125,9 +205,33 @@ namespace ET {
                 }
 
                 svgw.writePackGroup(pgrp);
+				std::string finalPath;
+				if (AUsedBins > 1) finalPath = basePath;
+				else  finalPath = basePath + "_" + std::to_string(currentBin);
 
-                std::string finalPath = basePath + "_" + std::to_string(currentBin);
+
                 svgw.save(finalPath);
+                std::string realSvgPath = finalPath;
+
+                std::ifstream testFile(realSvgPath.c_str(), std::ios::in | std::ios::binary);
+
+                if (!testFile.is_open()) {
+                    realSvgPath = finalPath + ".svg";
+                }
+                else {
+                    testFile.close();
+                }
+
+                std::cout << "[SVG] realSvgPath = " << realSvgPath << std::endl;
+
+                if (AOptions.Board.Enabled && AOptions.Board.Vertices.size() >= 3) {
+                    std::string boardPath = MakeBoardSvgPath(
+                        AOptions.Board,
+                        AOptions.BinHeight
+                    );
+
+                    InsertTextBeforeSvgEnd(realSvgPath, boardPath);
+                }
             }
 
 			return 0;

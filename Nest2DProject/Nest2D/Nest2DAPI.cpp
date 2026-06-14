@@ -41,12 +41,7 @@ namespace ET {
 			delete AsNestItems(_Lib2DItemDataType);
 			_Lib2DItemDataType = nullptr;
 		}
-        static TetNestPoint TransformPoint(
-            const TetNestPoint& P,
-            double X,
-            double Y,
-            double Angle
-        )
+        static TetNestPoint TransformPoint(const TetNestPoint& P,double X,double Y,double Angle)
         {
             TetNestPoint R;
 
@@ -59,10 +54,7 @@ namespace ET {
             return R;
         }
 
-        static bool PointInPolygon(
-            const TetNestPoint& P,
-            const std::vector<TetNestPoint>& Polygon
-        )
+        static bool PointInPolygon(const TetNestPoint& P,const std::vector<TetNestPoint>& Polygon)
         {
             bool Inside = false;
             size_t Count = Polygon.size();
@@ -87,10 +79,7 @@ namespace ET {
             return Inside;
         }
 
-        static bool IsPointInsideBoard(
-            const TetNestPoint& P,
-            const TetNestBoard& Board
-        )
+        static bool IsPointInsideBoard(const TetNestPoint& P,const TetNestBoard& Board)
         {
             if (!PointInPolygon(P, Board.Vertices)) {
                 return false;
@@ -105,10 +94,7 @@ namespace ET {
             return true;
         }
 
-        static void ValidateItemsInsideBoard(
-            std::vector<TetNestPolygon>& AItems,
-            const TetNestBoard& Board
-        )
+        static void ValidateItemsInsideBoard(std::vector<TetNestPolygon>& AItems,const TetNestBoard& Board)
         {
             if (!Board.Enabled || Board.Vertices.size() < 3) {
                 return;
@@ -167,6 +153,30 @@ namespace ET {
 
             return static_cast<std::size_t>(NextBin);
         }
+        static TetBoardBounds CalcBoardBounds(const TetNestBoard& Board)
+        {
+            TetBoardBounds B;
+
+            if (!Board.Enabled || Board.Vertices.size() < 3) {
+                return B;
+            }
+
+            B.MinX = B.MaxX = Board.Vertices[0].X;
+            B.MinY = B.MaxY = Board.Vertices[0].Y;
+
+            for (const auto& P : Board.Vertices) {
+                B.MinX = std::min(B.MinX, P.X);
+                B.MaxX = std::max(B.MaxX, P.X);
+                B.MinY = std::min(B.MinY, P.Y);
+                B.MaxY = std::max(B.MaxY, P.Y);
+            }
+
+            B.Width = B.MaxX - B.MinX;
+            B.Height = B.MaxY - B.MinY;
+            B.Valid = B.Width > 0.0 && B.Height > 0.0;
+
+            return B;
+        }
 		int CetNest2DManager::PerformNestingEx(std::vector<TetNestPolygon>& AItems, const TetNestOptions& AOptions, TetNestResult* AResult)
 		{
 			//Nest2DUtils->WWFunct1(1);
@@ -207,6 +217,23 @@ namespace ET {
 			Nest2DUtils->ApplyResults(NestItems, AItems);
 
 			if (AOptions.Board.Enabled) {
+                TetBoardBounds BoardBounds = CalcBoardBounds(AOptions.Board);
+                if (!BoardBounds.Valid) {
+                    if (AResult) {
+                        AResult->Code = NEST2D_ERR_CORE_INVALID_SIZE;
+                        AResult->Message = "Invalid custom board.";
+                    }
+                    return NEST2D_ERR_CORE_INVALID_SIZE;
+                }
+                // 如果底板不是从 0,0 开始，把排版结果平移到底板真实坐标系
+                if (BoardBounds.MinX != 0.0 || BoardBounds.MinY != 0.0) {
+                    for (auto& Item : AItems) {
+                        if (Item.Out_bin >= 0) {
+                            Item.Out_x += BoardBounds.MinX;
+                            Item.Out_y += BoardBounds.MinY;
+                        }
+                    }
+                }
 				ValidateItemsInsideBoard(AItems, AOptions.Board);
                 UsedBins = RecalcUsedBinsFromItems(AItems);
 			}
