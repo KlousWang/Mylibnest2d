@@ -2,7 +2,7 @@
 #include "EtTechCore_SelfFunction.h"
 #include "EtTechCore_Functor.h"
 #include "Nest2D_DataType.h"
-
+#include"NestTestData_DataType.h"
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
@@ -48,6 +48,8 @@ int main() {
 	CetCoreObjFunctor<void(int, double, bool, double, double) > AddCircle;
 	CetCoreObjFunctor<void() > ClearData;
 	CetCoreObjFunctor<void(int) > AddCustomShapeWithHolesByInput;
+	CetCoreObjFunctor<void(CetVertices&& , std::vector<CetVertices>&&) > AddBoardWithHoles;
+	CetCoreObjFunctor<void(CetVertices&&) > AddBoard;
 	CetCoreObjFunctor<bool(const std::string&)>SaveToFile;
 	CetCoreObjFunctor<int(const std::string&, TetNestOptions&, std::vector<TetNestPolygon>&, std::string*)>LoadFile;
 	CetCoreObjFunctor<int(const std::string&, const TetNestOptions& , const std::vector<TetNestPolygon>&, int)>SaveCoordinatesFile;
@@ -60,6 +62,8 @@ int main() {
 	AddCircle.Reload(tmpObj1, "AddCircle");
 	ClearData.Reload(tmpObj1, "ClearPolygons");
 	AddCustomShapeWithHolesByInput.Reload(tmpObj1, "AddCustomShapeWithHolesByInput");
+	AddBoardWithHoles.Reload(tmpObj1, "AddBoardWithHoles");
+	AddBoard.Reload(tmpObj1, "AddBoard");
 	SaveToFile.Reload(tmpObj1, "SaveToFile");
 	LoadFile.Reload(tmpObj2, "LoadNestCaseFromFile");
 	SaveCoordinatesFile.Reload(tmpObj2, "SaveNestResultToFile");
@@ -104,6 +108,73 @@ int main() {
 			int initCode = Init(binWidth, binHeight, spacing, rotations);
 			std::cout << "init result = " << initCode << std::endl;
 			ClearData();
+			char useIrregularBoard = 'n';
+			std::cout << "Use irregular board? y/n: ";
+			std::cin >> useIrregularBoard;
+
+			if (useIrregularBoard == 'y' || useIrregularBoard == 'Y') {
+				int boardType = 0;
+
+				std::cout << "Please select board type:" << std::endl;
+				std::cout << "1. L shape board" << std::endl;
+				std::cout << "2. Custom polygon board" << std::endl;
+				std::cout << "Please enter: ";
+				std::cin >> boardType;
+
+				if (boardType == 1) {
+					double W = 0.0;
+					double H = 0.0;
+					double CutW = 0.0;
+					double CutH = 0.0;
+
+					std::cout << "Please enter board width: ";
+					std::cin >> W;
+
+					std::cout << "Please enter board height: ";
+					std::cin >> H;
+
+					std::cout << "Please enter cut width: ";
+					std::cin >> CutW;
+
+					std::cout << "Please enter cut height: ";
+					std::cin >> CutH;
+
+					CetVertices Board = {
+						{0.0, 0.0},
+						{W, 0.0},
+						{W, H - CutH},
+						{W - CutW, H - CutH},
+						{W - CutW, H},
+						{0.0, H}
+					};
+
+					AddBoard(std::move(Board));
+				}
+				else if (boardType == 2) {
+					int pointCount = 0;
+
+					std::cout << "Please enter board point count: ";
+					std::cin >> pointCount;
+
+					CetVertices Board;
+					Board.reserve(pointCount);
+
+					for (int i = 0; i < pointCount; ++i) {
+						double X = 0.0;
+						double Y = 0.0;
+
+						std::cout << "Board point " << i + 1 << " X: ";
+						std::cin >> X;
+
+						std::cout << "Board point " << i + 1 << " Y: ";
+						std::cin >> Y;
+
+						Board.emplace_back(X, Y);
+					}
+
+					AddBoard(std::move(Board));
+				}
+			}
 			while (true) {
 				int shapeType = 0;
 				ShowAddShapeTitle();
@@ -225,6 +296,21 @@ int main() {
 			std::cout << "Invalid mode." << std::endl;
 			return -1;
 		}
+		std::cout << "[EXE] sizeof(TetNestOptions) = "
+			<< sizeof(TetNestOptions)
+			<< std::endl;
+
+		std::cout << "[EXE] offsetof(Board) = "
+			<< offsetof(TetNestOptions, Board)
+			<< std::endl;
+
+		std::cout << "[EXE] &Options = "
+			<< &Options
+			<< ", &Options.Board = "
+			<< &Options.Board
+			<< ", &Options.Board.Vertices = "
+			<< &Options.Board.Vertices
+			<< std::endl;
 		int loadCode = LoadFile(inputFile, Options, Items, &ErrorMessage);
 		std::cout << "LoadFile result = " << loadCode << std::endl;
 		if (loadCode != 0) {

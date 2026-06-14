@@ -24,13 +24,22 @@ struct TetNestPolygon
 	double Out_angle = 0.0;
 };
 
+struct TetNestBoard
+{
+	std::vector<TetNestPoint> Vertices;
+	std::vector<std::vector<TetNestPoint>> Holes;
+	bool Enabled = false;
+};
+
 struct TetNestOptions
 {
 	double BinWidth = 0.0;
 	double BinHeight = 0.0;
 	double Spacing = 1.0;
-	int Sotations = 4;
+	//int Sotations = 4;
 	int Rotations = 4;
+
+	TetNestBoard Board;
 
 	bool ExportSvg = false;
 	std::string SvgPath = "NestingResult";

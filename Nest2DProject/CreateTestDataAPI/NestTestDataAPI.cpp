@@ -661,6 +661,59 @@ namespace ET {
             );
         }
 
+        void CetNestTestDataAPI::AddBoard(CetVertices&& AVertices)
+        {
+            std::cout << "[DLL] AddBoard called. point count = "
+                << AVertices.size()
+                << std::endl;
+
+            if (AVertices.size() < 3) {
+                std::cout << "[DLL] Invalid board. point count must be >= 3." << std::endl;
+                return;
+            }
+
+            NormalizeContourDirection(AVertices, false);
+
+            m_Board.Enabled = true;
+            m_Board.Vertices = std::move(AVertices);
+            m_Board.Holes.clear();
+        }
+
+        void CetNestTestDataAPI::AddBoardWithHoles(CetVertices&& AOuter, std::vector<CetVertices>&& AHoles)
+        {
+            std::cout << "[DLL] AddBoardWithHoles called. outer point count = "
+                << AOuter.size()
+                << ", hole count = "
+                << AHoles.size()
+                << std::endl;
+
+            if (AOuter.size() < 3) {
+                std::cout << "[DLL] Invalid board outer. point count must be >= 3." << std::endl;
+                return;
+            }
+
+            NormalizeContourDirection(AOuter, false);
+
+            for (auto& Hole : AHoles) {
+                if (Hole.size() >= 3) {
+                    NormalizeContourDirection(Hole, true);
+                }
+            }
+
+            m_Board.Enabled = true;
+            m_Board.Vertices = std::move(AOuter);
+            m_Board.Holes = std::move(AHoles);
+        }
+
+        void CetNestTestDataAPI::ClearBoard()
+        {
+            std::cout << "[DLL] ClearBoard called." << std::endl;
+
+            m_Board.Enabled = false;
+            m_Board.Vertices.clear();
+            m_Board.Holes.clear();
+        }
+
         size_t CetNestTestDataAPI::PolygonCount() const
         {
             std::cout << "[DLL] PolygonCount called. real count = "<< m_Polygons.size() << std::endl;
@@ -673,6 +726,7 @@ namespace ET {
             std::cout << "[DLL] ClearPolygons called. Old count = " << m_Polygons.size() << std::endl;
 
             m_Polygons.clear();
+            ClearBoard();
         }
 
         std::string CetNestTestDataAPI::ToString() const
@@ -682,7 +736,21 @@ namespace ET {
             Oss << std::fixed << std::setprecision(4);
 
             Oss << "BIN " << m_BinWidth<< " " << m_BinHeight<< "\n";
-
+            if (m_Board.Enabled && m_Board.Vertices.size() >= 3) {
+                Oss << "BOARD " << m_Board.Vertices.size() << "\n";
+                for (const auto& P : m_Board.Vertices) {
+                    Oss << P.first << " " << P.second << "\n";
+                }
+                for (const auto& Hole : m_Board.Holes) {
+                    if (Hole.size() < 3) {
+                        continue;
+                    }
+                    Oss << "BOARD_HOLE " << Hole.size() << "\n";
+                    for (const auto& P : Hole) {
+                        Oss << P.first << " " << P.second << "\n";
+                    }
+                }
+            }
             Oss << "SPACING " << m_Bpacing << "\n";
 
             Oss << "ROTATIONS " << m_Rotations << "\n";

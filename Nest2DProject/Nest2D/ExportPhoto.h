@@ -19,12 +19,13 @@ namespace ET {
 			void _WrapFuncs() override {
 				CetCoreObject::_WrapFuncs();
 				_WrapFunc("ExportSvg", Type_Class_Func(ExportSvgItems));
+				_WrapFunc("ExportSvgbd", Type_Class_Func(ExportSvg));
 			}
 		public:
 			CetExportPhoto();
 			virtual ~CetExportPhoto();
 		public:
-			static int ExportSvg(const std::vector<TetNestPolygon>& AItems, const TetNestOptions& AOptions, int AUsedBins);
+			 int ExportSvg(const std::vector<TetNestPolygon>& AItems, const TetNestOptions& AOptions, int AUsedBins);
 
 			 int ExportSvgItems(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, int AUsedBins);
 		};

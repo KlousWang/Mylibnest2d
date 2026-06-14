@@ -29,6 +29,7 @@ namespace ET {
 
            
             CetNest2DInvokeFunctor::ExportSvg.Reload(m_ExportPhoto, "ExportSvg");
+            CetNest2DInvokeFunctor::ExportSvgbd.Reload(m_ExportPhoto, "ExportSvgbd");
 
             return 0;
         }

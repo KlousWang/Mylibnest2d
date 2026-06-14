@@ -132,6 +132,22 @@ namespace ET {
 
         int CetFile::LoadNestCaseFromFile(const std::string& AFilePath, TetNestOptions& AOptions, std::vector<TetNestPolygon>& AItems, std::string* AErrorMessage) 
         {
+            std::cout << "[DLL] sizeof(TetNestOptions) = "
+                << sizeof(TetNestOptions)
+                << std::endl;
+
+            std::cout << "[DLL] offsetof(Board) = "
+                << offsetof(TetNestOptions, Board)
+                << std::endl;
+
+            std::cout << "[DLL] &AOptions = "
+                << &AOptions
+                << ", &AOptions.Board = "
+                << &AOptions.Board
+                << ", &AOptions.Board.Vertices = "
+                << &AOptions.Board.Vertices
+                << std::endl;
+
             if (AErrorMessage) {
                 AErrorMessage->clear();
             }
@@ -167,6 +183,92 @@ namespace ET {
                         }
                         return NEST2D_ERR_FILE_BIN_SIZE;
                     }
+                }
+                else if (token == "BOARD") {
+                    std::size_t pointCount = 0;
+
+                    if (!(fin >> pointCount)) {
+                        if (AErrorMessage) {
+                            *AErrorMessage = "Invalid BOARD format. Expected: BOARD pointCount";
+                        }
+                        return NEST2D_ERR_FILE_UNKNOWN_TOKEN;
+                    }
+
+                    if (pointCount < 3) {
+                        if (AErrorMessage) {
+                            *AErrorMessage = "Board point count must be >= 3.";
+                        }
+                        return NEST2D_ERR_FILE_UNKNOWN_TOKEN;
+                    }
+
+                    AOptions.Board.Enabled = true;
+                    AOptions.Board.Vertices.clear();
+                    AOptions.Board.Holes.clear();
+                    AOptions.Board.Vertices.reserve(pointCount);
+
+                    for (std::size_t i = 0; i < pointCount; ++i) {
+                        TetNestPoint pt;
+
+                        if (!(fin >> pt.X >> pt.Y)) {
+                            if (AErrorMessage) {
+                                *AErrorMessage = "Invalid board coordinate.";
+                            }
+                            return NEST2D_ERR_FILE_UNKNOWN_TOKEN;
+                        }
+
+                        if (!std::isfinite(pt.X) || !std::isfinite(pt.Y)) {
+                            if (AErrorMessage) {
+                                *AErrorMessage = "Board coordinate is not finite.";
+                            }
+                            return NEST2D_ERR_FILE_UNKNOWN_TOKEN;
+                        }
+
+                        AOptions.Board.Vertices.push_back(pt);
+                    }
+                }
+                else if (token == "BOARD_HOLE") {
+                    std::size_t pointCount = 0;
+
+                    if (!(fin >> pointCount)) {
+                        if (AErrorMessage) {
+                            *AErrorMessage = "Invalid BOARD_HOLE format. Expected: BOARD_HOLE pointCount";
+                        }
+                        return NEST2D_ERR_FILE_UNKNOWN_TOKEN;
+                    }
+
+                    if (pointCount < 3) {
+                        if (AErrorMessage) {
+                            *AErrorMessage = "Board hole point count must be >= 3.";
+                        }
+                        return NEST2D_ERR_FILE_UNKNOWN_TOKEN;
+                    }
+
+                    AOptions.Board.Enabled = true;
+
+                    std::vector<TetNestPoint> hole;
+                    hole.reserve(pointCount);
+
+                    for (std::size_t i = 0; i < pointCount; ++i) {
+                        TetNestPoint pt;
+
+                        if (!(fin >> pt.X >> pt.Y)) {
+                            if (AErrorMessage) {
+                                *AErrorMessage = "Invalid board hole coordinate.";
+                            }
+                            return NEST2D_ERR_FILE_UNKNOWN_TOKEN;
+                        }
+
+                        if (!std::isfinite(pt.X) || !std::isfinite(pt.Y)) {
+                            if (AErrorMessage) {
+                                *AErrorMessage = "Board hole coordinate is not finite.";
+                            }
+                            return NEST2D_ERR_FILE_UNKNOWN_TOKEN;
+                        }
+
+                        hole.push_back(pt);
+                    }
+
+                    AOptions.Board.Holes.push_back(std::move(hole));
                 }
                 else if (token == "SPACING") {
                     if (!(fin >> AOptions.Spacing)) {
@@ -331,6 +433,25 @@ namespace ET {
             Out << "NEST_RESULT 1\n";
             Out << "UNIT mm\n";
             Out << "BIN " << AOptions.BinWidth << " " << AOptions.BinHeight << "\n";
+            if (AOptions.Board.Enabled && AOptions.Board.Vertices.size() >= 3) {
+                Out << "BOARD_SHAPE " << AOptions.Board.Vertices.size() << "\n";
+
+                for (const auto& P : AOptions.Board.Vertices) {
+                    Out << P.X << " " << P.Y << "\n";
+                }
+
+                for (const auto& Hole : AOptions.Board.Holes) {
+                    if (Hole.size() < 3) {
+                        continue;
+                    }
+
+                    Out << "BOARD_SHAPE_HOLE " << Hole.size() << "\n";
+
+                    for (const auto& P : Hole) {
+                        Out << P.X << " " << P.Y << "\n";
+                    }
+                }
+            }
             Out << "SPACING " << AOptions.Spacing << "\n";
             Out << "USED_BINS " << AUsedBins << "\n";
             for (int currentBin = 0; currentBin < AUsedBins; ++currentBin) {

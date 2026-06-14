@@ -14,4 +14,9 @@ struct TetPolygonData
     std::vector<CetVertices> Holes;
 
 };
-
+struct TetBoardData
+{
+    bool Enabled = false;
+    CetVertices Vertices;
+    std::vector<CetVertices> Holes;
+};

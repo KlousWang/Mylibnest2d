@@ -36,6 +36,8 @@ namespace ET {
                 _WrapFunc("AddLShape", Type_Class_Func(AddLShape));
                 _WrapFunc("GenerateRandomConvexPolygons", Type_Class_Func(GenerateRandomConvexPolygons));
                 _WrapFunc("AddCustomShapeWithHolesByInput", Type_Class_Func(AddCustomShapeWithHolesByInput));
+                _WrapFunc("AddBoard", Type_Class_Func(AddBoard));
+                _WrapFunc("AddBoardWithHoles", Type_Class_Func(AddBoardWithHoles));
                 _WrapFunc("GenerateRandomTriangles", Type_Class_Func(GenerateRandomTriangles));
                 _WrapFunc("PolygonCount", Type_Class_Func(PolygonCountWrap));
                 _WrapFunc("SaveToFile", Type_Class_Func(SaveToFileWrap));
@@ -58,6 +60,9 @@ namespace ET {
             void AddLShape(int AId,double AW,double AH,double ACutW, double ACutH);
             void AddPolygonWithHoles( int AId,const std::string& AName,CetVertices&& AOuter, std::vector<CetVertices>&& AHoles);
             void AddCustomShapeWithHolesByInput(int AId);
+            void AddBoard(CetVertices&& AVertices);
+            void AddBoardWithHoles(CetVertices&& AOuter, std::vector<CetVertices>&& AHoles);
+            void ClearBoard();
             void GenerateRandomConvexPolygons(int ACount, int AMinVertices, int AMaxVertices,double AMaxWidth, double AMaxHeight, unsigned ASeed = std::random_device{}());
             void GenerateRandomTriangles(int ACount, double AMaxWidth,double AMaxHeight, unsigned ASeed = std::random_device{}() );
             std::string ToString() const;
@@ -84,6 +89,7 @@ namespace ET {
 			int m_Rotations = 0;
 
 			std::vector<TetPolygonData> m_Polygons;
+            TetBoardData m_Board;
             //std::vector<std::string>
 
 			/*static std::vector<std::pair<double, double>> _ConvexHull(

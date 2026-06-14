@@ -77,12 +77,32 @@ namespace ET {
         {
             double invScale = 1.0 / libnest2d::mm();
 
-            for (size_t i = 0; i < nestItems.size(); ++i) {
+            const size_t nestCount = nestItems.size();
+            const size_t itemCount = AItems.size();
+
+            if (nestCount != itemCount) {
+                std::cout << "[ERROR] ApplyResults size mismatch: nestItems = "
+                    << nestCount
+                    << ", AItems = "
+                    << itemCount
+                    << std::endl;
+            }
+
+            const size_t count = std::min(nestCount, itemCount);
+
+            for (size_t i = 0; i < count; ++i) {
                 auto tr = nestItems[i].translation();
+
                 AItems[i].Out_bin = static_cast<int>(nestItems[i].binId());
                 AItems[i].Out_x = static_cast<double>(tr.X) * invScale;
                 AItems[i].Out_y = static_cast<double>(tr.Y) * invScale;
                 AItems[i].Out_angle = nestItems[i].rotation();
+            }
+            for (size_t i = count; i < itemCount; ++i) {
+                AItems[i].Out_bin = -1;
+                AItems[i].Out_x = 0.0;
+                AItems[i].Out_y = 0.0;
+                AItems[i].Out_angle = 0.0;
             }
         }
     }

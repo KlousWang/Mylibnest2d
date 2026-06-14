@@ -41,9 +41,132 @@ namespace ET {
 			delete AsNestItems(_Lib2DItemDataType);
 			_Lib2DItemDataType = nullptr;
 		}
+        static TetNestPoint TransformPoint(
+            const TetNestPoint& P,
+            double X,
+            double Y,
+            double Angle
+        )
+        {
+            TetNestPoint R;
 
+            double C = std::cos(Angle);
+            double S = std::sin(Angle);
 
+            R.X = P.X * C - P.Y * S + X;
+            R.Y = P.X * S + P.Y * C + Y;
 
+            return R;
+        }
+
+        static bool PointInPolygon(
+            const TetNestPoint& P,
+            const std::vector<TetNestPoint>& Polygon
+        )
+        {
+            bool Inside = false;
+            size_t Count = Polygon.size();
+
+            if (Count < 3) {
+                return false;
+            }
+
+            for (size_t i = 0, j = Count - 1; i < Count; j = i++) {
+                const auto& Pi = Polygon[i];
+                const auto& Pj = Polygon[j];
+
+                bool Intersect =
+                    ((Pi.Y > P.Y) != (Pj.Y > P.Y)) &&
+                    (P.X < (Pj.X - Pi.X) * (P.Y - Pi.Y) / (Pj.Y - Pi.Y + 1e-12) + Pi.X);
+
+                if (Intersect) {
+                    Inside = !Inside;
+                }
+            }
+
+            return Inside;
+        }
+
+        static bool IsPointInsideBoard(
+            const TetNestPoint& P,
+            const TetNestBoard& Board
+        )
+        {
+            if (!PointInPolygon(P, Board.Vertices)) {
+                return false;
+            }
+
+            for (const auto& Hole : Board.Holes) {
+                if (PointInPolygon(P, Hole)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        static void ValidateItemsInsideBoard(
+            std::vector<TetNestPolygon>& AItems,
+            const TetNestBoard& Board
+        )
+        {
+            if (!Board.Enabled || Board.Vertices.size() < 3) {
+                return;
+            }
+
+            for (auto& Item : AItems) {
+                if (Item.Out_bin < 0) {
+                    continue;
+                }
+
+                bool Valid = true;
+
+                for (const auto& P : Item.Vertices) {
+                    TetNestPoint TP = TransformPoint(
+                        P,
+                        Item.Out_x,
+                        Item.Out_y,
+                        Item.Out_angle
+                    );
+
+                    if (!IsPointInsideBoard(TP, Board)) {
+                        Valid = false;
+                        break;
+                    }
+                }
+
+                if (!Valid) {
+                    Item.Out_bin = -1;
+                    Item.Out_x = 0.0;
+                    Item.Out_y = 0.0;
+                    Item.Out_angle = 0.0;
+                }
+            }
+        }
+
+        static std::size_t RecalcUsedBinsFromItems(  std::vector<TetNestPolygon>& AItems )
+        {
+            std::map<int, int> Remap;
+            int NextBin = 0;
+
+            for (auto& Item : AItems) {
+                if (Item.Out_bin < 0) {
+                    continue;
+                }
+
+                auto It = Remap.find(Item.Out_bin);
+                if (It == Remap.end()) {
+                    Remap[Item.Out_bin] = NextBin;
+                    Item.Out_bin = NextBin;
+                    ++NextBin;
+                }
+                else {
+                    Item.Out_bin = It->second;
+                }
+            }
+
+            return static_cast<std::size_t>(NextBin);
+        }
 		int CetNest2DManager::PerformNestingEx(std::vector<TetNestPolygon>& AItems, const TetNestOptions& AOptions, TetNestResult* AResult)
 		{
 			//Nest2DUtils->WWFunct1(1);
@@ -63,6 +186,17 @@ namespace ET {
 			CetTNestItemVector& NestItems = *NestItemsPtr;
 			NestItems.clear();
 			Nest2DUtils->BuildNestms(AItems,NestItems);
+            std::cout << "[DEBUG] AItems.size = " << AItems.size()
+                << ", NestItems.size = " << NestItems.size()
+                << std::endl;
+
+            if (NestItems.size() != AItems.size()) {
+                if (AResult) {
+                    AResult->Code = NEST2D_ERR_CORE_NESTING_FAILED;
+                    AResult->Message = "BuildNestItems size mismatch.";
+                }
+                return NEST2D_ERR_CORE_NESTING_FAILED;
+            }
 			 //int i  =Nest2DUtils->BuildNestms.GetResult();
 			 //std::cout << i << std::endl;
 			std::size_t UsedBins = 0;
@@ -71,10 +205,15 @@ namespace ET {
 			if (NestCode != Nest2D_Success)return NestCode;
 
 			Nest2DUtils->ApplyResults(NestItems, AItems);
+
+			if (AOptions.Board.Enabled) {
+				ValidateItemsInsideBoard(AItems, AOptions.Board);
+                UsedBins = RecalcUsedBinsFromItems(AItems);
+			}
 			if (AOptions.ExportSvg) {
 				
 				//CetExportPhoto::ExportSvg(AItems, AOptions, static_cast<int>(layers)); // 调用我们之前拆出来的函数
-				Nest2DUtils->ExportSvg(NestItems, AOptions, static_cast<int>(UsedBins));
+				Nest2DUtils->ExportSvgbd(AItems, AOptions, static_cast<int>(UsedBins));
 			}
 
 			if (AResult) {

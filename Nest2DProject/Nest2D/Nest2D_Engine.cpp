@@ -43,11 +43,36 @@ namespace ET {
 				return NEST2D_ERR_CORE_EMPTY_INPUT;
 			}
 
-			if (AOptions.BinWidth <= 0.0 || AOptions.BinHeight <= 0.0) {
+			double BinWidth = AOptions.BinWidth;
+			double BinHeight = AOptions.BinHeight;
+
+			if (AOptions.Board.Enabled) {
+				if (AOptions.Board.Vertices.size() < 3) {
+					return NEST2D_ERR_CORE_INVALID_SIZE;
+				}
+
+				double MinX = AOptions.Board.Vertices[0].X;
+				double MaxX = AOptions.Board.Vertices[0].X;
+				double MinY = AOptions.Board.Vertices[0].Y;
+				double MaxY = AOptions.Board.Vertices[0].Y;
+
+				for (const auto& P : AOptions.Board.Vertices) {
+					MinX = std::min(MinX, P.X);
+					MaxX = std::max(MaxX, P.X);
+					MinY = std::min(MinY, P.Y);
+					MaxY = std::max(MaxY, P.Y);
+				}
+
+				BinWidth = MaxX - MinX;
+				BinHeight = MaxY - MinY;
+			}
+
+			if (BinWidth <= 0.0 || BinHeight <= 0.0) {
 				return NEST2D_ERR_CORE_INVALID_SIZE;
 			}
-			auto width = NestUtils::ToNestCoord(AOptions.BinWidth);
-			auto height = NestUtils::ToNestCoord(AOptions.BinHeight);
+
+			auto width = NestUtils::ToNestCoord(BinWidth);
+			auto height = NestUtils::ToNestCoord(BinHeight);
 
 			Box Bin(width, height, { width / 2, height / 2 });
 
@@ -59,7 +84,8 @@ namespace ET {
 			TetNestProgressTracker Tracker(TotalItems, AOptions.ProgressCallback);
 			NestConfig<CetMyPlacer, CetMySelector> cfg;
 			cfg.placer_config.alignment = placers::NfpPConfig<PolygonImpl>::Alignment::BOTTOM_LEFT;
-			cfg.placer_config.parallel = true;
+			cfg.placer_config.parallel = false;
+			cfg.placer_config.explore_holes = true;
 			cfg.placer_config.rotations.clear();
 			if (AOptions.Rotations > 0) {
 				const double PI = 3.14159265358979323846;
