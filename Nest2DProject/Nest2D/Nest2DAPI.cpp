@@ -41,35 +41,35 @@ namespace ET {
 			delete AsNestItems(_Lib2DItemDataType);
 			_Lib2DItemDataType = nullptr;
 		}
-        static TetNestPoint TransformPoint(const TetNestPoint& P,double X,double Y,double Angle)
+        static TetNestPoint TransformPoint(const TetNestPoint& AP,double AX,double AY,double AAngle)
         {
             TetNestPoint R;
 
-            double C = std::cos(Angle);
-            double S = std::sin(Angle);
+            double C = std::cos(AAngle);
+            double S = std::sin(AAngle);
 
-            R.X = P.X * C - P.Y * S + X;
-            R.Y = P.X * S + P.Y * C + Y;
+            R.X = AP.X * C - AP.Y * S + AX;
+            R.Y = AP.X * S + AP.Y * C + AY;
 
             return R;
         }
 
-        static bool PointInPolygon(const TetNestPoint& P,const std::vector<TetNestPoint>& Polygon)
+        static bool PointInPolygon(const TetNestPoint& AP,const std::vector<TetNestPoint>& APolygon)
         {
             bool Inside = false;
-            size_t Count = Polygon.size();
+            size_t Count = APolygon.size();
 
             if (Count < 3) {
                 return false;
             }
 
             for (size_t i = 0, j = Count - 1; i < Count; j = i++) {
-                const auto& Pi = Polygon[i];
-                const auto& Pj = Polygon[j];
+                const auto& Pi = APolygon[i];
+                const auto& Pj = APolygon[j];
 
                 bool Intersect =
-                    ((Pi.Y > P.Y) != (Pj.Y > P.Y)) &&
-                    (P.X < (Pj.X - Pi.X) * (P.Y - Pi.Y) / (Pj.Y - Pi.Y + 1e-12) + Pi.X);
+                    ((Pi.Y > AP.Y) != (Pj.Y > AP.Y)) &&
+                    (AP.X < (Pj.X - Pi.X) * (AP.Y - Pi.Y) / (Pj.Y - Pi.Y + 1e-12) + Pi.X);
 
                 if (Intersect) {
                     Inside = !Inside;
@@ -79,14 +79,14 @@ namespace ET {
             return Inside;
         }
 
-        static bool IsPointInsideBoard(const TetNestPoint& P,const TetNestBoard& Board)
+        static bool IsPointInsideBoard(const TetNestPoint& AP,const TetNestBoard& ABoard)
         {
-            if (!PointInPolygon(P, Board.Vertices)) {
+            if (!PointInPolygon(AP, ABoard.Vertices)) {
                 return false;
             }
 
-            for (const auto& Hole : Board.Holes) {
-                if (PointInPolygon(P, Hole)) {
+            for (const auto& Hole : ABoard.Holes) {
+                if (PointInPolygon(AP, Hole)) {
                     return false;
                 }
             }
@@ -94,9 +94,9 @@ namespace ET {
             return true;
         }
 
-        static void ValidateItemsInsideBoard(std::vector<TetNestPolygon>& AItems,const TetNestBoard& Board)
+        static void ValidateItemsInsideBoard(std::vector<TetNestPolygon>& AItems,const TetNestBoard& ABoard)
         {
-            if (!Board.Enabled || Board.Vertices.size() < 3) {
+            if (!ABoard.Enabled || ABoard.Vertices.size() < 3) {
                 return;
             }
 
@@ -115,7 +115,7 @@ namespace ET {
                         Item.Out_angle
                     );
 
-                    if (!IsPointInsideBoard(TP, Board)) {
+                    if (!IsPointInsideBoard(TP, ABoard)) {
                         Valid = false;
                         break;
                     }
@@ -153,18 +153,18 @@ namespace ET {
 
             return static_cast<std::size_t>(NextBin);
         }
-        static TetBoardBounds CalcBoardBounds(const TetNestBoard& Board)
+        static TetBoardBounds CalcBoardBounds(const TetNestBoard& ABoard)
         {
             TetBoardBounds B;
 
-            if (!Board.Enabled || Board.Vertices.size() < 3) {
+            if (!ABoard.Enabled || ABoard.Vertices.size() < 3) {
                 return B;
             }
 
-            B.MinX = B.MaxX = Board.Vertices[0].X;
-            B.MinY = B.MaxY = Board.Vertices[0].Y;
+            B.MinX = B.MaxX = ABoard.Vertices[0].X;
+            B.MinY = B.MaxY = ABoard.Vertices[0].Y;
 
-            for (const auto& P : Board.Vertices) {
+            for (const auto& P : ABoard.Vertices) {
                 B.MinX = std::min(B.MinX, P.X);
                 B.MaxX = std::max(B.MaxX, P.X);
                 B.MinY = std::min(B.MinY, P.Y);
@@ -177,6 +177,7 @@ namespace ET {
 
             return B;
         }
+
 		int CetNest2DManager::PerformNestingEx(std::vector<TetNestPolygon>& AItems, const TetNestOptions& AOptions, TetNestResult* AResult)
 		{
 			//Nest2DUtils->WWFunct1(1);
@@ -215,7 +216,14 @@ namespace ET {
 			if (NestCode != Nest2D_Success)return NestCode;
 
 			Nest2DUtils->ApplyResults(NestItems, AItems);
-
+            for (const auto& Item : AItems) {
+                std::cout << "[RESULT] item id = " << Item.Id
+                    << ", bin = " << Item.Out_bin
+                    << ", x = " << Item.Out_x
+                    << ", y = " << Item.Out_y
+                    << ", angle = " << Item.Out_angle
+                    << std::endl;
+            }
 			if (AOptions.Board.Enabled) {
                 TetBoardBounds BoardBounds = CalcBoardBounds(AOptions.Board);
                 if (!BoardBounds.Valid) {

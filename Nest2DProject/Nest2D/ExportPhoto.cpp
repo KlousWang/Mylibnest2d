@@ -19,9 +19,9 @@ namespace ET {
 		CetExportPhoto::~CetExportPhoto()
 		{
 		}
-        static std::string MakeBoardSvgPath(const TetNestBoard& Board,double SvgHeight)
+        static std::string MakeBoardSvgPath(const TetNestBoard& ABoard,double ASvgHeight)
         {
-            if (!Board.Enabled || Board.Vertices.size() < 3) {
+            if (!ABoard.Enabled || ABoard.Vertices.size() < 3) {
                 return "";
             }
 
@@ -30,34 +30,34 @@ namespace ET {
             ss << "<path d=\"";
 
             ss << "M "
-                << Board.Vertices[0].X
+                << ABoard.Vertices[0].X
                 << ","
-                << (SvgHeight - Board.Vertices[0].Y)
+                << (ASvgHeight - ABoard.Vertices[0].Y)
                 << " ";
 
-            for (size_t i = 1; i < Board.Vertices.size(); ++i) {
+            for (size_t i = 1; i < ABoard.Vertices.size(); ++i) {
                 ss << "L "
-                    << Board.Vertices[i].X
+                    << ABoard.Vertices[i].X
                     << ","
-                    << (SvgHeight - Board.Vertices[i].Y)
+                    << (ASvgHeight - ABoard.Vertices[i].Y)
                     << " ";
             }
 
-            ss << "z\" style=\"fill:none;stroke:red;stroke-width:2px;\"/>\n";
+            ss << "z\" style=\"fill:#1b2a3a;fill-opacity:0.18;stroke:red;stroke-width:2px;\"/>\n";
 
             return ss.str();
         }
 
-        static void InsertTextBeforeSvgEnd(const std::string& FilePath,const std::string& Text)
+        static void InsertTextBeforeSvgEnd(const std::string& AFilePath,const std::string& AText)
         {
-            if (Text.empty()) {
+            if (AText.empty()) {
                 return;
             }
 
-            std::ifstream fin(FilePath.c_str(), std::ios::in | std::ios::binary);
+            std::ifstream fin(AFilePath.c_str(), std::ios::in | std::ios::binary);
 
             if (!fin.is_open()) {
-                std::cout << "[SVG][WARN] cannot reopen svg: " << FilePath << std::endl;
+                std::cout << "[SVG][WARN] cannot reopen svg: " << AFilePath << std::endl;
                 return;
             }
 
@@ -69,16 +69,16 @@ namespace ET {
             size_t pos = content.rfind("</svg>");
 
             if (pos == std::string::npos) {
-                std::cout << "[SVG][WARN] cannot find </svg> in: " << FilePath << std::endl;
+                std::cout << "[SVG][WARN] cannot find </svg> in: " << AFilePath << std::endl;
                 return;
             }
 
-            content.insert(pos, Text);
+            content.insert(pos, AText);
 
-            std::ofstream fout(FilePath.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
+            std::ofstream fout(AFilePath.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
 
             if (!fout.is_open()) {
-                std::cout << "[SVG][WARN] cannot write svg: " << FilePath << std::endl;
+                std::cout << "[SVG][WARN] cannot write svg: " << AFilePath << std::endl;
                 return;
             }
 
@@ -205,10 +205,9 @@ namespace ET {
                 }
 
                 svgw.writePackGroup(pgrp);
-				std::string finalPath;
-				if (AUsedBins > 1) finalPath = basePath;
-				else  finalPath = basePath + "_" + std::to_string(currentBin);
-
+                std::string finalPath;
+                if(AUsedBins>1)  finalPath = basePath + "_" + std::to_string(currentBin);
+                else finalPath = basePath;
 
                 svgw.save(finalPath);
                 std::string realSvgPath = finalPath;

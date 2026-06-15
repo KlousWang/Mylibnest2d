@@ -3,6 +3,7 @@
 #include "EtTechCore_Functor.h"
 #include "Nest2D_DataType.h"
 #include"NestTestData_DataType.h"
+#include"Nest2DTest_SelfFunction.h"
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
@@ -10,6 +11,14 @@
 #include <fstream>
 
 using namespace ET::CORE;
+namespace ET {
+	namespace NEST2DTESTAPP {
+		void ii() {
+			 int i =Nest2DUtils->Init(1000.0, 1000.0, 3.0, 4);
+			 cout << i << std::endl;
+		}
+	}
+}
 
 void ShowTitle() {
 	std::cout << "Please select model" << std::endl;
@@ -68,6 +77,8 @@ int main() {
 	LoadFile.Reload(tmpObj2, "LoadNestCaseFromFile");
 	SaveCoordinatesFile.Reload(tmpObj2, "SaveNestResultToFile");
 	PerformNest.Reload(tmpObj3, "PerformNestingEx");
+
+	//ET::NEST2DTESTAPP::ii();
 	while (true) {
 		TetNestOptions Options;
 		TetNestResult result;

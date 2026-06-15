@@ -1,0 +1,18 @@
+{
+  "ClassType": [
+    "Nest2D_Engine, Nest2D_Engine",
+    "Nest2D_InvokeFunctor, Nest2D_InvokeFunctor",
+    "Nest2D_DataMapper, Nest2D_DataMapper",
+    "Nest2D_ExportPhoto, Nest2D_ExportPhoto"
+	],
+  "ComponentClassType": [],
+  "LocalObjIns_LocalType": [ 
+   "l_Nest2DEngine, Nest2D_Engine",
+   "l_NestDataMapper, Nest2D_DataMapper",
+   "l_ExportPhoto, Nest2D_ExportPhoto"
+  ],
+  "GlobalObjIns_LocalIns": [
+	],
+  "LocalComponentIns_LocalType": [],
+  "GlobalComponentIns_LocalIns": []
+}
