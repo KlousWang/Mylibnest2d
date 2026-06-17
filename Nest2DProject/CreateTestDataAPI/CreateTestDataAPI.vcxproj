@@ -21,8 +21,8 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{a44e8d0b-f9cc-45c9-8e0f-a88102368760}</ProjectGuid>
-    <RootNamespace>Nest2D</RootNamespace>
+    <ProjectGuid>{c8ad07c2-a7f1-453a-893c-caa32b330ffa}</ProjectGuid>
+    <RootNamespace>CreateTestDataAPI</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -50,7 +50,7 @@
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>MultiByte</CharacterSet>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -70,29 +70,30 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <OutDir>$(SolutionDir)$(Configuration)\</OutDir>
+    <ExternalIncludePath>$(SolutionDir)\include\header;$(ExternalIncludePath)</ExternalIncludePath>
+    <LibraryPath>$(SolutionDir)lib;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <OutDir>$(SolutionDir)$(Configuration)\</OutDir>
+    <ExternalIncludePath>$(SolutionDir)\include\header;$(ExternalIncludePath)</ExternalIncludePath>
+    <LibraryPath>$(SolutionDir)lib;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)Bin</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)Bin</OutDir>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <ExternalIncludePath>$(SolutionDir)include\header;$(ExternalIncludePath)</ExternalIncludePath>
-    <LibraryPath>$(SolutionDir)lib;$(LibraryPath)</LibraryPath>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <ExternalIncludePath>$(SolutionDir)include\header;$(ExternalIncludePath)</ExternalIncludePath>
-    <LibraryPath>$(SolutionDir)lib;$(LibraryPath)</LibraryPath>
-  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NOMINMAX;NEST2D_EXPORTS;LIBNEST2D_OPTIMIZER_nlopt;LIBNEST2D_THREADING_std</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NEST_DLL_EXPORTS;WIN32;_DEBUG;CREATETESTDATAAPI_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(SolutionDir)Third_party\clipper;$(SolutionDir)Third_party\libnest2d\include;$(SolutionDir)Third_party\boost_1_83_0;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4251;4819;4038</DisableSpecificWarnings>
     </ClCompile>
@@ -109,11 +110,10 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NOMINMAX;NEST2D_EXPORTS;LIBNEST2D_OPTIMIZER_nlopt;LIBNEST2D_THREADING_std</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NEST_DLL_EXPORTS;WIN32;NDEBUG;CREATETESTDATAAPI_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(SolutionDir)Third_party\clipper;$(SolutionDir)Third_party\libnest2d\include;$(SolutionDir)Third_party\boost_1_83_0;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4251;4819;4038</DisableSpecificWarnings>
     </ClCompile>
@@ -128,11 +128,10 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NOMINMAX;NEST2D_EXPORTS;LIBNEST2D_OPTIMIZER_nlopt</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NEST_DLL_EXPORTS;_DEBUG;CREATETESTDATAAPI_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(SolutionDir)Third_party\clipper;$(SolutionDir)Third_party\libnest2d\include;$(SolutionDir)Third_party\boost_1_83_0;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -146,11 +145,10 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NOMINMAX;NEST2D_EXPORTS;LIBNEST2D_OPTIMIZER_nlopt</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NEST_DLL_EXPORTS;NDEBUG;CREATETESTDATAAPI_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(SolutionDir)Third_party\clipper;$(SolutionDir)Third_party\libnest2d\include;$(SolutionDir)Third_party\boost_1_83_0;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -159,51 +157,26 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="..\Third_party\clipper\clipper.hpp" />
-    <ClInclude Include="Nest2D_BoardUtils.h" />
-    <ClInclude Include="Nest2D_DataType.h" />
-    <ClInclude Include="ExportPhoto.h" />
-    <ClInclude Include="File.h" />
     <ClInclude Include="framework.h" />
-    <ClInclude Include="Nest2DAPI.h" />
-    <ClInclude Include="Nest2D_Def.h" />
-    <ClInclude Include="Nest2D_Engine.h" />
-    <ClInclude Include="Nest2D_GeometryUtils.h" />
-    <ClInclude Include="Nest2D_InvokeFunctor.h" />
-    <ClInclude Include="Nest2D_PolygonBoardRepairer.h" />
-    <ClInclude Include="Nest2D_SelfFunction.h" />
-    <ClInclude Include="Nest2D_DataConst.h" />
-    <ClInclude Include="Nest2D_SvgUtils.h" />
-    <ClInclude Include="NestDataMapper.h" />
-    <ClInclude Include="NestUtils.h" />
+    <ClInclude Include="NestGeometryUtils.h" />
+    <ClInclude Include="NestProfileInputUtils.h" />
+    <ClInclude Include="NestTestDataAPI.h" />
+    <ClInclude Include="NestTestDataAPI_Def.h" />
     <ClInclude Include="pch.h" />
+    <ClInclude Include="NestTestData_DataType.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\Third_party\clipper\clipper.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
     <ClCompile Include="dllmain.cpp" />
-    <ClCompile Include="ExportPhoto.cpp" />
-    <ClCompile Include="File.cpp" />
-    <ClCompile Include="Nest2DAPI.cpp" />
-    <ClCompile Include="Nest2D_BoardUtils.cpp" />
-    <ClCompile Include="Nest2D_Engine.cpp" />
-    <ClCompile Include="Nest2D_GeometryUtils.cpp" />
-    <ClCompile Include="Nest2D_InvokeFunctor.cpp" />
-    <ClCompile Include="Nest2D_PolygonBoardRepairer.cpp" />
-    <ClCompile Include="Nest2D_PrivateDataType.h" />
-    <ClCompile Include="Nest2D_Reg.cpp" />
-    <ClCompile Include="Nest2D_SvgUtils.cpp" />
-    <ClCompile Include="NestDataMapper.cpp" />
+    <ClCompile Include="NestGeometryUtils.cpp" />
+    <ClCompile Include="NestProfileInputUtils.cpp" />
+    <ClCompile Include="NestTestDataAPI.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="TestDataApi_Reg.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="cpp.hint" />

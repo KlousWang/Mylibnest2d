@@ -20,6 +20,18 @@ namespace ET {
             // 注意：这里的 "g_Nest2DEngine" 是你在 JSON 中配置的 GlobalObjIns 变量名
             m_pNest2DEngine = m_LibConfig->GetLocalCoreObjIns("l_Nest2DEngine");
             if (!m_pNest2DEngine) return -1;
+
+            m_BoardUtils = m_LibConfig->GetLocalCoreObjIns("l_BoardUtils");
+            if (!m_BoardUtils) return -1;
+
+            m_GeometryUtils = m_LibConfig->GetLocalCoreObjIns("l_GeometryUtils");
+            if (!m_GeometryUtils) return -1;
+
+            m_SvgUtils = m_LibConfig->GetLocalCoreObjIns("l_SvgUtils");
+            if (!m_SvgUtils) return -1;
+
+            m_PolygonBoardRepairer = m_LibConfig->GetLocalCoreObjIns("l_PolygonBoardRepairer");
+            if (!m_PolygonBoardRepairer) return -1;
             //WWFunct1.Reload(m_pNest2DEngine, "func1");
             // 3. 将 Functor 变量与底层的真实字符串暗号 "RunNesting" 绑定起来 [cite: 84]
             CetNest2DInvokeFunctor::RunNestingFunctor.Reload(m_pNest2DEngine, "RunNesting");
@@ -30,6 +42,22 @@ namespace ET {
            
             CetNest2DInvokeFunctor::ExportSvg.Reload(m_ExportPhoto, "ExportSvg");
             CetNest2DInvokeFunctor::ExportSvgbd.Reload(m_ExportPhoto, "ExportSvgbd");
+
+            CetNest2DInvokeFunctor::CalcBoardBoundsLocal.Reload(m_BoardUtils, "CalcBoardBoundsLocal");
+            CetNest2DInvokeFunctor::BuildPathFromPoints.Reload(m_BoardUtils, "BuildPathFromPoints");
+            CetNest2DInvokeFunctor::BuildBinPolygonFromOptions.Reload(m_BoardUtils, "BuildBinPolygonFromOptions");
+
+            CetNest2DInvokeFunctor::TransformPoint.Reload(m_GeometryUtils, "TransformPoint");
+            CetNest2DInvokeFunctor::RadToDeg.Reload(m_GeometryUtils, "RadToDeg");
+            CetNest2DInvokeFunctor::PointInPolygon.Reload(m_GeometryUtils, "PointInPolygon");
+            CetNest2DInvokeFunctor::IsPointInsideBoard.Reload(m_GeometryUtils, "IsPointInsideBoard");
+            CetNest2DInvokeFunctor:: ValidateItemsInsideBoard.Reload(m_GeometryUtils,"ValidateItemsInsideBoard");
+
+            CetNest2DInvokeFunctor::MakeBoardSvgPath.Reload(m_SvgUtils, "MakeBoardSvgPath");
+            CetNest2DInvokeFunctor::InsertTextBeforeSvgEnd.Reload(m_SvgUtils, "InsertTextBeforeSvgEnd");
+
+            CetNest2DInvokeFunctor::SetPolygonBoardRepairContext.Reload(m_PolygonBoardRepairer, "SetContext");
+            CetNest2DInvokeFunctor::RepairPolygonBoard.Reload(m_PolygonBoardRepairer, "Repair");
 
             return 0;
         }

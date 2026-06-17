@@ -57,6 +57,18 @@
     <ClInclude Include="Nest2D_SelfFunction.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="Nest2D_BoardUtils.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Nest2D_GeometryUtils.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Nest2D_SvgUtils.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Nest2D_PolygonBoardRepairer.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
@@ -91,6 +103,18 @@
     </ClCompile>
     <ClCompile Include="Nest2D_PrivateDataType.h">
       <Filter>头文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Nest2D_BoardUtils.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Nest2D_GeometryUtils.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Nest2D_SvgUtils.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Nest2D_PolygonBoardRepairer.cpp">
+      <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

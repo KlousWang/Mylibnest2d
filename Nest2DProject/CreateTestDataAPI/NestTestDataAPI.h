@@ -4,7 +4,8 @@
 #include "NestTestData_DataType.h"
 #include "EtTechCore_Object.h"
 //#include "EtTechCore_Component.h"
-
+#include"NestGeometryUtils.h"
+#include"NestProfileInputUtils.h"
 #include <vector>
 #include <string>
 #include <utility>
@@ -24,7 +25,6 @@ namespace ET {
                 CetCoreObject::_Init();
                 return 0;
             }
-
             void _WrapFuncs() override {
                 CetCoreObject::_WrapFuncs();
                 _WrapFunc("ClearPolygons", Type_Class_Func(ClearPolygons));
@@ -43,6 +43,7 @@ namespace ET {
                 _WrapFunc("SaveToFile", Type_Class_Func(SaveToFileWrap));
                 _WrapFunc("PolygonCountWrap", Type_Class_Func(PolygonCountWrap));
                 _WrapFunc("SaveToFileWrap", Type_Class_Func(SaveToFileWrap));
+               // _WrapFunc("ReadProfileVertices", Type_Class_Func(ReadProfileVertices));
             }
 
         public:
@@ -65,6 +66,7 @@ namespace ET {
             void ClearBoard();
             void GenerateRandomConvexPolygons(int ACount, int AMinVertices, int AMaxVertices,double AMaxWidth, double AMaxHeight, unsigned ASeed = std::random_device{}());
             void GenerateRandomTriangles(int ACount, double AMaxWidth,double AMaxHeight, unsigned ASeed = std::random_device{}() );
+           // CetVertices ReadProfileVertices(bool AIsHole, std::string* AProfileName);
             std::string ToString() const;
             size_t PolygonCount() const;
             void ClearPolygons();
@@ -91,7 +93,8 @@ namespace ET {
 			std::vector<TetPolygonData> m_Polygons;
             TetBoardData m_Board;
             //std::vector<std::string>
-
+            CetNestGeometryUtils m_GeometryUtils;
+            CetNestProfileInputUtils m_ProfileInputUtils;
 			/*static std::vector<std::pair<double, double>> _ConvexHull(
 				std::vector<std::pair<double, double>> APoints
             );*/

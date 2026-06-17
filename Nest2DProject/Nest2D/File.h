@@ -31,6 +31,7 @@ namespace ET {
 		public:
 			int LoadNestCaseFromFile(const std::string& AFilePath, TetNestOptions& AOptions, std::vector<TetNestPolygon>& AItems, std::string* AErrorMessage = nullptr);
 			int SaveNestResultToFile(const std::string& AFilePath, const TetNestOptions& AOptions, const std::vector<TetNestPolygon>& AItems, int AUsedBins);
+	
 		};
 	}
 }

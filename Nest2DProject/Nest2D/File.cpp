@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "File.h"
 #include "Nest2D_DataConst.h"
+#include "Nest2D_SelfFunction.h"
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -23,11 +24,11 @@ namespace ET {
             double VertexRadius = 0.0;  // 外切多边形顶点半径
             int Segments = 0;
         };
-        static bool IsCircleItem(const TetNestPolygon& AItem)
+        static bool _IsCircleItem(const TetNestPolygon& AItem)
         {
             return AItem.Name == "Circle";
         }
-        static TetNestPoint ApplyTransform(const TetNestPoint& APt, double AX, double AY, double AAngle)
+        static TetNestPoint _ApplyTransform(const TetNestPoint& APt, double AX, double AY, double AAngle)
         {
             double cosA = std::cos(AAngle);
             double sinA = std::sin(AAngle);
@@ -37,15 +38,8 @@ namespace ET {
             Result.Y = AY + APt.X * sinA + APt.Y * cosA;
 
             return Result;
-        }
-      
-        static double RadToDeg(double ARad)
-        {
-            constexpr double PI = 3.14159265358979323846;
-            return ARad * 180.0 / PI;
-        }
-       
-        static void WriteLocalVertices(std::ofstream& AOut, const std::vector<TetNestPoint>& APoints )
+        }    
+        static void _WriteLocalVertices(std::ofstream& AOut, const std::vector<TetNestPoint>& APoints )
         {
             AOut << "LOCAL_VERTICES " << APoints.size() << "\n";
 
@@ -53,16 +47,16 @@ namespace ET {
                 AOut << pt.X << " " << pt.Y << "\n";
             }
         }
-        static void WriteWorldVertices( std::ofstream& AOut, const std::vector<TetNestPoint>& APoints, double AX,double AY, double AAngle )
+        static void _WriteWorldVertices( std::ofstream& AOut, const std::vector<TetNestPoint>& APoints, double AX,double AY, double AAngle )
         {
             AOut << "WORLD_VERTICES " << APoints.size() << "\n";
 
             for (const auto& pt : APoints) {
-                TetNestPoint worldPt = ApplyTransform(pt, AX, AY, AAngle);
+                TetNestPoint worldPt = _ApplyTransform(pt, AX, AY, AAngle);
                 AOut << worldPt.X << " " << worldPt.Y << "\n";
             }
         }
-        static bool CalcCircleInfoFromPolygon(const TetNestPolygon& AItem, TetCircleExportInfo& AInfo)
+        static  bool _CalcCircleInfoFromPolygon(const TetNestPolygon& AItem, TetCircleExportInfo& AInfo)
         {
             AInfo = TetCircleExportInfo();
             const std::vector<TetNestPoint>& pts = AItem.Vertices;
@@ -105,11 +99,11 @@ namespace ET {
             AInfo.VertexRadius = vertexRadius;
             AInfo.Segments = segments;
 
-            AInfo.CenterWorld = ApplyTransform(AInfo.CenterLocal, AItem.Out_x, AItem.Out_y, AItem.Out_angle);
+            AInfo.CenterWorld = _ApplyTransform(AInfo.CenterLocal, AItem.Out_x, AItem.Out_y, AItem.Out_angle);
 
             return true;
         }
-        static bool CompareNestItemPosition( const TetNestPolygon* A, const TetNestPolygon* B )
+        static bool _CompareNestItemPosition( const TetNestPolygon* A, const TetNestPolygon* B )
         {
             if (A->Out_y != B->Out_y) {
                 return A->Out_y < B->Out_y;
@@ -463,7 +457,7 @@ namespace ET {
                         BinItems.push_back(&item);
                     }
                 }
-                std::sort(BinItems.begin(),BinItems.end(), CompareNestItemPosition );
+                std::sort(BinItems.begin(),BinItems.end(), _CompareNestItemPosition );
                 Out << "\nBOARD " << currentBin << "\n";
                 Out << "ITEM_COUNT " << BinItems.size() << "\n";
 
@@ -475,16 +469,16 @@ namespace ET {
                         << item->Out_x << " "
                         << item->Out_y << " "
                         << std::setprecision(6) << item->Out_angle << " "
-                        << std::setprecision(4) << RadToDeg(item->Out_angle)
+                        << std::setprecision(4) << Nest2DUtils->RadToDeg(item->Out_angle)
                         << "\n";
 
                     Out << "PROFILE\n";
 
-                    if (IsCircleItem(*item)) {
+                    if (_IsCircleItem(*item)) {
 
                         TetCircleExportInfo circleInfo;
 
-                        if (CalcCircleInfoFromPolygon(*item, circleInfo)) {
+                        if (_CalcCircleInfoFromPolygon(*item, circleInfo)) {
                             Out << "OUTER CIRCLE\n";
                             Out << "CENTER_LOCAL " << circleInfo.CenterLocal.X << " "<< circleInfo.CenterLocal.Y << "\n";
                             Out << "CENTER_WORLD "<< circleInfo.CenterWorld.X << " " << circleInfo.CenterWorld.Y << "\n";
@@ -494,8 +488,8 @@ namespace ET {
                         else {
                             // 如果反推失败，就退回普通多边形导出
                             Out << "OUTER POLYGON\n";
-                            WriteLocalVertices(Out, item->Vertices);
-                            WriteWorldVertices(
+                            _WriteLocalVertices(Out, item->Vertices);
+                            _WriteWorldVertices(
                                 Out,
                                 item->Vertices,
                                 item->Out_x,
@@ -506,8 +500,8 @@ namespace ET {
                     }
                     else {
                         Out << "OUTER POLYGON\n";
-                        WriteLocalVertices(Out, item->Vertices);
-                        WriteWorldVertices(
+                        _WriteLocalVertices(Out, item->Vertices);
+                        _WriteWorldVertices(
                             Out,
                             item->Vertices,
                             item->Out_x,
@@ -521,8 +515,8 @@ namespace ET {
                     for (std::size_t h = 0; h < item->Holes.size(); ++h) {
                         Out << "HOLE " << h + 1 << " POLYGON\n";
 
-                        WriteLocalVertices(Out, item->Holes[h]);
-                        WriteWorldVertices(
+                        _WriteLocalVertices(Out, item->Holes[h]);
+                        _WriteWorldVertices(
                             Out,
                             item->Holes[h],
                             item->Out_x,

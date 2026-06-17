@@ -3,13 +3,21 @@
     "Nest2D_Engine, Nest2D_Engine",
     "Nest2D_InvokeFunctor, Nest2D_InvokeFunctor",
     "Nest2D_DataMapper, Nest2D_DataMapper",
-    "Nest2D_ExportPhoto, Nest2D_ExportPhoto"
+    "Nest2D_ExportPhoto, Nest2D_ExportPhoto",
+	 "Nest2D_BoardUtils, Nest2D_BoardUtils",
+    "Nest2D_GeometryUtils, Nest2D_GeometryUtils",
+    "Nest2D_SvgUtils, Nest2D_SvgUtils",
+    "Nest2D_PolygonBoardRepairer, Nest2D_PolygonBoardRepairer"
 	],
   "ComponentClassType": [],
   "LocalObjIns_LocalType": [ 
    "l_Nest2DEngine, Nest2D_Engine",
    "l_NestDataMapper, Nest2D_DataMapper",
-   "l_ExportPhoto, Nest2D_ExportPhoto"
+   "l_ExportPhoto, Nest2D_ExportPhoto",
+    "l_BoardUtils, Nest2D_BoardUtils",
+    "l_GeometryUtils, Nest2D_GeometryUtils",
+    "l_SvgUtils, Nest2D_SvgUtils",
+    "l_PolygonBoardRepairer, Nest2D_PolygonBoardRepairer"
   ],
   "GlobalObjIns_LocalIns": [
 	],

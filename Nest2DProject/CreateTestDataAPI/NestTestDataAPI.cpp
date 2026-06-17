@@ -1,12 +1,13 @@
 #include "pch.h"
 #include "NestTestDataAPI.h"
-
+#include "NestGeometryUtils.h"
 #include <algorithm>
 #include <fstream>
 #include <sstream>
 #include <cmath>
 #include <iomanip>
 #include <iostream>
+
 
 
 constexpr double PI = 3.14159265358979323846;
@@ -21,402 +22,6 @@ namespace ET {
 
         CetNestTestDataAPI::~CetNestTestDataAPI()
         {
-        }
-
-        static void OffsetVertices(CetVertices& AVerts, double AX, double AY)
-        {
-            for (auto& V : AVerts) {
-                V.first += AX;
-                V.second += AY;
-            }
-        }
-
-        static double CalcSignedArea(const CetVertices& AVerts)
-        {
-            if (AVerts.size() < 3) {
-                return 0.0;
-            }
-
-            double Area = 0.0;
-
-            for (size_t i = 0; i < AVerts.size(); ++i) {
-                const auto& P1 = AVerts[i];
-                const auto& P2 = AVerts[(i + 1) % AVerts.size()];
-
-                Area += P1.first * P2.second - P2.first * P1.second;
-            }
-
-            return Area * 0.5;
-        }
-
-        static void NormalizeContourDirection(CetVertices& AVerts, bool AIsHole)
-        {
-            if (AVerts.size() < 3) {
-                return;
-            }
-
-            double Area = CalcSignedArea(AVerts);
-
-            // 外轮廓建议逆时针，孔洞建议顺时针
-            if (!AIsHole && Area < 0.0) {
-                std::reverse(AVerts.begin(), AVerts.end());
-            }
-
-            if (AIsHole && Area > 0.0) {
-                std::reverse(AVerts.begin(), AVerts.end());
-            }
-        }
-        static CetVertices MakeTriangleBySidesVertices(double ASideA,double ASideB,double ASideC)
-        {
-            constexpr double EPS = 1e-9;
-
-            CetVertices Verts;
-
-            double a = ASideA;
-            double b = ASideB;
-            double c = ASideC;
-
-            if (a <= 0.0 || b <= 0.0 || c <= 0.0) {
-                return Verts;
-            }
-
-            if (a + b <= c + EPS ||
-                a + c <= b + EPS ||
-                b + c <= a + EPS) {
-                return Verts;
-            }
-
-            double x = (b * b + c * c - a * a) / (2.0 * c);
-            double y2 = b * b - x * x;
-
-            if (y2 < 0.0 && y2 > -EPS) {
-                y2 = 0.0;
-            }
-
-            if (y2 <= 0.0) {
-                return Verts;
-            }
-
-            double y = std::sqrt(y2);
-
-            Verts = {
-                {0.0, 0.0},
-                {c, 0.0},
-                {x, y}
-            };
-
-            double minX = Verts[0].first;
-            double minY = Verts[0].second;
-
-            for (const auto& V : Verts) {
-                if (V.first < minX) {
-                    minX = V.first;
-                }
-
-                if (V.second < minY) {
-                    minY = V.second;
-                }
-            }
-
-            if (minX < 0.0 || minY < 0.0) {
-                for (auto& V : Verts) {
-                    V.first -= minX;
-                    V.second -= minY;
-                }
-            }
-
-            return Verts;
-        }
-        static CetVertices MakeCircleVertices( double ACX, double ACY, double ARadius, int ASegments, bool AIsHole )
-        {
-            CetVertices Verts;
-
-            if (ARadius <= 0.0) {
-                return Verts;
-            }
-
-            if (ASegments < 4) {
-                ASegments = 4;
-            }
-
-            Verts.reserve(ASegments);
-
-            // 外轮廓圆继续用外切多边形，避免排版时圆被缩小
-            double UseRadius = ARadius;
-
-            if (!AIsHole) {
-                UseRadius = ARadius / std::cos(PI / ASegments);
-            }
-
-            if (!AIsHole) {
-                // 外轮廓：逆时针
-                for (int i = 0; i < ASegments; ++i) {
-                    double Angle = 2.0 * PI * i / ASegments;
-
-                    Verts.emplace_back(
-                        ACX + UseRadius * std::cos(Angle),
-                        ACY + UseRadius * std::sin(Angle)
-                    );
-                }
-            }
-            else {
-                // 孔洞：顺时针
-                for (int i = ASegments - 1; i >= 0; --i) {
-                    double Angle = 2.0 * PI * i / ASegments;
-
-                    Verts.emplace_back(
-                        ACX + UseRadius * std::cos(Angle),
-                        ACY + UseRadius * std::sin(Angle)
-                    );
-                }
-            }
-
-            return Verts;
-        }
-        static CetVertices MakeRegularPolygonVertices(double ACX,double ACY, int ASideCount, double ASideLength,bool AIsHole )
-        {
-            CetVertices Verts;
-
-            if (ASideCount < 3 || ASideLength <= 0.0) {
-                return Verts;
-            }
-
-            double Radius = ASideLength / (2.0 * std::sin(PI / ASideCount));
-
-            Verts.reserve(ASideCount);
-
-            if (!AIsHole) {
-                for (int i = 0; i < ASideCount; ++i) {
-                    double Angle = 2.0 * PI * i / ASideCount;
-
-                    Verts.emplace_back(
-                        ACX + Radius * std::cos(Angle),
-                        ACY + Radius * std::sin(Angle)
-                    );
-                }
-            }
-            else {
-                for (int i = ASideCount - 1; i >= 0; --i) {
-                    double Angle = 2.0 * PI * i / ASideCount;
-
-                    Verts.emplace_back(
-                        ACX + Radius * std::cos(Angle),
-                        ACY + Radius * std::sin(Angle)
-                    );
-                }
-            }
-
-            return Verts;
-        }
-        static CetVertices ReadProfileVertices(bool AIsHole,std::string* AProfileName)
-        {
-            if (AProfileName) {
-                *AProfileName = "Polygon";
-            }
-            int ShapeType = 0;
-
-            std::cout << std::endl;
-            std::cout << "Please select profile type:" << std::endl;
-            std::cout << "1. Triangle by 3 sides" << std::endl;
-            std::cout << "2. Circle by radius" << std::endl;
-            std::cout << "3. Custom polygon by vertices" << std::endl;
-            std::cout << "4. Regular polygon by side length" << std::endl;
-            std::cout << "Please enter: ";
-            std::cin >> ShapeType;
-
-            if (ShapeType == 1) {
-                if (AProfileName) {
-                    *AProfileName = "Triangle";
-                }
-                double A = 0.0;
-                double B = 0.0;
-                double C = 0.0;
-                double OffsetX = 0.0;
-                double OffsetY = 0.0;
-
-                std::cout << "Please enter side A: ";
-                std::cin >> A;
-
-                std::cout << "Please enter side B: ";
-                std::cin >> B;
-
-                std::cout << "Please enter side C: ";
-                std::cin >> C;
-
-                std::cout << "Please enter offset X: ";
-                std::cin >> OffsetX;
-
-                std::cout << "Please enter offset Y: ";
-                std::cin >> OffsetY;
-
-                CetVertices Verts = MakeTriangleBySidesVertices(A, B, C);
-
-                OffsetVertices(Verts, OffsetX, OffsetY);
-                NormalizeContourDirection(Verts, AIsHole);
-
-                return Verts;
-            }
-
-            if (ShapeType == 2) {
-                if (AProfileName) {
-                    *AProfileName = "Circle";
-                }
-                double CX = 0.0;
-                double CY = 0.0;
-                double Radius = 0.0;
-                int Segments = 32;
-
-                std::cout << "Please enter center X: ";
-                std::cin >> CX;
-
-                std::cout << "Please enter center Y: ";
-                std::cin >> CY;
-
-                std::cout << "Please enter radius: ";
-                std::cin >> Radius;
-
-                std::cout << "Please enter segments, for example 32: ";
-                std::cin >> Segments;
-
-                CetVertices Verts = MakeCircleVertices(
-                    CX,
-                    CY,
-                    Radius,
-                    Segments,
-                    AIsHole
-                );
-
-                NormalizeContourDirection(Verts, AIsHole);
-
-                return Verts;
-            }
-
-            if (ShapeType == 3) {
-                if (AProfileName) {
-                    *AProfileName = "Polygon";
-                }
-                int PointCount = 0;
-
-                std::cout << "Please enter point count: ";
-                std::cin >> PointCount;
-
-                CetVertices Verts;
-
-                if (PointCount < 3) {
-                    return Verts;
-                }
-
-                Verts.reserve(PointCount);
-
-                for (int i = 0; i < PointCount; ++i) {
-                    double X = 0.0;
-                    double Y = 0.0;
-
-                    std::cout << "Point " << i + 1 << " X: ";
-                    std::cin >> X;
-
-                    std::cout << "Point " << i + 1 << " Y: ";
-                    std::cin >> Y;
-
-                    Verts.emplace_back(X, Y);
-                }
-
-                NormalizeContourDirection(Verts, AIsHole);
-
-                return Verts;
-            }
-
-            if (ShapeType == 4) {
-                if (AProfileName) {
-                    *AProfileName = "RegularPolygon";
-                }
-
-                int SideCount = 0;
-                double SideLength = 0.0;
-                double CX = 0.0;
-                double CY = 0.0;
-
-                std::cout << "Please enter side count: ";
-                std::cin >> SideCount;
-
-                std::cout << "Please enter side length: ";
-                std::cin >> SideLength;
-
-                std::cout << "Please enter center X: ";
-                std::cin >> CX;
-
-                std::cout << "Please enter center Y: ";
-                std::cin >> CY;
-
-                CetVertices Verts = MakeRegularPolygonVertices(
-                    CX,
-                    CY,
-                    SideCount,
-                    SideLength,
-                    AIsHole
-                );
-
-                NormalizeContourDirection(Verts, AIsHole);
-
-                return Verts;
-            }
-
-            return CetVertices();
-        }
-        static int CalcCircleSegmentsByTolerance( double ARadius,double ATolerance,int AMinSegments = 4,int AMaxSegments = 32)
-        {
-            if (ARadius <= 0.0) {
-                return AMinSegments;
-            }
-
-            if (ATolerance <= 0.0) {
-                return AMaxSegments;
-            }
-
-            double value = ARadius / (ARadius + ATolerance);
-
-            if (value < -1.0) value = -1.0;
-            if (value > 1.0) value = 1.0;
-
-            int segments = static_cast<int>( std::ceil(PI / std::acos(value)));
-
-            if (segments < AMinSegments) {
-                segments = AMinSegments;
-            }
-
-            if (segments > AMaxSegments) {
-                segments = AMaxSegments;
-            }
-
-            return segments;
-        }
-        static int CalcCircleSegmentsAuto( double ARadius,bool AHasOtherItems, double AMinOtherItemSize, double AToleranceRatio = 0.1)
-        {
-            // 没有其他图形，粗略一点就行
-            if (!AHasOtherItems) {
-                return 4;
-            }
-            // 有其他图形，但是没拿到尺寸，给一个平衡值
-            if (AMinOtherItemSize <= 0.0) {
-                return 16;
-            }
-            if (AToleranceRatio <= 0.0) {
-                AToleranceRatio = 0.1;
-            }
-            // 允许圆形多边形比真实圆多占“最小零件尺寸的 10%”
-            double tolerance = AMinOtherItemSize * AToleranceRatio;
-
-            // 防止 tolerance 太小导致 segments 太大
-            if (tolerance < 0.2) {
-                tolerance = 0.2;
-            }
-
-            // 防止 tolerance 太大导致圆太粗
-            if (tolerance > 3.0) {
-                tolerance = 3.0;
-            }
-
-            return CalcCircleSegmentsByTolerance( ARadius,tolerance, 4,32);
         }
         int CetNestTestDataAPI::Init( double ABinWidth, double ABinHeight,double ASpacing, int ARotations )
         {
@@ -546,7 +151,7 @@ namespace ET {
 
             // ASegments <= 0 表示自动计算
            
-             int  ASegments = CalcCircleSegmentsAuto(  ARadius,AHasOtherItems, AMinOtherItemSize , AToleranceRatio);
+             int  ASegments = m_GeometryUtils.CalcCircleSegmentsAuto(  ARadius,AHasOtherItems, AMinOtherItemSize , AToleranceRatio);
            
             if (ASegments < 4) {
                 ASegments = 4;
@@ -619,7 +224,7 @@ namespace ET {
             std::cout << "Create outer profile:" << std::endl;
 
             std::string OuterName = "Polygon";
-            CetVertices Outer = ReadProfileVertices(false, &OuterName);
+            CetVertices Outer = m_ProfileInputUtils.ReadProfileVertices(false, &OuterName);
 
             if (Outer.size() < 3) {
                 std::cout << "[DLL] Invalid outer profile." << std::endl;
@@ -642,7 +247,7 @@ namespace ET {
                 std::cout << "Create hole " << i + 1 << ":" << std::endl;
 
                 std::string HoleName = "Polygon";
-                CetVertices Hole = ReadProfileVertices(true, &HoleName);
+                CetVertices Hole = m_ProfileInputUtils.ReadProfileVertices(true, &HoleName);
 
                 if (Hole.size() < 3) {
                     std::cout << "[DLL] Invalid hole, skipped." << std::endl;
@@ -672,7 +277,7 @@ namespace ET {
                 return;
             }
 
-            NormalizeContourDirection(AVertices, false);
+            m_GeometryUtils.NormalizeContourDirection(AVertices, false);
 
             m_Board.Enabled = true;
             m_Board.Vertices = std::move(AVertices);
@@ -692,11 +297,11 @@ namespace ET {
                 return;
             }
 
-            NormalizeContourDirection(AOuter, false);
+            m_GeometryUtils.NormalizeContourDirection(AOuter, false);
 
             for (auto& Hole : AHoles) {
                 if (Hole.size() >= 3) {
-                    NormalizeContourDirection(Hole, true);
+                    m_GeometryUtils.NormalizeContourDirection(Hole, true);
                 }
             }
 
@@ -792,11 +397,7 @@ namespace ET {
 
         bool CetNestTestDataAPI::SaveToFile(const std::string& AFilePath) const
         {
-            std::cout << "[DLL] SaveToFile called. File = "
-                << AFilePath
-                << ", polygon count = "
-                << m_Polygons.size()
-                << std::endl;
+            std::cout << "[DLL] SaveToFile called. File = "<< AFilePath<< ", polygon count = "<< m_Polygons.size()<< std::endl;
 
             std::ofstream Out(AFilePath.c_str());
 

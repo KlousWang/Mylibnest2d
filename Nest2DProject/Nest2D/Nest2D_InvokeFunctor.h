@@ -27,6 +27,10 @@ namespace ET {
             ET::CORE::CetCoreObject* m_NestDataMapper = nullptr;
             ET::CORE::CetCoreObject* m_ExportPhoto = nullptr;
 
+            ET::CORE::CetCoreObject* m_BoardUtils = nullptr;
+            ET::CORE::CetCoreObject* m_GeometryUtils = nullptr;
+            ET::CORE::CetCoreObject* m_SvgUtils = nullptr;
+            ET::CORE::CetCoreObject* m_PolygonBoardRepairer = nullptr;
         public:   
             //ET::CORE::CetCoreObjFunctor<int(int, int)> WWFunct1;
             ET::CORE::CetCoreObjFunctor<int(CetTNestItemVector&, const TetNestOptions&, std::size_t*)> RunNestingFunctor;
@@ -34,6 +38,19 @@ namespace ET {
             ET::CORE::CetCoreObjFunctor<void(const CetTNestItemVector&, std::vector<TetNestPolygon>&)>ApplyResults;
             ET::CORE::CetCoreObjFunctor<int(CetTNestItemVector&, const TetNestOptions&, int)>ExportSvg;
             ET::CORE::CetCoreObjFunctor<int(const std::vector<TetNestPolygon>&, const TetNestOptions&, int)>ExportSvgbd;
+
+            ET::CORE::CetCoreObjFunctor<TetBoardBounds(const TetNestBoard&)> CalcBoardBoundsLocal;
+            ET::CORE::CetCoreObjFunctor<ClipperLib::Path(const std::vector<TetNestPoint>&,double,double,bool)> BuildPathFromPoints;
+            ET::CORE::CetCoreObjFunctor<libnest2d::PolygonImpl(const TetNestOptions&,double&,double&)> BuildBinPolygonFromOptions;
+            ET::CORE::CetCoreObjFunctor<TetNestPoint(const TetNestPoint&,double,double,double)> TransformPoint;
+            ET::CORE::CetCoreObjFunctor<double(double)> RadToDeg;
+            ET::CORE::CetCoreObjFunctor<bool(const TetNestPoint&,const std::vector<TetNestPoint>&)> PointInPolygon;
+            ET::CORE::CetCoreObjFunctor<bool(const TetNestPoint&,const TetNestBoard&)> IsPointInsideBoard;
+            ET::CORE::CetCoreObjFunctor<void(std::vector<TetNestPolygon>&,const TetNestBoard&)> ValidateItemsInsideBoard;
+            ET::CORE::CetCoreObjFunctor<std::string(const TetNestBoard&,double)> MakeBoardSvgPath;
+            ET::CORE::CetCoreObjFunctor<void(const std::string&,const std::string&)> InsertTextBeforeSvgEnd;
+            ET::CORE::CetCoreObjFunctor<void(CetTNestItemVector&,const TetNestOptions&,const libnest2d::PolygonImpl&,double,double)> SetPolygonBoardRepairContext;
+            ET::CORE::CetCoreObjFunctor<void(std::size_t&)> RepairPolygonBoard;
         };
     }
 }

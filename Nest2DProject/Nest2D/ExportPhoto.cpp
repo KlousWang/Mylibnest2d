@@ -3,6 +3,7 @@
 #include"NestUtils.h"
 #include"Nest2D_DataConst.h"
 #include"Nest2D_PrivateDataType.h"
+#include"Nest2D_SelfFunction.h"
 //#include<libnest2d/backends/clipper/geometries.hpp>
 //#include<libnest2d/libnest2d.hpp>
 #include <libnest2d/utils/svgtools.hpp>
@@ -15,77 +16,9 @@ namespace ET {
 		CetExportPhoto::CetExportPhoto() :CetCoreObject()
 		{
 		}
-
 		CetExportPhoto::~CetExportPhoto()
 		{
 		}
-        static std::string MakeBoardSvgPath(const TetNestBoard& ABoard,double ASvgHeight)
-        {
-            if (!ABoard.Enabled || ABoard.Vertices.size() < 3) {
-                return "";
-            }
-
-            std::ostringstream ss;
-
-            ss << "<path d=\"";
-
-            ss << "M "
-                << ABoard.Vertices[0].X
-                << ","
-                << (ASvgHeight - ABoard.Vertices[0].Y)
-                << " ";
-
-            for (size_t i = 1; i < ABoard.Vertices.size(); ++i) {
-                ss << "L "
-                    << ABoard.Vertices[i].X
-                    << ","
-                    << (ASvgHeight - ABoard.Vertices[i].Y)
-                    << " ";
-            }
-
-            ss << "z\" style=\"fill:#1b2a3a;fill-opacity:0.18;stroke:red;stroke-width:2px;\"/>\n";
-
-            return ss.str();
-        }
-
-        static void InsertTextBeforeSvgEnd(const std::string& AFilePath,const std::string& AText)
-        {
-            if (AText.empty()) {
-                return;
-            }
-
-            std::ifstream fin(AFilePath.c_str(), std::ios::in | std::ios::binary);
-
-            if (!fin.is_open()) {
-                std::cout << "[SVG][WARN] cannot reopen svg: " << AFilePath << std::endl;
-                return;
-            }
-
-            std::stringstream buffer;
-            buffer << fin.rdbuf();
-            std::string content = buffer.str();
-            fin.close();
-
-            size_t pos = content.rfind("</svg>");
-
-            if (pos == std::string::npos) {
-                std::cout << "[SVG][WARN] cannot find </svg> in: " << AFilePath << std::endl;
-                return;
-            }
-
-            content.insert(pos, AText);
-
-            std::ofstream fout(AFilePath.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
-
-            if (!fout.is_open()) {
-                std::cout << "[SVG][WARN] cannot write svg: " << AFilePath << std::endl;
-                return;
-            }
-
-            fout << content;
-            fout.close();
-        }
-
 		int CetExportPhoto::ExportSvg(const std::vector<TetNestPolygon>& AItems, const TetNestOptions& AOptions, int AUsedBins) 
 		{
             std::cout << "[SVG] Board.Enabled = "
@@ -224,12 +157,12 @@ namespace ET {
                 std::cout << "[SVG] realSvgPath = " << realSvgPath << std::endl;
 
                 if (AOptions.Board.Enabled && AOptions.Board.Vertices.size() >= 3) {
-                    std::string boardPath = MakeBoardSvgPath(
+                    std::string boardPath = Nest2DUtils->MakeBoardSvgPath(
                         AOptions.Board,
                         AOptions.BinHeight
                     );
 
-                    InsertTextBeforeSvgEnd(realSvgPath, boardPath);
+                   Nest2DUtils->InsertTextBeforeSvgEnd(realSvgPath, boardPath);
                 }
             }
 
