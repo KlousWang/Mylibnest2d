@@ -77,11 +77,9 @@ namespace ET {
 					BoardBinHeight
 				);
 
-				using CetMyPlacer =
-					placers::_NofitPolyPlacer<PolygonImpl, PolygonImpl>;
+				using CetMyPlacer =placers::_NofitPolyPlacer<PolygonImpl, PolygonImpl>;
 
-				using CetMySelector =
-					selections::_FirstFitSelection<PolygonImpl>;
+				using CetMySelector =selections::_FirstFitSelection<PolygonImpl>;
 
 				NestConfig<CetMyPlacer, CetMySelector> cfg;
 
@@ -132,16 +130,13 @@ namespace ET {
 
 				Box Bin(width, height, { width / 2, height / 2 });
 
-				using CetMyPlacer =
-					placers::_NofitPolyPlacer<PolygonImpl, Box>;
+				using CetMyPlacer =placers::_NofitPolyPlacer<PolygonImpl, Box>;
 
-				using CetMySelector =
-					selections::_FirstFitSelection<PolygonImpl>;
+				using CetMySelector =selections::_FirstFitSelection<PolygonImpl>;
 
 				NestConfig<CetMyPlacer, CetMySelector> cfg;
 
-				cfg.placer_config.alignment =
-					placers::NfpPConfig<PolygonImpl>::Alignment::BOTTOM_LEFT;
+				cfg.placer_config.alignment =placers::NfpPConfig<PolygonImpl>::Alignment::BOTTOM_LEFT;
 
 				cfg.placer_config.parallel = false;
 				cfg.placer_config.explore_holes = true;

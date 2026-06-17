@@ -127,20 +127,14 @@ CetVertices CetNestGeometryUtils::MakeCircleVertices(double ACX,double ACY,doubl
         for (int i = 0; i < ASegments; ++i) {
             double Angle = 2.0 * PI * i / ASegments;
 
-            Verts.emplace_back(
-                ACX + UseRadius * std::cos(Angle),
-                ACY + UseRadius * std::sin(Angle)
-            );
+            Verts.emplace_back(ACX + UseRadius * std::cos(Angle),ACY + UseRadius * std::sin(Angle));
         }
     }
     else {
         for (int i = ASegments - 1; i >= 0; --i) {
             double Angle = 2.0 * PI * i / ASegments;
 
-            Verts.emplace_back(
-                ACX + UseRadius * std::cos(Angle),
-                ACY + UseRadius * std::sin(Angle)
-            );
+            Verts.emplace_back(ACX + UseRadius * std::cos(Angle),ACY + UseRadius * std::sin(Angle));
         }
     }
 
