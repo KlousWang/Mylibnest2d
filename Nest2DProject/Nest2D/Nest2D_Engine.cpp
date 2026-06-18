@@ -135,14 +135,52 @@ namespace ET {
 				using CetMySelector =selections::_FirstFitSelection<PolygonImpl>;
 
 				NestConfig<CetMyPlacer, CetMySelector> cfg;
+				cfg.placer_config.accuracy = 0.8f;
+				//cfg.placer_config.alignment = placers::NfpPConfig<PolygonImpl>::Alignment::DONT_ALIGN;
+				cfg.placer_config.alignment = placers::NfpPConfig<PolygonImpl>::Alignment::BOTTOM_LEFT;
+				cfg.placer_config.starting_point = placers::NfpPConfig<PolygonImpl>::Alignment::BOTTOM_LEFT;
+				cfg.placer_config.parallel = true;
+				cfg.placer_config.explore_holes = false;
+				cfg.placer_config.rotations.clear();
+				FillRotations (cfg.placer_config.rotations,AOptions.Rotations);
+				using Config = placers::NfpPConfig<PolygonImpl>;
+				using ItemGroup = typename Config::ItemGroup;
 
-				cfg.placer_config.alignment =placers::NfpPConfig<PolygonImpl>::Alignment::BOTTOM_LEFT;
+				Box pileBox;
+				bool hasPileBox = false;
 
-				cfg.placer_config.parallel = false;
-				cfg.placer_config.explore_holes = true;
+				cfg.placer_config.before_packing =[&](const nfp::Shapes<PolygonImpl>&,const ItemGroup& packed,const ItemGroup&)
+					{
+						hasPileBox = false;
+						for (const auto& refItem : packed) {
+							const auto& it = refItem.get();
 
-				FillRotations(cfg.placer_config.rotations,AOptions.Rotations);
+							if (!hasPileBox) {
+								pileBox = it.boundingBox();
+								hasPileBox = true;
+							}
+							else {
+								pileBox = sl::boundingBox(pileBox, it.boundingBox());
+							}
+						}
+					};
 
+				cfg.placer_config.object_function =
+					[&](const auto& item) -> double
+					{
+						Box ibb = item.boundingBox();
+
+						Box fullbb = hasPileBox
+							? sl::boundingBox(pileBox, ibb)
+							: ibb;
+
+						double w = double(fullbb.width());
+						double h = double(fullbb.height());
+						double area = w * h;
+
+						
+						return area + 1000.0 * h + 0.01 * w;
+					};
 				std::cout << "================ DEBUG INFO ================" << std::endl;
 				std::cout << "UsePolygonBoard: false" << std::endl;
 				std::cout << "Bin Width: " << Bin.width()<< ", Height: " << Bin.height()<< std::endl;
