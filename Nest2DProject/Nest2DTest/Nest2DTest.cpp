@@ -6,6 +6,7 @@
 #include"Nest2DTest_SelfFunction.h"
 #include"Nest2DTestApp.h"
 #include"MainMenuRunner.h"
+#include"MenuRunnerBase.h"
 using namespace ET::CORE;
 
 int main() {
@@ -18,7 +19,7 @@ int main() {
 	auto tmpObj1 = CetCoreObjStorage::GetClassIns("gCreateTestData");
 	auto tmpObj2 = CetCoreObjStorage::GetClassIns("gFile");
 	auto tmpObj3 = CetCoreObjStorage::GetClassIns("gNest2D");
-	CetMainMenuRunner menuRunner;
+	CetMainMenuRunner  menuRunner;
 	menuRunner.Run();
  
 	return 0;

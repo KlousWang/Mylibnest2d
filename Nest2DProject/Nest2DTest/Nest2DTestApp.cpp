@@ -1,73 +1,31 @@
 #include "Nest2DTestApp.h"
-#include"Nest2D_DataType.h"
-
-#include"Nest2DTest_SelfFunction.h"
+#include "ShapeMenuRunner.h"
+#include "BoardMenuRunner.h"
+#include"NestExportManager.h"
+#include "Nest2D_DataType.h"
+#include "Nest2DTest_SelfFunction.h"
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
 #include <string>
 #include <fstream>
 
-
 namespace ET {
 	namespace NEST2DTESTAPP {
-        enum MetShapeMenuChoice
-        {
-            SHAPE_FINISH = 0,
-            SHAPE_TRIANGLE = 1,
-            SHAPE_RECTANGLE = 2,
-            SHAPE_CIRCLE = 3,
-            SHAPE_WITH_HOLES = 4
-        }; 
-        enum MetBoardMenuChoice
-        {
-            BOARD_NORMAL = 0,
-            BOARD_L_SHAPE = 1,
-            BOARD_CUSTOM_POLYGON = 2
-        };
+    
         void CetTestApp::InputBoardIfNeeded()
         {
-            TetBoardMenuMap BoardMenu;
-
-            BoardMenu[BOARD_NORMAL] = {
-                "Normal rectangle board",
-                &CetTestApp::_UseNormalBoard
-            };
-
-            BoardMenu[BOARD_L_SHAPE] = {
-                "L shape board",
-                &CetTestApp::_InputLShapeBoard
-            };
-
-            BoardMenu[BOARD_CUSTOM_POLYGON] = {
-                "Custom polygon board",
-                &CetTestApp::_InputCustomPolygonBoard
-            };
-
-            _PrintBoardMenu(BoardMenu);
-
-            int BoardType = _ReadChoice();
-
-            _ExecuteBoardMenuItem(BoardType, BoardMenu);
+            CetBoardMenuRunner BoardRunner(*this);
+            BoardRunner.Run();
         }
         void CetTestApp::InputShapes()
         {
-            m_StopInputShapes = false;
             m_MinOtherItemSize = 0.0;
             m_HasOtherItems = false;
             m_RandomPosition = true;
-            CetShapeMenuMap ShapeMenu;
 
-            ShapeMenu[SHAPE_FINISH] = {"Finish adding shapes", &CetTestApp::_FinishInputShapes };
-            ShapeMenu[SHAPE_TRIANGLE] = {"Triangle", &CetTestApp::_InputTriangle};
-            ShapeMenu[SHAPE_RECTANGLE] = { "Rectangle", &CetTestApp::_InputRectangle};
-            ShapeMenu[SHAPE_CIRCLE] = { "Circle", &CetTestApp::_InputCircle };
-            ShapeMenu[SHAPE_WITH_HOLES] = { "With Holes", &CetTestApp::_InputShapeWithHoles };
-            while (!m_StopInputShapes) {
-                _PrintShapeMenu(ShapeMenu);
-                int ShapeType = _ReadChoice();
-                _ExecuteShapeMenuItem(ShapeType,ShapeMenu );
-            }
+            CetShapeMenuRunner ShapeRunner(*this);
+            ShapeRunner.Run();
         }
         bool CetTestApp::GenerateNestFile(std::string& AInputFile)
         {
@@ -112,87 +70,18 @@ namespace ET {
 
             std::cout << "Read Items number: " << Items.size() << std::endl;
 
-            char exportSvg = 'y';
-            std::string svgPath;
+            CetNestExportManager ExportManager;
 
-            std::cout << "Export SVG? y/n: ";
-            std::cin >> exportSvg;
-
-            if (exportSvg == 'y' || exportSvg == 'Y') {
-                Options.ExportSvg = true;
-
-                std::cout << "Please enter SVG out path£¬for example Result.svg: ";
-                std::cin >> svgPath;
-
-                Options.SvgPath = svgPath;
+            if (!ExportManager.PrepareAll(Options)) {
+                return -1;
             }
-            else {
-                Options.ExportSvg = false;
-            }
-
             int nestCode = Nest2DUtils->PerformNest(Items, Options, &result);
             std::cout << "PerformNest result = " << nestCode << std::endl;
             std::cout << "UsedBins = " << result.UsedBins << std::endl;
             std::cout << "Message = " << result.Message << std::endl;
-
-            char exportFile = 'y';
-            std::cout << "Export File? y/n: ";
-            std::cin >> exportFile;
-
-            if (exportFile == 'y' || exportFile == 'Y') {
-                std::string FilePath;
-
-                std::cout << "Please enter File out path£¬for example Result.txt: ";
-                std::cin >> FilePath;
-
-                int saveCoordCode =
-                    Nest2DUtils->SaveCoordinatesFile(FilePath, Options, Items, result.UsedBins);
-
-                std::cout << "SaveCoordinatesFile result = " << saveCoordCode << std::endl;
-            }
+            ExportManager.ExportAll(Options, Items, result);
 
             return nestCode;
-        }
-        void CetTestApp::_PrintShapeMenu(const CetShapeMenuMap& AMenuItems) const
-        {
-            std::cout << std::endl;
-            std::cout << "Please select shape type:" << std::endl;
-
-            for (const auto& Item : AMenuItems) {
-                std::cout << Item.first
-                    << ". "
-                    << Item.second.Description
-                    << std::endl;
-            }
-
-            std::cout << "Please enter: ";
-        }
-        void CetTestApp::_PrintBoardMenu(const TetBoardMenuMap& AMenuItems) const
-        {
-            std::cout << "Please select board type:" << std::endl;
-
-            for (const auto& Item : AMenuItems) {
-                std::cout << Item.first
-                    << ". "
-                    << Item.second.Description
-                    << std::endl;
-            }
-        }
-        int CetTestApp::_ExecuteBoardMenuItem(int AChoice, const TetBoardMenuMap& AMenuItems)
-        {
-            auto It = AMenuItems.find(AChoice);
-
-            if (It == AMenuItems.end()) {
-                std::cout << "Invalid board type." << std::endl;
-                return -1;
-            }
-
-            if (It->second.Func == nullptr) {
-                std::cout << "Board function is empty." << std::endl;
-                return -1;
-            }
-
-            return (this->*(It->second.Func))();
         }
         int CetTestApp::_UseNormalBoard()
         {
@@ -325,33 +214,6 @@ namespace ET {
 
             AInputFile = ASaveFile;
             return true;
-        }
-        int CetTestApp::_ReadChoice() const
-        {
-            int Choice = 0;
-            std::cin >> Choice;
-            return Choice;
-        }
-        int CetTestApp::_ExecuteShapeMenuItem(int AChoice, const CetShapeMenuMap& AMenuItems)
-        {
-            auto It = AMenuItems.find(AChoice);
-
-            if (It == AMenuItems.end()) {
-                std::cout << "Invalid shape type." << std::endl;
-                return -1;
-            }
-
-            if (It->second.Func == nullptr) {
-                std::cout << "Shape function is empty." << std::endl;
-                return -1;
-            }
-
-            return (this->*(It->second.Func))();
-        }
-        int CetTestApp::_FinishInputShapes()
-        {
-            m_StopInputShapes = true;
-            return 0;
         }
         int CetTestApp::_InputTriangle()
         {
