@@ -45,7 +45,11 @@ namespace ET {
             ET::CORE::CetCoreObjFunctor<TetNestPoint(const TetNestPoint&,double,double,double)> TransformPoint;
             ET::CORE::CetCoreObjFunctor<double(double)> RadToDeg;
             ET::CORE::CetCoreObjFunctor<bool(const TetNestPoint&,const std::vector<TetNestPoint>&)> PointInPolygon;
-            ET::CORE::CetCoreObjFunctor<bool(const TetNestPoint&,const TetNestBoard&)> IsPointInsideBoard;
+            ET::CORE::CetCoreObjFunctor<bool(const TetNestPoint&, const TetNestBoard&)> IsPointInsideBoard;
+            ET::CORE::CetCoreObjFunctor<double(const TetNestPolygon&)> CalcPolygonBoundingBoxArea;
+            ET::CORE::CetCoreObjFunctor<bool(const TetNestPolygon& , const TetNestPolygon&)> ComparePolygonAreaDesc;
+
+
             ET::CORE::CetCoreObjFunctor<void(std::vector<TetNestPolygon>&,const TetNestBoard&)> ValidateItemsInsideBoard;
             ET::CORE::CetCoreObjFunctor<std::string(const TetNestBoard&,double)> MakeBoardSvgPath;
             ET::CORE::CetCoreObjFunctor<void(const std::string&,const std::string&)> InsertTextBeforeSvgEnd;

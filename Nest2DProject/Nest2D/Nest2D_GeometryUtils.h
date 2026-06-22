@@ -20,6 +20,8 @@ namespace ET {
 				_WrapFunc("PointInPolygon", Type_Class_Func(PointInPolygon));
 				_WrapFunc("IsPointInsideBoard", Type_Class_Func(IsPointInsideBoard));
 				_WrapFunc("ValidateItemsInsideBoard", Type_Class_Func(ValidateItemsInsideBoard));
+				_WrapFunc("CalcPolygonBoundingBoxArea", Type_Class_Func(CalcPolygonBoundingBoxArea));
+				_WrapFunc("ComparePolygonAreaDesc", Type_Class_Func(ComparePolygonAreaDesc));
 			}
 
 		public:
@@ -31,6 +33,9 @@ namespace ET {
 			bool PointInPolygon(const TetNestPoint& AP, const std::vector<TetNestPoint>& APolygon);
 			bool IsPointInsideBoard(const TetNestPoint& AP, const TetNestBoard& ABoard);
 			void ValidateItemsInsideBoard(std::vector<TetNestPolygon>& AItems,const TetNestBoard& ABoard);
+
+			double CalcPolygonBoundingBoxArea(const TetNestPolygon& APoly);
+			bool ComparePolygonAreaDesc(const TetNestPolygon&ADataa, const TetNestPolygon& ADAtab);
 		};
 	}
 

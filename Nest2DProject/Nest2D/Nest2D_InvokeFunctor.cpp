@@ -51,7 +51,9 @@ namespace ET {
             CetNest2DInvokeFunctor::RadToDeg.Reload(m_GeometryUtils, "RadToDeg");
             CetNest2DInvokeFunctor::PointInPolygon.Reload(m_GeometryUtils, "PointInPolygon");
             CetNest2DInvokeFunctor::IsPointInsideBoard.Reload(m_GeometryUtils, "IsPointInsideBoard");
-            CetNest2DInvokeFunctor:: ValidateItemsInsideBoard.Reload(m_GeometryUtils,"ValidateItemsInsideBoard");
+            CetNest2DInvokeFunctor::ValidateItemsInsideBoard.Reload(m_GeometryUtils, "ValidateItemsInsideBoard");
+            CetNest2DInvokeFunctor::CalcPolygonBoundingBoxArea.Reload(m_GeometryUtils, "CalcPolygonBoundingBoxArea");
+            CetNest2DInvokeFunctor::ComparePolygonAreaDesc.Reload(m_GeometryUtils,"ComparePolygonAreaDesc");
 
             CetNest2DInvokeFunctor::MakeBoardSvgPath.Reload(m_SvgUtils, "MakeBoardSvgPath");
             CetNest2DInvokeFunctor::InsertTextBeforeSvgEnd.Reload(m_SvgUtils, "InsertTextBeforeSvgEnd");

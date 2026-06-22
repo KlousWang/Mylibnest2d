@@ -103,3 +103,24 @@ void ET::NEST2DMANAGERLIB::CetGeometryUtils::ValidateItemsInsideBoard(std::vecto
         }
     }
 }
+
+double ET::NEST2DMANAGERLIB::CetGeometryUtils::CalcPolygonBoundingBoxArea(const TetNestPolygon& APoly)
+{
+    if (APoly.Vertices.empty()) return 0.0;
+
+    double minX = APoly.Vertices[0].X, maxX = minX;
+    double minY = APoly.Vertices[0].Y, maxY = minY;
+
+    for (const auto& pt : APoly.Vertices) {
+        if (pt.X < minX) minX = pt.X;
+        if (pt.X > maxX) maxX = pt.X;
+        if (pt.Y < minY) minY = pt.Y;
+        if (pt.Y > maxY) maxY = pt.Y;
+    }
+    return (maxX - minX) * (maxY - minY);
+}
+
+bool ET::NEST2DMANAGERLIB::CetGeometryUtils::ComparePolygonAreaDesc(const TetNestPolygon& ADataa, const TetNestPolygon& ADAtab)
+{
+    return CalcPolygonBoundingBoxArea(ADataa) > CalcPolygonBoundingBoxArea(ADAtab);
+}

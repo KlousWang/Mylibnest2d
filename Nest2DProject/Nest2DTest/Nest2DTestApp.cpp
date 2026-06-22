@@ -20,10 +20,7 @@ namespace ET {
         }
         void CetTestApp::InputBoardIfNeeded()
         {
-            auto* BoardRunner =
-                static_cast<CetBoardMenuRunner*>(
-                    ET::CORE::CetCoreObject::CreateIns("BoardMenuRunner")
-                    );
+            auto* BoardRunner =static_cast<CetBoardMenuRunner*>(ET::CORE::CetCoreObject::CreateIns("BoardMenuRunner"));
 
             if (!BoardRunner) {
                 std::cout << "Create BoardMenuRunner failed." << std::endl;

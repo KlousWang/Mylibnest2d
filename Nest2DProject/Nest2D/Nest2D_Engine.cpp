@@ -18,7 +18,7 @@ namespace ET {
 		CetNest2DEngine::~CetNest2DEngine()
 		{
 		}
-		static void FillRotations(std::vector<libnest2d::Radians>& ARotations,int ARotationCount)
+		static void FillRotations(std::vector<libnest2d::Radians>& ARotations, int ARotationCount)
 		{
 			ARotations.clear();
 
@@ -57,8 +57,18 @@ namespace ET {
 
 			if (ANestItems.empty()) {
 				return NEST2D_ERR_CORE_EMPTY_INPUT;
-			}		
-			const bool UsePolygonBoard =AOptions.Board.Enabled &&AOptions.Board.Vertices.size() >= 3;
+			}
+			//std::cout << "[NEST] Sorting items by bounding box area (Descending)..." << std::endl;
+			//std::sort(ANestItems.begin(), ANestItems.end(), [](const auto& a, const auto& b) {
+			//	auto bbA = a.boundingBox();
+			//	auto bbB = b.boundingBox();
+			//	// 计算外接矩形面积进行比较
+			//	double areaA = static_cast<double>(bbA.width()) * static_cast<double>(bbA.height());
+			//	double areaB = static_cast<double>(bbB.width()) * static_cast<double>(bbB.height());
+			//	return areaA > areaB;
+			//	});
+
+			const bool UsePolygonBoard = AOptions.Board.Enabled && AOptions.Board.Vertices.size() >= 3;
 
 			int TotalItems = static_cast<int>(ANestItems.size());
 			TetNestProgressTracker Tracker(TotalItems, AOptions.ProgressCallback);
@@ -71,27 +81,27 @@ namespace ET {
 				double BoardBinWidth = AOptions.BinWidth;
 				double BoardBinHeight = AOptions.BinHeight;
 
-				PolygonImpl binPoly = Nest2DUtils->BuildBinPolygonFromOptions(AOptions,BoardBinWidth,BoardBinHeight);
+				PolygonImpl binPoly = Nest2DUtils->BuildBinPolygonFromOptions(AOptions, BoardBinWidth, BoardBinHeight);
 
-				using CetMyPlacer =placers::_NofitPolyPlacer<PolygonImpl, PolygonImpl>;
+				using CetMyPlacer = placers::_NofitPolyPlacer<PolygonImpl, PolygonImpl>;
 
-				using CetMySelector =selections::_FirstFitSelection<PolygonImpl>;
+				using CetMySelector = selections::_FirstFitSelection<PolygonImpl>;
 
 				NestConfig<CetMyPlacer, CetMySelector> cfg;
 
-				cfg.placer_config.alignment =placers::NfpPConfig<PolygonImpl>::Alignment::DONT_ALIGN;
+				cfg.placer_config.alignment = placers::NfpPConfig<PolygonImpl>::Alignment::DONT_ALIGN;
 				cfg.placer_config.starting_point = placers::NfpPConfig<PolygonImpl>::Alignment::BOTTOM_LEFT;
 				cfg.placer_config.accuracy = 1.0f;
 				cfg.placer_config.parallel = true;
 				cfg.placer_config.explore_holes = false;
 
-				FillRotations(cfg.placer_config.rotations,AOptions.Rotations);
+				FillRotations(cfg.placer_config.rotations, AOptions.Rotations);
 
 				std::cout << "================ DEBUG INFO ================" << std::endl;
 				std::cout << "UsePolygonBoard: true" << std::endl;
-				std::cout << "BoardBinWidth: " << BoardBinWidth<< ", BoardBinHeight: " << BoardBinHeight<< std::endl;
-				std::cout << "Spacing: "<< NestUtils::ToNestCoord(AOptions.Spacing)<< std::endl;
-				std::cout << "Board.Vertices.size: "<< AOptions.Board.Vertices.size()<< std::endl;
+				std::cout << "BoardBinWidth: " << BoardBinWidth << ", BoardBinHeight: " << BoardBinHeight << std::endl;
+				std::cout << "Spacing: " << NestUtils::ToNestCoord(AOptions.Spacing) << std::endl;
+				std::cout << "Board.Vertices.size: " << AOptions.Board.Vertices.size() << std::endl;
 				std::cout << "============================================" << std::endl;
 
 				Layers = nest(
@@ -101,11 +111,11 @@ namespace ET {
 					cfg,
 					ProgressFunction{ Tracker }
 				);
-				std::cout << "[NEST] before repair, Layers = "<< Layers<< std::endl;
+				std::cout << "[NEST] before repair, Layers = " << Layers << std::endl;
 
-				Nest2DUtils->SetPolygonBoardRepairContext(ANestItems,AOptions,binPoly,BoardBinWidth,BoardBinHeight);
+				Nest2DUtils->SetPolygonBoardRepairContext(ANestItems, AOptions, binPoly, BoardBinWidth, BoardBinHeight);
 				Nest2DUtils->RepairPolygonBoard(Layers);
-				std::cout << "[NEST] after repair, Layers = "<< Layers<< std::endl;
+				std::cout << "[NEST] after repair, Layers = " << Layers << std::endl;
 			}
 			else {
 				std::cout << "[NEST] use original rectangle BIN" << std::endl;
@@ -118,54 +128,24 @@ namespace ET {
 
 				Box Bin(width, height, { width / 2, height / 2 });
 
-				using CetMyPlacer =placers::_NofitPolyPlacer<PolygonImpl, Box>;
+				using CetMyPlacer = placers::_NofitPolyPlacer<PolygonImpl, Box>;
 
-				using CetMySelector =selections::_FirstFitSelection<PolygonImpl>;
+				using CetMySelector = selections::_FirstFitSelection<PolygonImpl>;
 
 				NestConfig<CetMyPlacer, CetMySelector> cfg;
 				cfg.placer_config.accuracy = 0.8f;
 				//cfg.placer_config.alignment = placers::NfpPConfig<PolygonImpl>::Alignment::DONT_ALIGN;
-				cfg.placer_config.alignment = placers::NfpPConfig<PolygonImpl>::Alignment::BOTTOM_LEFT;
-				cfg.placer_config.starting_point = placers::NfpPConfig<PolygonImpl>::Alignment::BOTTOM_LEFT;
+				cfg.placer_config.alignment = placers::NfpPConfig<PolygonImpl>::Alignment::TOP_LEFT;
+				cfg.placer_config.starting_point = placers::NfpPConfig<PolygonImpl>::Alignment::TOP_LEFT;
 				cfg.placer_config.parallel = true;
 				cfg.placer_config.explore_holes = false;
 				cfg.placer_config.rotations.clear();
-				FillRotations (cfg.placer_config.rotations,AOptions.Rotations);
-				using Config = placers::NfpPConfig<PolygonImpl>;
-				using ItemGroup = typename Config::ItemGroup;
-
-			/*	Box pileBox;
-				bool hasPileBox = false;
-
-				cfg.placer_config.before_packing =[&](const nfp::Shapes<PolygonImpl>&,const ItemGroup& packed,const ItemGroup&)
-					{
-						hasPileBox = false;
-						for (const auto& refItem : packed) {
-							const auto& it = refItem.get();
-							if (!hasPileBox) {
-								pileBox = it.boundingBox();
-								hasPileBox = true;
-							}
-							else {
-								pileBox = sl::boundingBox(pileBox, it.boundingBox());
-							}
-						}
-					};
-
-				cfg.placer_config.object_function =
-					[&](const auto& item) -> double
-					{
-						Box ibb = item.boundingBox();
-						Box fullbb = hasPileBox? sl::boundingBox(pileBox, ibb): ibb;
-						double w = double(fullbb.width());
-						double h = double(fullbb.height());
-						double area = w * h;				
-						return area + 1000.0 * h + 0.01 * w;
-					};*/
+				FillRotations(cfg.placer_config.rotations, AOptions.Rotations);
+		
 				std::cout << "================ DEBUG INFO ================" << std::endl;
 				std::cout << "UsePolygonBoard: false" << std::endl;
-				std::cout << "Bin Width: " << Bin.width()<< ", Height: " << Bin.height()<< std::endl;
-				std::cout << "Spacing: "<< NestUtils::ToNestCoord(AOptions.Spacing)<< std::endl;
+				std::cout << "Bin Width: " << Bin.width() << ", Height: " << Bin.height() << std::endl;
+				std::cout << "Spacing: " << NestUtils::ToNestCoord(AOptions.Spacing) << std::endl;
 				std::cout << "============================================" << std::endl;
 
 				Layers = nest(
@@ -176,8 +156,8 @@ namespace ET {
 					ProgressFunction{ Tracker }
 				);
 			}
-			std::cout << "[NEST] after polygon nest, Layers = "<< Layers<< std::endl;
-			
+			std::cout << "[NEST] after polygon nest, Layers = " << Layers << std::endl;
+
 			if (Layers == 0) {
 				return NEST2D_ERR_CORE_NESTING_FAILED;
 			}
