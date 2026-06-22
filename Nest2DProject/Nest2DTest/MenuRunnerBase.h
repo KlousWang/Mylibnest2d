@@ -1,11 +1,12 @@
 #pragma once
+#include"EtTechCore_Object.h"
 #include<iostream>
 #include<map>
 #include<string>
 #include<functional>
 #include<limits>
 
-class CetMenuRunnerBase
+class CetMenuRunnerBase : public ET::CORE::CetCoreObject
 {
 public:
 	using CetMenuFunc = std::function<int()>;

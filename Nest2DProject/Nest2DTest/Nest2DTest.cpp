@@ -19,10 +19,23 @@ int main() {
 	auto tmpObj1 = CetCoreObjStorage::GetClassIns("gCreateTestData");
 	auto tmpObj2 = CetCoreObjStorage::GetClassIns("gFile");
 	auto tmpObj3 = CetCoreObjStorage::GetClassIns("gNest2D");
-	CetMainMenuRunner  menuRunner;
-	menuRunner.Run();
- 
-	return 0;
+    auto* TestApp =static_cast<ET::NEST2DTESTAPP::CetTestApp*>(CetCoreObject::CreateIns("Nest2DTestApp"));
+    if (!TestApp) {
+        std::cout << "Create Nest2DTestApp failed." << std::endl;
+        return -1;
+    }
+    auto* MenuRunner =static_cast<CetMainMenuRunner*>(CetCoreObject::CreateIns("MainMenuRunner"));
+    if (!MenuRunner) {
+        std::cout << "Create MainMenuRunner failed." << std::endl;
+        return -1;
+    }
+    if (MenuRunner->SetTestApp(TestApp) != 0) {
+        return -1;
+    }
+
+    MenuRunner->Run();
+
+    return 0;
 	//================
 }
 

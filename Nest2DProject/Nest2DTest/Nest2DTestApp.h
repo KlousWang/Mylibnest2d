@@ -7,9 +7,11 @@ namespace ET {
     namespace NEST2DTESTAPP {
 
         class CetShapeMenuRunner;
-        class CetBoardMenuRunner;
-
-        class CetTestApp {
+        class CetBoardMenuRunner;        
+        class CetTestApp : public ET::CORE::CetCoreObject {
+        public :
+            CetTestApp();
+            virtual ~CetTestApp();
         public:
             void InputBoardIfNeeded();
             void InputShapes();

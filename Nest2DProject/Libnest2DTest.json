@@ -1,6 +1,13 @@
 {
   "ClassType": [
-   "Nest2DTest_InvokeFunctor,Nest2DTest_InvokeFunctor"
+    "Nest2DTest_InvokeFunctor,Nest2DTest_InvokeFunctor",
+    "Nest2DTestApp,Nest2DTestApp",
+    "MainMenuRunner,MainMenuRunner",
+    "BoardMenuRunner,BoardMenuRunner",
+    "ShapeMenuRunner,ShapeMenuRunner",
+    "NestExportManager,NestExportManager",
+    "SvgExporter,SvgExporter",
+    "CoordinateFileExporter,CoordinateFileExporter"
 	],
   "ComponentClassType": [],
   "LocalObjIns_LocalType": [ 

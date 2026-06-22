@@ -4,18 +4,16 @@
 #include "NestExporterBase.h"
 #include "SvgExporter.h"
 #include "CoordinateFileExporter.h"
-
+#include"EtTechCore_Object.h"
 #include <vector>
 #include <memory>
-class CetNestExportManager
+class CetNestExportManager : public ET::CORE::CetCoreObject
 {
 public:
 	CetNestExportManager();
 	virtual ~CetNestExportManager();
 	bool PrepareAll(TetNestOptions& AOptions);
 	int ExportAll(const TetNestOptions& AOptions, const std::vector<TetNestPolygon>& AItems, const TetNestResult& AResult);
-
-
 private:
 	std::vector<std::unique_ptr<CetNestExporterBase>> m_Exporters;
 };

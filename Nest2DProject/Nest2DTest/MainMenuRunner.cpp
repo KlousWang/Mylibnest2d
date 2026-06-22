@@ -2,28 +2,24 @@
 
 CetMainMenuRunner::CetMainMenuRunner()
 {
-    
-    _AddMenuItem(
-        MENU_EXIT,
-        "Exit App",
-        std::bind(&CetMainMenuRunner::_ExitAction, this)
-    );
-
-    _AddMenuItem(
-        MENU_GENERATE_AND_RUN,
-        "Generate and format test graphics",
-        std::bind(&CetMainMenuRunner::_GenerateAndRunAction, this)
-    );
-
-    _AddMenuItem(
-        MENU_READ_AND_RUN,
-        "Read and format an existing file",
-        std::bind(&CetMainMenuRunner::_ReadAndRunAction, this)
-    );
+    _AddMenuItem(MENU_EXIT,"Exit App",std::bind(&CetMainMenuRunner::_ExitAction, this));
+    _AddMenuItem(MENU_GENERATE_AND_RUN,"Generate and format test graphics",std::bind(&CetMainMenuRunner::_GenerateAndRunAction, this));
+    _AddMenuItem(MENU_READ_AND_RUN,"Read and format an existing file",std::bind(&CetMainMenuRunner::_ReadAndRunAction, this));
 }
 
 CetMainMenuRunner::~CetMainMenuRunner()
 {
+}
+
+int CetMainMenuRunner::SetTestApp(ET::NEST2DTESTAPP::CetTestApp* ATestApp)
+{
+    if (!ATestApp) {
+        std::cout << "TestApp is null." << std::endl;
+        return -1;
+    }
+
+    m_pTestApp = ATestApp;
+    return 0;
 }
 
 std::string CetMainMenuRunner::_GetMenuTitle() const
@@ -44,12 +40,12 @@ int CetMainMenuRunner::_GenerateAndRunAction()
 {
     std::string InputFile;
 
-    if (!m_TestApp.GenerateNestFile(InputFile)) {
+    if (!m_pTestApp->GenerateNestFile(InputFile)) {
         std::cout << "Generate nest file failed." << std::endl;
         return -1;
     }
 
-    int Result = m_TestApp.RunNestProcess(InputFile);
+    int Result = m_pTestApp->RunNestProcess(InputFile);
 
     std::cout << "RunNestProcess result = "
         << Result
@@ -61,17 +57,11 @@ int CetMainMenuRunner::_GenerateAndRunAction()
 int CetMainMenuRunner::_ReadAndRunAction()
 {
     std::string InputFile;
-
-    if (!m_TestApp.ReadNestFileName(InputFile)) {
+    if (!m_pTestApp->ReadNestFileName(InputFile)) {
         std::cout << "Input file is empty." << std::endl;
         return -1;
     }
-
-    int Result = m_TestApp.RunNestProcess(InputFile);
-
-    std::cout << "RunNestProcess result = "
-        << Result
-        << std::endl;
-
+    int Result = m_pTestApp->RunNestProcess(InputFile);
+    std::cout << "RunNestProcess result = "<< Result<< std::endl;
     return Result;
 }

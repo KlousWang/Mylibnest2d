@@ -4,12 +4,13 @@
 #include<iostream>
 #include<map>
 
-class CetMainMenuRunner:public CetMenuRunnerBase
+class CetMainMenuRunner :public CetMenuRunnerBase
 {
 public:
 	CetMainMenuRunner();
 	virtual ~CetMainMenuRunner();
 
+	int SetTestApp(ET::NEST2DTESTAPP::CetTestApp* ATestApp);
 protected:
 	std::string _GetMenuTitle() const override;
 
@@ -26,6 +27,6 @@ protected:
 	};
 
 protected:
-	ET::NEST2DTESTAPP::CetTestApp m_TestApp;
+    ET::NEST2DTESTAPP::CetTestApp* m_pTestApp = nullptr;
 };
 

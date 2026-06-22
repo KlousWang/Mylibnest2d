@@ -12,11 +12,29 @@
 
 namespace ET {
 	namespace NEST2DTESTAPP {
-    
+        CetTestApp::CetTestApp()
+        {
+        }
+        CetTestApp::~CetTestApp()
+        {
+        }
         void CetTestApp::InputBoardIfNeeded()
         {
-            CetBoardMenuRunner BoardRunner(*this);
-            BoardRunner.Run();
+            auto* BoardRunner =
+                static_cast<CetBoardMenuRunner*>(
+                    ET::CORE::CetCoreObject::CreateIns("BoardMenuRunner")
+                    );
+
+            if (!BoardRunner) {
+                std::cout << "Create BoardMenuRunner failed." << std::endl;
+                return;
+            }
+
+            if (BoardRunner->SetTestApp(this) != 0) {
+                return;
+            }
+
+            BoardRunner->Run();
         }
         void CetTestApp::InputShapes()
         {
@@ -24,8 +42,21 @@ namespace ET {
             m_HasOtherItems = false;
             m_RandomPosition = true;
 
-            CetShapeMenuRunner ShapeRunner(*this);
-            ShapeRunner.Run();
+            auto* ShapeRunner =
+                static_cast<CetShapeMenuRunner*>(
+                    ET::CORE::CetCoreObject::CreateIns("ShapeMenuRunner")
+                    );
+
+            if (!ShapeRunner) {
+                std::cout << "Create ShapeMenuRunner failed." << std::endl;
+                return;
+            }
+
+            if (ShapeRunner->SetTestApp(this) != 0) {
+                return;
+            }
+
+            ShapeRunner->Run();
         }
         bool CetTestApp::GenerateNestFile(std::string& AInputFile)
         {
@@ -70,16 +101,22 @@ namespace ET {
 
             std::cout << "Read Items number: " << Items.size() << std::endl;
 
-            CetNestExportManager ExportManager;
-
-            if (!ExportManager.PrepareAll(Options)) {
+            auto* ExportManager =static_cast<CetNestExportManager*>(ET::CORE::CetCoreObject::CreateIns("NestExportManager"));
+            if (!ExportManager) {
+                std::cout << "Create NestExportManager failed." << std::endl;
                 return -1;
             }
+            if (!ExportManager->PrepareAll(Options)) {
+                return -1;
+            }
+
             int nestCode = Nest2DUtils->PerformNest(Items, Options, &result);
+
             std::cout << "PerformNest result = " << nestCode << std::endl;
             std::cout << "UsedBins = " << result.UsedBins << std::endl;
             std::cout << "Message = " << result.Message << std::endl;
-            ExportManager.ExportAll(Options, Items, result);
+
+            ExportManager->ExportAll(Options, Items, result);
 
             return nestCode;
         }

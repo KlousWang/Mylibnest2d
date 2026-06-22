@@ -7,7 +7,6 @@ CetMenuRunnerBase::CetMenuRunnerBase()
 CetMenuRunnerBase::~CetMenuRunnerBase()
 {
 }
-
 int CetMenuRunnerBase::Run()
 {
 	while (m_Running) {
@@ -17,7 +16,6 @@ int CetMenuRunnerBase::Run()
 	}
 	return 0;
 }
-
 std::string CetMenuRunnerBase::_GetMenuTitle() const
 {
 	return "Please select Menu";

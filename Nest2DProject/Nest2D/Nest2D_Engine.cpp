@@ -71,11 +71,7 @@ namespace ET {
 				double BoardBinWidth = AOptions.BinWidth;
 				double BoardBinHeight = AOptions.BinHeight;
 
-				PolygonImpl binPoly = Nest2DUtils->BuildBinPolygonFromOptions(
-					AOptions,
-					BoardBinWidth,
-					BoardBinHeight
-				);
+				PolygonImpl binPoly = Nest2DUtils->BuildBinPolygonFromOptions(AOptions,BoardBinWidth,BoardBinHeight);
 
 				using CetMyPlacer =placers::_NofitPolyPlacer<PolygonImpl, PolygonImpl>;
 
@@ -86,7 +82,7 @@ namespace ET {
 				cfg.placer_config.alignment =placers::NfpPConfig<PolygonImpl>::Alignment::DONT_ALIGN;
 				cfg.placer_config.starting_point = placers::NfpPConfig<PolygonImpl>::Alignment::BOTTOM_LEFT;
 				cfg.placer_config.accuracy = 1.0f;
-				cfg.placer_config.parallel = false;
+				cfg.placer_config.parallel = true;
 				cfg.placer_config.explore_holes = false;
 
 				FillRotations(cfg.placer_config.rotations,AOptions.Rotations);
@@ -107,17 +103,9 @@ namespace ET {
 				);
 				std::cout << "[NEST] before repair, Layers = "<< Layers<< std::endl;
 
-				Nest2DUtils->SetPolygonBoardRepairContext(
-					ANestItems,
-					AOptions,
-					binPoly,
-					BoardBinWidth,
-					BoardBinHeight
-				);
+				Nest2DUtils->SetPolygonBoardRepairContext(ANestItems,AOptions,binPoly,BoardBinWidth,BoardBinHeight);
 				Nest2DUtils->RepairPolygonBoard(Layers);
-				std::cout << "[NEST] after repair, Layers = "
-					<< Layers
-					<< std::endl;
+				std::cout << "[NEST] after repair, Layers = "<< Layers<< std::endl;
 			}
 			else {
 				std::cout << "[NEST] use original rectangle BIN" << std::endl;
@@ -146,7 +134,7 @@ namespace ET {
 				using Config = placers::NfpPConfig<PolygonImpl>;
 				using ItemGroup = typename Config::ItemGroup;
 
-				Box pileBox;
+			/*	Box pileBox;
 				bool hasPileBox = false;
 
 				cfg.placer_config.before_packing =[&](const nfp::Shapes<PolygonImpl>&,const ItemGroup& packed,const ItemGroup&)
@@ -154,7 +142,6 @@ namespace ET {
 						hasPileBox = false;
 						for (const auto& refItem : packed) {
 							const auto& it = refItem.get();
-
 							if (!hasPileBox) {
 								pileBox = it.boundingBox();
 								hasPileBox = true;
@@ -169,18 +156,12 @@ namespace ET {
 					[&](const auto& item) -> double
 					{
 						Box ibb = item.boundingBox();
-
-						Box fullbb = hasPileBox
-							? sl::boundingBox(pileBox, ibb)
-							: ibb;
-
+						Box fullbb = hasPileBox? sl::boundingBox(pileBox, ibb): ibb;
 						double w = double(fullbb.width());
 						double h = double(fullbb.height());
-						double area = w * h;
-
-						
+						double area = w * h;				
 						return area + 1000.0 * h + 0.01 * w;
-					};
+					};*/
 				std::cout << "================ DEBUG INFO ================" << std::endl;
 				std::cout << "UsePolygonBoard: false" << std::endl;
 				std::cout << "Bin Width: " << Bin.width()<< ", Height: " << Bin.height()<< std::endl;
