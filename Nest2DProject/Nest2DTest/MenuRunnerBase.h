@@ -8,6 +8,7 @@
 
 class CetMenuRunnerBase : public ET::CORE::CetCoreObject
 {
+	Inherit_Invoke_Hook(CetMenuRunnerBase)
 public:
 	using CetMenuFunc = std::function<int()>;
 	struct TetMenuItem

@@ -16,11 +16,9 @@ namespace ET {
 		Reg_EtCore_Obj_Str(BoardMenuRunner, CetBoardMenuRunner)
 		Reg_EtCore_Obj_Str(ShapeMenuRunner, CetShapeMenuRunner)
 		Reg_EtCore_Obj_Str(CoordinateFileExporter, CetCoordinateFileExporter)
-
 	}
 }
 using namespace ET::CORE;
-
 Reg_EtCore_Obj_Str(MainMenuRunner, CetMainMenuRunner)
 Reg_EtCore_Obj_Str(NestExportManager, CetNestExportManager)
 Reg_EtCore_Obj_Str(SvgExporter, CetSvgExporter)

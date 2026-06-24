@@ -4,6 +4,7 @@
 #include<vector>
 class CetNestExporterBase:public ET::CORE::CetCoreObject
 {
+    Inherit_Invoke_Hook(CetNestExporterBase)
 public:
     CetNestExporterBase();
     virtual ~CetNestExporterBase();

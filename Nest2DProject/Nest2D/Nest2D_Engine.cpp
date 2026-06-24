@@ -2,10 +2,12 @@
 #include "pch.h"
 #include "Nest2D_Engine.h"
 #include "Nest2D_DataConst.h"
+#include "Nest2D_PolygonBoardRepairer.h"
 #include "NestUtils.h"
 #include "Nest2D_SelfFunction.h"
 #include <map>
-#include "Nest2D_PolygonBoardRepairer.h"
+
+//#include"libnest2d/optimizers/nlopt/subplex.hpp"
 
 using namespace ClipperLib;
 using namespace libnest2d;
@@ -58,16 +60,6 @@ namespace ET {
 			if (ANestItems.empty()) {
 				return NEST2D_ERR_CORE_EMPTY_INPUT;
 			}
-			//std::cout << "[NEST] Sorting items by bounding box area (Descending)..." << std::endl;
-			//std::sort(ANestItems.begin(), ANestItems.end(), [](const auto& a, const auto& b) {
-			//	auto bbA = a.boundingBox();
-			//	auto bbB = b.boundingBox();
-			//	// 计算外接矩形面积进行比较
-			//	double areaA = static_cast<double>(bbA.width()) * static_cast<double>(bbA.height());
-			//	double areaB = static_cast<double>(bbB.width()) * static_cast<double>(bbB.height());
-			//	return areaA > areaB;
-			//	});
-
 			const bool UsePolygonBoard = AOptions.Board.Enabled && AOptions.Board.Vertices.size() >= 3;
 
 			int TotalItems = static_cast<int>(ANestItems.size());
@@ -127,21 +119,29 @@ namespace ET {
 				auto height = NestUtils::ToNestCoord(BinHeight);
 
 				Box Bin(width, height, { width / 2, height / 2 });
-
+	
 				using CetMyPlacer = placers::_NofitPolyPlacer<PolygonImpl, Box>;
-
-				using CetMySelector = selections::_FirstFitSelection<PolygonImpl>;
+				using CetMySelector = selections::_DJDHeuristic<PolygonImpl>;
 
 				NestConfig<CetMyPlacer, CetMySelector> cfg;
-				cfg.placer_config.accuracy = 0.8f;
+				cfg.placer_config.accuracy =0.5f;
 				//cfg.placer_config.alignment = placers::NfpPConfig<PolygonImpl>::Alignment::DONT_ALIGN;
-				cfg.placer_config.alignment = placers::NfpPConfig<PolygonImpl>::Alignment::TOP_LEFT;
-				cfg.placer_config.starting_point = placers::NfpPConfig<PolygonImpl>::Alignment::TOP_LEFT;
+				cfg.placer_config.alignment = placers::NfpPConfig<PolygonImpl>::Alignment::DONT_ALIGN;
+				cfg.placer_config.starting_point = placers::NfpPConfig<PolygonImpl>::Alignment::BOTTOM_LEFT;
 				cfg.placer_config.parallel = true;
 				cfg.placer_config.explore_holes = false;
 				cfg.placer_config.rotations.clear();
 				FillRotations(cfg.placer_config.rotations, AOptions.Rotations);
 		
+				//DJD配置
+				cfg.selector_config.try_pairs = true;
+				cfg.selector_config.try_triplets = false;
+				cfg.selector_config.try_reverse_order = true;
+				cfg.selector_config.initial_fill_proportion = 0.33f;
+				cfg.selector_config.waste_increment = 0.1f;
+				cfg.selector_config.allow_parallel = true;
+				cfg.selector_config.force_parallel = false;
+
 				std::cout << "================ DEBUG INFO ================" << std::endl;
 				std::cout << "UsePolygonBoard: false" << std::endl;
 				std::cout << "Bin Width: " << Bin.width() << ", Height: " << Bin.height() << std::endl;

@@ -9,6 +9,7 @@
 #include <memory>
 class CetNestExportManager : public ET::CORE::CetCoreObject
 {
+	Inherit_Invoke_Hook(CetNestExportManager)
 public:
 	CetNestExportManager();
 	virtual ~CetNestExportManager();
