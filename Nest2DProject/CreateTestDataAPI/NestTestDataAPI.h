@@ -51,7 +51,7 @@ namespace ET {
              ~CetNestTestDataAPI();
 
         public:
-            int Init( double ABinWidth,double ABinHeight, double ASpacing,int ARotations );
+            int Init( const TetNestDataOptions& opt);
             void AddPolygon(const TetPolygonData& APoly );
             void AddPolygon(int AId,const std::string& AName, CetVertices&& AVertices);
             void AddRectangle( int AId, double AW,double AH);
@@ -90,6 +90,12 @@ namespace ET {
 			double m_Bpacing = 0;
 			int m_Rotations = 0;
 
+            float m_PlacerAccuracy =0;
+            int m_PlacerAlignment =0;
+            int m_PlacerStartingPoint =0;
+            bool m_PlacerParallel =true;
+            bool m_PlacerExploreHoles =false;
+         
 			std::vector<TetPolygonData> m_Polygons;
             TetBoardData m_Board;
             //std::vector<std::string>

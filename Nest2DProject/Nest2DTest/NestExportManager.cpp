@@ -36,11 +36,7 @@ bool CetNestExportManager::PrepareAll(TetNestOptions& AOptions)
     return true;
 }
 
-int CetNestExportManager::ExportAll(
-    const TetNestOptions& AOptions,
-    const std::vector<TetNestPolygon>& AItems,
-    const TetNestResult& AResult
-)
+int CetNestExportManager::ExportAll(const TetNestOptions& AOptions,const std::vector<TetNestPolygon>& AItems,const TetNestResult& AResult)
 {
     int ResultCode = 0;
 

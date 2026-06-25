@@ -1,5 +1,6 @@
 #pragma once
 #include "EtTechCore_Object.h"
+#include"NestTestData_DataType.h"
 #include <iostream>
 #include <string>
 
@@ -20,13 +21,19 @@ namespace ET {
             int RunNestProcess(const std::string& AInputFile);
 
         protected:
-            struct TetNestInitInput
-            {
-                double BinWidth = 0.0;
-                double BinHeight = 0.0;
-                double Spacing = 0.0;
-                int Rotations = 0;
-            };
+            //struct TetNestInitInput
+            //{
+            //    double BinWidth = 0.0;
+            //    double BinHeight = 0.0;
+            //    double Spacing = 0.0;
+            //    int Rotations = 0;
+            //    float PlacerAccuracy = 0.5f;
+            //    int PlacerAlignment = 1;       // 0 = DONT_ALIGN, 1 = BOTTOM_LEFT
+            //    int PlacerStartingPoint = 1;   // 0 = DONT_ALIGN, 1 = BOTTOM_LEFT
+
+            //    bool PlacerParallel = true;
+            //    bool PlacerExploreHoles = false;
+            //};
 
         protected:
             friend class CetShapeMenuRunner;
@@ -41,8 +48,8 @@ namespace ET {
             int _InputLShapeBoard();
             int _InputCustomPolygonBoard();
 
-            bool _InputNestInitOptions(TetNestInitInput& AInput) const;
-            bool _InitNestSystem(const TetNestInitInput& AInput) const;
+            bool _InputNestInitOptions(TetNestDataOptions& AInput) const;
+            bool _InitNestSystem(const TetNestDataOptions& AInput) const;
             bool _InputSaveFileName(std::string& AFileName) const;
             bool _SaveNestFile(const std::string& ASaveFile, std::string& AInputFile) const;
 

@@ -9,6 +9,20 @@ struct TetNestPoint
 	double X =0.0;
 	double Y =0.0;
 };
+enum class MetNestAlignment {
+	DontAlign = 0,
+	BottomLeft = 1
+};
+struct TetNestPlacerOptions
+{
+	float Accuracy = 0.5f;
+
+	MetNestAlignment Alignment = MetNestAlignment::BottomLeft;
+	MetNestAlignment StartingPoint = MetNestAlignment::BottomLeft;
+
+	bool Parallel = true;
+	bool ExploreHoles = false;
+};
 struct TetNestPolygon
 {
 	int Id = 0;
@@ -40,6 +54,7 @@ struct TetNestOptions
 	int Rotations = 4;
 
 	TetNestBoard Board;
+	TetNestPlacerOptions Placer;
 
 	bool ExportSvg = false;
 	std::string SvgPath = "NestingResult";

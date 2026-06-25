@@ -36,6 +36,20 @@ namespace ET {
 				ARotations.push_back(libnest2d::Radians(0.0));
 			}
 		}
+		static placers::NfpPConfig<PolygonImpl>::Alignment ToLibNestAlignment(MetNestAlignment AAlignment)
+		{
+			using CetAlignment = placers::NfpPConfig<PolygonImpl>::Alignment;
+
+			switch (AAlignment)
+			{
+			case MetNestAlignment::DontAlign:
+				return CetAlignment::DONT_ALIGN;
+
+			case MetNestAlignment::BottomLeft:
+			default:
+				return CetAlignment::BOTTOM_LEFT;
+			}
+		}
 		struct TetNestProgressTracker {
 			int totalItems;
 			NestProgressCallback callback;
@@ -119,28 +133,37 @@ namespace ET {
 				auto height = NestUtils::ToNestCoord(BinHeight);
 
 				Box Bin(width, height, { width / 2, height / 2 });
+				//Box Bin(width, height);
 	
 				using CetMyPlacer = placers::_NofitPolyPlacer<PolygonImpl, Box>;
-				using CetMySelector = selections::_DJDHeuristic<PolygonImpl>;
+				//using CetMyPlacer = placers::_BottomLeftPlacer<PolygonImpl>;
+				using CetMySelector = selections::_FirstFitSelection<PolygonImpl>;
 
 				NestConfig<CetMyPlacer, CetMySelector> cfg;
-				cfg.placer_config.accuracy =0.5f;
+				cfg.placer_config.accuracy =AOptions.Placer.Accuracy;
 				//cfg.placer_config.alignment = placers::NfpPConfig<PolygonImpl>::Alignment::DONT_ALIGN;
-				cfg.placer_config.alignment = placers::NfpPConfig<PolygonImpl>::Alignment::DONT_ALIGN;
-				cfg.placer_config.starting_point = placers::NfpPConfig<PolygonImpl>::Alignment::BOTTOM_LEFT;
-				cfg.placer_config.parallel = true;
-				cfg.placer_config.explore_holes = false;
+				cfg.placer_config.alignment = ToLibNestAlignment(AOptions.Placer.Alignment);
+				cfg.placer_config.starting_point = ToLibNestAlignment(AOptions.Placer.StartingPoint);
+				cfg.placer_config.parallel = AOptions.Placer.Parallel;
+				cfg.placer_config.explore_holes = AOptions.Placer.Parallel;
 				cfg.placer_config.rotations.clear();
 				FillRotations(cfg.placer_config.rotations, AOptions.Rotations);
 		
-				//DJD配置
-				cfg.selector_config.try_pairs = true;
-				cfg.selector_config.try_triplets = false;
-				cfg.selector_config.try_reverse_order = true;
-				cfg.selector_config.initial_fill_proportion = 0.33f;
-				cfg.selector_config.waste_increment = 0.1f;
-				cfg.selector_config.allow_parallel = true;
-				cfg.selector_config.force_parallel = false;
+				//// BottomLeftPlacer 的配置
+				//cfg.placer_config.min_obj_distance = NestUtils::ToNestCoord(AOptions.Spacing);
+				//cfg.placer_config.epsilon = 1;
+
+				//// BottomLeftPlacer 只支持“不旋转 / 失败后尝试 90 度”这种简单旋转
+				//cfg.placer_config.allow_rotations = (AOptions.Rotations > 1);
+
+				////DJD配置
+				//cfg.selector_config.try_pairs = true;
+				//cfg.selector_config.try_triplets = false;
+				//cfg.selector_config.try_reverse_order = true;
+				//cfg.selector_config.initial_fill_proportion = 0.2f;
+				//cfg.selector_config.waste_increment = 0.1f;
+				//cfg.selector_config.allow_parallel = true;
+				//cfg.selector_config.force_parallel = false;
 
 				std::cout << "================ DEBUG INFO ================" << std::endl;
 				std::cout << "UsePolygonBoard: false" << std::endl;

@@ -28,7 +28,7 @@ namespace ET {
             ET::CORE::CetCoreObject* m_pNest2D = nullptr;
 
         public:
-            ET::CORE::CetCoreObjFunctor<int(double, double, double, int)>Init;
+            ET::CORE::CetCoreObjFunctor<int(const TetNestDataOptions&)>Init;
             ET::CORE::CetCoreObjFunctor<void(int, double, double, bool) > AddTrigle;
             ET::CORE::CetCoreObjFunctor<void(int, double, double, double) > AddCustomTrigle;
             ET::CORE::CetCoreObjFunctor<void(int, double, double) > AddRectangle;

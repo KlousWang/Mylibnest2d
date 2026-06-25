@@ -57,7 +57,7 @@ namespace ET {
         }
         bool CetTestApp::GenerateNestFile(std::string& AInputFile)
         {
-            TetNestInitInput InitInput;
+            TetNestDataOptions InitInput;
 
             if (!_InputNestInitOptions(InitInput)) {
                 return false;
@@ -186,7 +186,7 @@ namespace ET {
 
             return 0;
         }
-        bool CetTestApp::_InputNestInitOptions(TetNestInitInput& AInput) const
+        bool CetTestApp::_InputNestInitOptions(TetNestDataOptions& AInput) const
         {
             std::cout << "Please enter bin Width£º";
             std::cin >> AInput.BinWidth;
@@ -200,6 +200,23 @@ namespace ET {
             std::cout << "Please enter rotation number,for example 4£º";
             std::cin >> AInput.Rotations;
 
+            std::cout << "Please enter placer accuracy, for example 0.5: ";
+            std::cin >> AInput.PlacerAccuracy;
+
+            std::cout << "Please enter placer alignment, 0 = DONT_ALIGN, 1 = BOTTOM_LEFT: ";
+            std::cin >> AInput.PlacerAlignment;
+
+            std::cout << "Please enter placer starting point, 0 = DONT_ALIGN, 1 = BOTTOM_LEFT: ";
+            std::cin >> AInput.PlacerStartingPoint;
+            int parallel = 1;
+            std::cout << "Please enter placer parallel, 0 = false, 1 = true: ";
+            std::cin >> parallel;
+            AInput.PlacerParallel = (parallel != 0);
+
+            int exploreHoles = 0;
+            std::cout << "Please enter placer explore holes, 0 = false, 1 = true: ";
+            std::cin >> exploreHoles;
+            AInput.PlacerExploreHoles = (exploreHoles != 0);
             if (AInput.BinWidth <= 0.0 || AInput.BinHeight <= 0.0) {
                 std::cout << "Invalid bin size." << std::endl;
                 return false;
@@ -214,12 +231,23 @@ namespace ET {
                 std::cout << "Invalid rotations." << std::endl;
                 return false;
             }
-
+            if (AInput.PlacerAccuracy <= 0.0f) {
+                std::cout << "Invalid placer accuracy." << std::endl;
+                return false;
+            }
+            if (AInput.PlacerAlignment < 0 || AInput.PlacerAlignment > 1) {
+                std::cout << "Invalid placer alignment." << std::endl;
+                return false;
+            }
+            if (AInput.PlacerStartingPoint < 0 || AInput.PlacerStartingPoint > 1) {
+                std::cout << "Invalid placer starting point." << std::endl;
+                return false;
+            }
             return true;
         }
-        bool CetTestApp::_InitNestSystem(const TetNestInitInput& AInput) const
-        {
-            int initCode = Nest2DUtils->Init(AInput.BinWidth,AInput.BinHeight,AInput.Spacing,AInput.Rotations);
+        bool CetTestApp::_InitNestSystem(const TetNestDataOptions& AInput) const
+        {       
+            int initCode = Nest2DUtils->Init(AInput);
             std::cout << "init result = "<< initCode<< std::endl;
 
             return initCode == 0;
@@ -269,16 +297,9 @@ namespace ET {
                     m_MinOtherItemSize = curMin;
                 }
                 for (int i = 0; i < count; ++i) {
-                    Nest2DUtils->AddTrigle(
-                        i + 1,
-                        width,
-                        height,
-                        m_RandomPosition
-                    );
+                    Nest2DUtils->AddTrigle(i + 1,width,height,m_RandomPosition);
                 }
-                std::cout << "Added triangle count = "
-                    << count
-                    << std::endl;
+                std::cout << "Added triangle count = "<< count<< std::endl;
                 return 0;
             }
             double line1 = 0.0;

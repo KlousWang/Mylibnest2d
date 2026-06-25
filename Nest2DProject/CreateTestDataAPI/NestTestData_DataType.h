@@ -20,3 +20,16 @@ struct TetBoardData
     CetVertices Vertices;
     std::vector<CetVertices> Holes;
 };
+struct TetNestDataOptions
+{
+    double BinWidth = 0.0;
+    double BinHeight = 0.0;
+    double Spacing = 0.0;
+    int Rotations = 0;
+    float PlacerAccuracy = 0.5f;
+    int PlacerAlignment = 1;       // 0 = DONT_ALIGN, 1 = BOTTOM_LEFT
+    int PlacerStartingPoint = 1;   // 0 = DONT_ALIGN, 1 = BOTTOM_LEFT
+
+    bool PlacerParallel = true;
+    bool PlacerExploreHoles = false;
+};

@@ -115,6 +115,33 @@ namespace ET {
 
             return A->Id < B->Id;
         }
+        static bool _ParseNestAlignment(const std::string& AText, MetNestAlignment& AOut)
+        {
+            if (AText == "DONT_ALIGN") {
+                AOut = MetNestAlignment::DontAlign;
+                return true;
+            }
+
+            if (AText == "BOTTOM_LEFT") {
+                AOut = MetNestAlignment::BottomLeft;
+                return true;
+            }
+
+            return false;
+        }
+        static const char* _NestAlignmentToString(MetNestAlignment AAlignment)
+        {
+            switch (AAlignment)
+            {
+            case MetNestAlignment::DontAlign:
+                return "DONT_ALIGN";
+
+            case MetNestAlignment::BottomLeft:
+            default:
+                return "BOTTOM_LEFT";
+            }
+        }
+
         CetFile::CetFile():CetCoreObject()
         {
             std::cout << "CetFile Constructor" << std::endl;
@@ -126,21 +153,11 @@ namespace ET {
 
         int CetFile::LoadNestCaseFromFile(const std::string& AFilePath, TetNestOptions& AOptions, std::vector<TetNestPolygon>& AItems, std::string* AErrorMessage) 
         {
-            std::cout << "[DLL] sizeof(TetNestOptions) = "
-                << sizeof(TetNestOptions)
-                << std::endl;
+            std::cout << "[DLL] sizeof(TetNestOptions) = "<< sizeof(TetNestOptions)<< std::endl;
 
-            std::cout << "[DLL] offsetof(Board) = "
-                << offsetof(TetNestOptions, Board)
-                << std::endl;
+            std::cout << "[DLL] offsetof(Board) = "<< offsetof(TetNestOptions, Board)<< std::endl;
 
-            std::cout << "[DLL] &AOptions = "
-                << &AOptions
-                << ", &AOptions.Board = "
-                << &AOptions.Board
-                << ", &AOptions.Board.Vertices = "
-                << &AOptions.Board.Vertices
-                << std::endl;
+            std::cout << "[DLL] &AOptions = "<< &AOptions<< ", &AOptions.Board = "<< &AOptions.Board<< ", &AOptions.Board.Vertices = "<< &AOptions.Board.Vertices<< std::endl;
 
             if (AErrorMessage) {
                 AErrorMessage->clear();
@@ -180,26 +197,22 @@ namespace ET {
                 }
                 else if (token == "BOARD") {
                     std::size_t pointCount = 0;
-
                     if (!(fin >> pointCount)) {
                         if (AErrorMessage) {
                             *AErrorMessage = "Invalid BOARD format. Expected: BOARD pointCount";
                         }
                         return NEST2D_ERR_FILE_UNKNOWN_TOKEN;
                     }
-
                     if (pointCount < 3) {
                         if (AErrorMessage) {
                             *AErrorMessage = "Board point count must be >= 3.";
                         }
                         return NEST2D_ERR_FILE_UNKNOWN_TOKEN;
                     }
-
                     AOptions.Board.Enabled = true;
                     AOptions.Board.Vertices.clear();
                     AOptions.Board.Holes.clear();
                     AOptions.Board.Vertices.reserve(pointCount);
-
                     for (std::size_t i = 0; i < pointCount; ++i) {
                         TetNestPoint pt;
 
@@ -292,6 +305,75 @@ namespace ET {
                         return NEST2D_ERR_FILE_ROTATIONS_VAL;
                     }
                 }
+                else if (token == "PLACER_ACCURACY") {
+                    if (!(fin >> AOptions.Placer.Accuracy)) {
+                        if (AErrorMessage) {
+                            *AErrorMessage = "Invalid PLACER_ACCURACY format. Expected: PLACER_ACCURACY value";
+                        }
+                        return NEST2D_ERR_FILE_UNKNOWN_TOKEN;
+                    }
+
+                    if (AOptions.Placer.Accuracy <= 0.0f) {
+                        if (AErrorMessage) {
+                            *AErrorMessage = "Invalid PLACER_ACCURACY. It must be > 0.";
+                        }
+                        return NEST2D_ERR_FILE_UNKNOWN_TOKEN;
+                    }
+}
+                else if (token == "PLACER_ALIGNMENT") {
+                    std::string text;
+                    if (!(fin >> text)) {
+                        if (AErrorMessage) {
+                            *AErrorMessage = "Invalid PLACER_ALIGNMENT format. Expected: PLACER_ALIGNMENT BOTTOM_LEFT";
+                        }
+                        return NEST2D_ERR_FILE_UNKNOWN_TOKEN;
+                    }
+
+                    if (!_ParseNestAlignment(text, AOptions.Placer.Alignment)) {
+                        if (AErrorMessage) {
+                            *AErrorMessage = "Invalid PLACER_ALIGNMENT value: " + text;
+                        }
+                        return NEST2D_ERR_FILE_UNKNOWN_TOKEN;
+                    }
+                    }
+                else if (token == "PLACER_STARTING_POINT") {
+                        std::string text;
+                        if (!(fin >> text)) {
+                            if (AErrorMessage) {
+                                *AErrorMessage = "Invalid PLACER_STARTING_POINT format. Expected: PLACER_STARTING_POINT BOTTOM_LEFT";
+                            }
+                            return NEST2D_ERR_FILE_UNKNOWN_TOKEN;
+                        }
+
+                        if (!_ParseNestAlignment(text, AOptions.Placer.StartingPoint)) {
+                            if (AErrorMessage) {
+                                *AErrorMessage = "Invalid PLACER_STARTING_POINT value: " + text;
+                            }
+                            return NEST2D_ERR_FILE_UNKNOWN_TOKEN;
+                        }
+                        }
+                else if (token == "PLACER_PARALLEL") {
+                            int value = 0;
+                            if (!(fin >> value)) {
+                                if (AErrorMessage) {
+                                    *AErrorMessage = "Invalid PLACER_PARALLEL format. Expected: PLACER_PARALLEL 0/1";
+                                }
+                                return NEST2D_ERR_FILE_UNKNOWN_TOKEN;
+                            }
+
+                            AOptions.Placer.Parallel = (value != 0);
+                            }
+                else if (token == "PLACER_EXPLORE_HOLES") {
+                                int value = 0;
+                                if (!(fin >> value)) {
+                                    if (AErrorMessage) {
+                                        *AErrorMessage = "Invalid PLACER_EXPLORE_HOLES format. Expected: PLACER_EXPLORE_HOLES 0/1";
+                                    }
+                                    return NEST2D_ERR_FILE_UNKNOWN_TOKEN;
+                                }
+
+                                AOptions.Placer.ExploreHoles = (value != 0);
+                                }
                 else if (token == "POLY") {
                     TetNestPolygon poly;
                     std::size_t pointCount = 0;
@@ -429,24 +511,26 @@ namespace ET {
             Out << "BIN " << AOptions.BinWidth << " " << AOptions.BinHeight << "\n";
             if (AOptions.Board.Enabled && AOptions.Board.Vertices.size() >= 3) {
                 Out << "BOARD_SHAPE " << AOptions.Board.Vertices.size() << "\n";
-
                 for (const auto& P : AOptions.Board.Vertices) {
                     Out << P.X << " " << P.Y << "\n";
                 }
-
                 for (const auto& Hole : AOptions.Board.Holes) {
                     if (Hole.size() < 3) {
                         continue;
                     }
-
                     Out << "BOARD_SHAPE_HOLE " << Hole.size() << "\n";
-
                     for (const auto& P : Hole) {
                         Out << P.X << " " << P.Y << "\n";
                     }
                 }
             }
             Out << "SPACING " << AOptions.Spacing << "\n";
+            Out << "ROTATIONS " << AOptions.Rotations << "\n";
+            Out << "PLACER_ACCURACY " << AOptions.Placer.Accuracy << "\n";
+            Out << "PLACER_ALIGNMENT " << _NestAlignmentToString(AOptions.Placer.Alignment) << "\n";
+            Out << "PLACER_STARTING_POINT " << _NestAlignmentToString(AOptions.Placer.StartingPoint) << "\n";
+            Out << "PLACER_PARALLEL " << (AOptions.Placer.Parallel ? 1 : 0) << "\n";
+            Out << "PLACER_EXPLORE_HOLES " << (AOptions.Placer.ExploreHoles ? 1 : 0) << "\n";
             Out << "USED_BINS " << AUsedBins << "\n";
             for (int currentBin = 0; currentBin < AUsedBins; ++currentBin) {
 
@@ -465,9 +549,7 @@ namespace ET {
 
                     Out << "\nITEM " << item->Id << " " << item->Name << "\n";
 
-                    Out << "TRANSFORM "
-                        << item->Out_x << " "
-                        << item->Out_y << " "
+                    Out << "TRANSFORM "<< item->Out_x << " "<< item->Out_y << " "
                         << std::setprecision(6) << item->Out_angle << " "
                         << std::setprecision(4) << Nest2DUtils->RadToDeg(item->Out_angle)
                         << "\n";
@@ -489,25 +571,13 @@ namespace ET {
                             // 如果反推失败，就退回普通多边形导出
                             Out << "OUTER POLYGON\n";
                             _WriteLocalVertices(Out, item->Vertices);
-                            _WriteWorldVertices(
-                                Out,
-                                item->Vertices,
-                                item->Out_x,
-                                item->Out_y,
-                                item->Out_angle
-                            );
+                            _WriteWorldVertices(Out,item->Vertices,item->Out_x,item->Out_y,item->Out_angle);
                         }
                     }
                     else {
                         Out << "OUTER POLYGON\n";
                         _WriteLocalVertices(Out, item->Vertices);
-                        _WriteWorldVertices(
-                            Out,
-                            item->Vertices,
-                            item->Out_x,
-                            item->Out_y,
-                            item->Out_angle
-                        );
+                        _WriteWorldVertices(Out,item->Vertices,item->Out_x,item->Out_y,item->Out_angle);
                     }
 
                     Out << "HOLE_COUNT " << item->Holes.size() << "\n";
@@ -516,22 +586,13 @@ namespace ET {
                         Out << "HOLE " << h + 1 << " POLYGON\n";
 
                         _WriteLocalVertices(Out, item->Holes[h]);
-                        _WriteWorldVertices(
-                            Out,
-                            item->Holes[h],
-                            item->Out_x,
-                            item->Out_y,
-                            item->Out_angle
-                        );
+                        _WriteWorldVertices(Out,item->Holes[h],item->Out_x,item->Out_y,item->Out_angle);
                     }
-
                     Out << "END_PROFILE\n";
                     Out << "END_ITEM\n";
                 }
-
                 Out << "END_BOARD\n";
             }
-
             if (!Out.good()) {
                 return NEST2D_ERR_FILE_OPEN_FAILED;
             }

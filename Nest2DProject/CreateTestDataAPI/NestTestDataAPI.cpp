@@ -7,14 +7,21 @@
 #include <cmath>
 #include <iomanip>
 #include <iostream>
-
-
-
 constexpr double PI = 3.14159265358979323846;
-
 namespace ET {
     namespace NESTTESTDATALIB {
+        static const char* _NestAlignmentIntToString(int AValue)
+        {
+            switch (AValue)
+            {
+            case 0:
+                return "DONT_ALIGN";
 
+            case 1:
+            default:
+                return "BOTTOM_LEFT";
+            }
+        }
         CetNestTestDataAPI::CetNestTestDataAPI():CetCoreObject()
         {
             std::cout << "CetNestTestDataAPI Constructor" << std::endl;
@@ -23,23 +30,20 @@ namespace ET {
         CetNestTestDataAPI::~CetNestTestDataAPI()
         {
         }
-        int CetNestTestDataAPI::Init( double ABinWidth, double ABinHeight,double ASpacing, int ARotations )
+        int CetNestTestDataAPI::Init(const TetNestDataOptions&opt )
         {
             
-            m_BinWidth = ABinWidth;
-            m_BinHeight = ABinHeight;
-            m_Bpacing = ASpacing;
-            m_Rotations = ARotations;
+            m_BinWidth = opt.BinHeight;
+            m_BinHeight = opt.BinWidth;
+            m_Bpacing = opt.Spacing;
+            m_Rotations = opt.Rotations;
+            m_PlacerAccuracy = opt.PlacerAccuracy;
+            m_PlacerAlignment = opt.PlacerAlignment;
+            m_PlacerStartingPoint = opt.PlacerStartingPoint;
+            m_PlacerParallel = opt.PlacerParallel;
+            m_PlacerExploreHoles = opt.PlacerExploreHoles;
 
-            std::cout << "[DLL] Init called. Bin = "
-                << m_BinWidth
-                << " x "
-                << m_BinHeight
-                << ", spacing = "
-                << m_Bpacing
-                << ", rotations = "
-                << m_Rotations
-                << std::endl;
+            std::cout << "[DLL] Init called. Bin = "<< m_BinWidth<< " x "<< m_BinHeight<< ", spacing = "<< m_Bpacing<< ", rotations = "<< m_Rotations<< std::endl;
 
             return 0;
         }
@@ -357,9 +361,12 @@ namespace ET {
                 }
             }
             Oss << "SPACING " << m_Bpacing << "\n";
-
             Oss << "ROTATIONS " << m_Rotations << "\n";
-
+            Oss << "PLACER_ACCURACY " << m_PlacerAccuracy << "\n";
+            Oss << "PLACER_ALIGNMENT " << _NestAlignmentIntToString(m_PlacerAlignment) << "\n";
+            Oss << "PLACER_STARTING_POINT " << _NestAlignmentIntToString(m_PlacerStartingPoint) << "\n";
+            Oss << "PLACER_PARALLEL " << (m_PlacerParallel ? 1 : 0) << "\n";
+            Oss << "PLACER_EXPLORE_HOLES " << (m_PlacerExploreHoles ? 1 : 0) << "\n";
             for (const auto& Poly : m_Polygons) {
                 if (Poly.Vertices.empty()) {
                     continue;
