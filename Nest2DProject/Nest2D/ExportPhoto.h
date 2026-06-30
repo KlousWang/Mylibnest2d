@@ -20,6 +20,7 @@ namespace ET {
 				CetCoreObject::_WrapFuncs();
 				_WrapFunc("ExportSvg", Type_Class_Func(ExportSvgItems));
 				_WrapFunc("ExportSvgbd", Type_Class_Func(ExportSvg));
+				_WrapFunc("ExportSvgPackGroup", Type_Class_Func(ExportSvgPackGroup));
 			}
 		public:
 			CetExportPhoto();
@@ -28,6 +29,7 @@ namespace ET {
 			 int ExportSvg(const std::vector<TetNestPolygon>& AItems, const TetNestOptions& AOptions, int AUsedBins);
 
 			 int ExportSvgItems(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, int AUsedBins);
+			 int ExportSvgPackGroup(const CetPackGround& PackGroup, const TetNestOptions& AOptions);
 		};
 
 	}

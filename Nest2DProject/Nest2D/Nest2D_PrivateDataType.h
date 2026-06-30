@@ -6,6 +6,7 @@
 // 将别名定义在这里，让整个模块内部都能看到
 //std::vector<int> FixedBinIds;
 using CetTNestItemVector = std::vector<libnest2d::Item>;
+using CetPackGround = libnest2d::_PackGroup<libnest2d::PolygonImpl>;
 struct TetLib2DItemDataType
 {
 

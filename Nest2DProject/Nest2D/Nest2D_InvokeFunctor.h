@@ -38,6 +38,8 @@ namespace ET {
             ET::CORE::CetCoreObjFunctor<void(const CetTNestItemVector&, std::vector<TetNestPolygon>&)>ApplyResults;
             ET::CORE::CetCoreObjFunctor<int(CetTNestItemVector&, const TetNestOptions&, int)>ExportSvg;
             ET::CORE::CetCoreObjFunctor<int(const std::vector<TetNestPolygon>&, const TetNestOptions&, int)>ExportSvgbd;
+            ET::CORE::CetCoreObjFunctor<int(const CetPackGround& , const TetNestOptions& )> ExportSvgPackGroup;
+          
 
             ET::CORE::CetCoreObjFunctor<TetBoardBounds(const TetNestBoard&)> CalcBoardBoundsLocal;
             ET::CORE::CetCoreObjFunctor<ClipperLib::Path(const std::vector<TetNestPoint>&,double,double,bool)> BuildPathFromPoints;

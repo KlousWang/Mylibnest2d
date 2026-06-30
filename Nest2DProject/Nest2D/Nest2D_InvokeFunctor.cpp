@@ -42,6 +42,7 @@ namespace ET {
            
             CetNest2DInvokeFunctor::ExportSvg.Reload(m_ExportPhoto, "ExportSvg");
             CetNest2DInvokeFunctor::ExportSvgbd.Reload(m_ExportPhoto, "ExportSvgbd");
+            CetNest2DInvokeFunctor::ExportSvgPackGroup.Reload(m_ExportPhoto, "ExportSvgPackGroup");
 
             CetNest2DInvokeFunctor::CalcBoardBoundsLocal.Reload(m_BoardUtils, "CalcBoardBoundsLocal");
             CetNest2DInvokeFunctor::BuildPathFromPoints.Reload(m_BoardUtils, "BuildPathFromPoints");

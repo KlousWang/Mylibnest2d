@@ -81,18 +81,14 @@ namespace ET {
                         if (ClipperLib::Orientation(outerPoints) == false) {
                             std::reverse(outerPoints.begin(), outerPoints.end());
                         }
-
                         Paths holes;
                         holes.reserve(item.Holes.size());
-
                         for (const auto& holePts : item.Holes) {
                             if (holePts.size() < 3) {
                                 continue;
                             }
-
                             Path innerPoints;
                             innerPoints.reserve(holePts.size());
-
                             for (const auto& pt : holePts) {
                                 innerPoints.push_back(
                                     Point(
@@ -101,67 +97,42 @@ namespace ET {
                                     )
                                 );
                             }
-
                             if (ClipperLib::Orientation(innerPoints) == true) {
                                 std::reverse(innerPoints.begin(), innerPoints.end());
                             }
-
                             holes.push_back(std::move(innerPoints));
                         }
-
                         PolygonImpl poly(std::move(outerPoints), std::move(holes));
                         libnest2d::Item svgItem(poly);
-
                         svgItem.rotation(item.Out_angle);
-                        svgItem.translation(
-                            Point(
-                                NestUtils::ToNestCoord(item.Out_x),
-                                NestUtils::ToNestCoord(item.Out_y)
-                            )
-                        );
+                        svgItem.translation(Point(NestUtils::ToNestCoord(item.Out_x),NestUtils::ToNestCoord(item.Out_y)));
                         svgItem.binId(item.Out_bin);
-
                         currentBinItems.push_back(std::move(svgItem));
                     }
                 }
-
                 // 关键：空板材不导出，防止 SVGWriter 内部访问空 vector
                 if (currentBinItems.empty()) {
                     std::cout << "[WARN] Skip empty bin: " << currentBin << std::endl;
                     continue;
                 }
-
                 libnest2d::_PackGroup<libnest2d::PolygonImpl> pgrp(1);
-
                 for (auto& svgItem : currentBinItems) {
                     pgrp[0].emplace_back(svgItem);
                 }
-
                 svgw.writePackGroup(pgrp);
                 std::string finalPath;
                 if(AUsedBins>1)  finalPath = basePath + "_" + std::to_string(currentBin);
                 else finalPath = basePath;
-
                 svgw.save(finalPath);
                 std::string realSvgPath = finalPath;
-
                 std::ifstream testFile(realSvgPath.c_str(), std::ios::in | std::ios::binary);
-
                 if (!testFile.is_open()) {
                     realSvgPath = finalPath + ".svg";
                 }
-                else {
-                    testFile.close();
-                }
-
+                else {testFile.close();}
                 std::cout << "[SVG] realSvgPath = " << realSvgPath << std::endl;
-
                 if (AOptions.Board.Enabled && AOptions.Board.Vertices.size() >= 3) {
-                    std::string boardPath = Nest2DUtils->MakeBoardSvgPath(
-                        AOptions.Board,
-                        AOptions.BinHeight
-                    );
-
+                    std::string boardPath = Nest2DUtils->MakeBoardSvgPath(AOptions.Board,AOptions.BinHeight);
                    Nest2DUtils->InsertTextBeforeSvgEnd(realSvgPath, boardPath);
                 }
             }
@@ -205,7 +176,72 @@ namespace ET {
 
 			return 0;
 		}
+        int CetExportPhoto::ExportSvgPackGroup(const CetPackGround& PackGroup,const TetNestOptions& AOptions)
+        {
+            if (PackGroup.empty()) {
+                return NEST2D_ERR_EXPORT_EMPTY_ITEMS;
+            }
 
+            if (AOptions.SvgPath.empty()) {
+                return NEST2D_ERR_EXPORT_NO_PATH;
+            }
+
+            const auto binWidth = NestUtils::ToNestCoord(AOptions.BinWidth);
+            const auto binHeight = NestUtils::ToNestCoord(AOptions.BinHeight);
+
+            Box binSize(binWidth, binHeight);
+
+            using SvgWriter = svg::SVGWriter<PolygonImpl>;
+
+            SvgWriter::Config conf;
+            conf.mm_in_coord_units = mm();
+
+            std::string basePath = AOptions.SvgPath;
+            if (basePath.size() >= 4 && basePath.substr(basePath.size() - 4) == ".svg") {
+                basePath = basePath.substr(0, basePath.size() - 4);
+            }
+
+            for (std::size_t binIndex = 0; binIndex < PackGroup.size(); ++binIndex)
+            {
+                if (PackGroup[binIndex].empty()) {
+                    std::cout << "[SVG][Filler] Skip empty bin: "
+                        << binIndex << std::endl;
+                    continue;
+                }
+
+                SvgWriter svgw(conf);
+                svgw.setSize(binSize);
+
+                libnest2d::_PackGroup<libnest2d::PolygonImpl> singleBinGroup(1);
+
+                for (const auto& itemRef : PackGroup[binIndex])
+                {
+                    singleBinGroup[0].emplace_back(itemRef);
+                }
+
+                svgw.writePackGroup(singleBinGroup);
+
+                std::string finalPath;
+
+                if (PackGroup.size() > 1) {
+                    finalPath = basePath + "_" + std::to_string(binIndex);
+                }
+                else {
+                    finalPath = basePath;
+                }
+
+                svgw.save(finalPath);
+
+                std::cout << "[SVG][Filler] saved bin "
+                    << binIndex
+                    << " to "
+                    << finalPath
+                    << ".svg"
+                    << std::endl;
+            }
+
+            return Nest2D_Success;
+        }
 	}
 }
 

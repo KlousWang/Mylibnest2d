@@ -72,7 +72,7 @@ namespace ET {
 				Layers = RunPolygonBoardNesting(ANestItems, AOptions, Tracker);
 			}
 			else {
-				Layers = RunRectangleBoardNesting(ANestItems, AOptions, Tracker);
+				Layers = RunRectangleBoardNestingFill(ANestItems, AOptions, Tracker);
 			}
 			std::cout << "[NEST] after polygon nest, Layers = " << Layers << std::endl;
 
@@ -159,8 +159,11 @@ namespace ET {
 			using CetMyPlacer = placers::_NofitPolyPlacer<PolygonImpl, Box>;
 			//using CetMyPlacer = placers::_BottomLeftPlacer<PolygonImpl>;
 			using CetMySelector = selections::_FirstFitSelection<PolygonImpl>;
+			//using CetMySelector = selections::_FillerSelection<PolygonImpl>;
+			//using CetMySelector = selections::_DJDHeuristic<PolygonImpl>;
 
 			NestConfig<CetMyPlacer, CetMySelector> cfg;
+			//nfp配置
 			cfg.placer_config.accuracy = AOptions.Placer.Accuracy;
 			//cfg.placer_config.alignment = placers::NfpPConfig<PolygonImpl>::Alignment::DONT_ALIGN;
 			cfg.placer_config.alignment = ToLibNestAlignment(AOptions.Placer.Alignment);
@@ -201,6 +204,114 @@ namespace ET {
 				cfg,
 				ProgressFunction{ Tracker }
 			);
+		
+			std::cout << "[NEST] Layers = " << Layers << std::endl;
+
+			std::map<int, int> BinCount;
+
+			for (const auto& Item : ANestItems)
+			{
+				BinCount[Item.binId()]++;
+			}
+
+			for (const auto& Pair : BinCount)
+			{
+				std::cout << "[NEST] binId = " << Pair.first
+					<< ", count = " << Pair.second << std::endl;
+			}
+
+			return Layers;
+		}
+
+		std::size_t CetNest2DEngine::RunRectangleBoardNestingFill(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, TetNestProgressTracker& Tracker)
+		{
+			std::cout << "[NEST] use original rectangle BIN" << std::endl;
+
+			double BinWidth = AOptions.BinWidth;
+			double BinHeight = AOptions.BinHeight;
+
+			auto width = NestUtils::ToNestCoord(BinWidth);
+			auto height = NestUtils::ToNestCoord(BinHeight);
+
+			Box Bin(width, height, { width / 2, height / 2 });
+			//Box Bin(width, height);
+
+			//using CetMyPlacer = placers::_NofitPolyPlacer<PolygonImpl, Box>;
+			using CetMyPlacer = placers::_BottomLeftPlacer<PolygonImpl>;
+			//using CetMySelector = selections::_FirstFitSelection<PolygonImpl>;
+			using CetMySelector = selections::_FillerSelection<PolygonImpl>;
+			//using CetMySelector = selections::_DJDHeuristic<PolygonImpl>;
+
+			NestConfig<CetMyPlacer, CetMySelector> cfg;
+			//nfp配置
+			//cfg.placer_config.accuracy = AOptions.Placer.Accuracy;
+			////cfg.placer_config.alignment = placers::NfpPConfig<PolygonImpl>::Alignment::DONT_ALIGN;
+			//cfg.placer_config.alignment = ToLibNestAlignment(AOptions.Placer.Alignment);
+			//cfg.placer_config.starting_point = ToLibNestAlignment(AOptions.Placer.StartingPoint);
+			//cfg.placer_config.parallel = AOptions.Placer.Parallel;
+			//cfg.placer_config.explore_holes = AOptions.Placer.Parallel;
+			//cfg.placer_config.rotations.clear();
+			//FillRotations(cfg.placer_config.rotations, AOptions.Rotations);
+
+			// BottomLeftPlacer 的配置
+			cfg.placer_config.min_obj_distance = NestUtils::ToNestCoord(AOptions.Spacing);
+			cfg.placer_config.epsilon = 1;
+
+			// BottomLeftPlacer 只支持“不旋转 / 失败后尝试 90 度”这种简单旋转
+			cfg.placer_config.allow_rotations = (AOptions.Rotations > 1);
+
+			std::cout << "================ DEBUG INFO ================" << std::endl;
+			std::cout << "UsePolygonBoard: false" << std::endl;
+			std::cout << "Bin Width: " << Bin.width()
+				<< ", Height: " << Bin.height() << std::endl;
+			std::cout << "Spacing: "
+				<< NestUtils::ToNestCoord(AOptions.Spacing) << std::endl;
+			std::cout << "============================================" << std::endl;
+
+			using CetNester = libnest2d::_Nester<CetMyPlacer, CetMySelector>;
+
+			CetNester Nester(
+				Bin,
+				NestUtils::ToNestCoord(AOptions.Spacing),
+				cfg.placer_config,
+				cfg.selector_config
+			);
+
+			Nester.progressIndicator(ProgressFunction{ Tracker });
+
+			std::size_t Layers = Nester.execute(
+				ANestItems.begin(),
+				ANestItems.end()
+			);
+			const auto& PackResult = Nester.lastResult();
+			Nest2DUtils->ExportSvgPackGroup(PackResult, AOptions);
+			/*	if (Layers == 1)
+				{
+					for (auto& Item : ANestItems)
+					{
+						if (Item.binId() < 0)
+						{
+							Item.binId(0);
+						}
+					}
+
+					std::cout << "[NEST][Filler Patch] Layers == 1, patch all unset binId to 0"
+						<< std::endl;
+				}*/
+			std::cout << "[NEST] Layers = " << Layers << std::endl;
+
+			std::map<int, int> BinCount;
+
+			for (const auto& Item : ANestItems)
+			{
+				BinCount[Item.binId()]++;
+			}
+
+			for (const auto& Pair : BinCount)
+			{
+				std::cout << "[NEST] binId = " << Pair.first
+					<< ", count = " << Pair.second << std::endl;
+			}
 
 			return Layers;
 		}
