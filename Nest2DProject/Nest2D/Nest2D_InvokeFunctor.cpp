@@ -32,6 +32,12 @@ namespace ET {
 
             m_PolygonBoardRepairer = m_LibConfig->GetLocalCoreObjIns("l_PolygonBoardRepairer");
             if (!m_PolygonBoardRepairer) return -1;
+
+			m_ClusterManager = m_LibConfig->GetLocalCoreObjIns("l_ClusterManager");
+			if (!m_ClusterManager) return -1;
+
+			m_StartegManager = m_LibConfig->GetLocalCoreObjIns("l_StrategyManager");
+			if (!m_StartegManager) return -1;
             //WWFunct1.Reload(m_pNest2DEngine, "func1");
             // 3. 将 Functor 变量与底层的真实字符串暗号 "RunNesting" 绑定起来 [cite: 84]
             CetNest2DInvokeFunctor::RunNestingFunctor.Reload(m_pNest2DEngine, "RunNesting");
@@ -61,6 +67,14 @@ namespace ET {
 
             CetNest2DInvokeFunctor::SetPolygonBoardRepairContext.Reload(m_PolygonBoardRepairer, "SetContext");
             CetNest2DInvokeFunctor::RepairPolygonBoard.Reload(m_PolygonBoardRepairer, "Repair");
+
+			CetNest2DInvokeFunctor::EvaluateNestResult.Reload(m_ClusterManager, "EvaluateNestResult");
+			CetNest2DInvokeFunctor::IsBetterNestResult.Reload(m_ClusterManager, "IsBetterNestResult");
+			CetNest2DInvokeFunctor::ApplyNestPriorityStrategy.Reload(m_StartegManager, "ApplyNestPriorityStrategy");
+			CetNest2DInvokeFunctor::PrintBinCount.Reload(m_StartegManager, "PrintBinCount");
+
+			CetNest2DInvokeFunctor::BuildClusterItems.Reload(m_ClusterManager, "BuildClusterItems");
+			CetNest2DInvokeFunctor::ExpandClusterResultToOriginalItems.Reload(m_ClusterManager, "ExpandClusterResultToOriginalItems");
 
             return 0;
         }

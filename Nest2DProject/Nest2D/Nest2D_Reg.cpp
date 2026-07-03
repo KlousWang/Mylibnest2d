@@ -9,6 +9,8 @@
 #include "Nest2D_GeometryUtils.h"
 #include "Nest2D_SvgUtils.h"
 #include "Nest2D_PolygonBoardRepairer.h"
+#include"Nest2D_ClusterManager.h"
+#include"Nest2D_StrategyManager.h"
 
 namespace ET {
 	namespace NEST2DMANAGERLIB {
@@ -24,6 +26,8 @@ namespace ET {
 		Reg_EtCore_Obj_Str(Nest2D_GeometryUtils, CetGeometryUtils)
 		Reg_EtCore_Obj_Str(Nest2D_SvgUtils, CetSvgUtils)
 		Reg_EtCore_Obj_Str(Nest2D_PolygonBoardRepairer, CetPolygonBoardRepairer)
+		Reg_EtCore_Obj_Str(Nest2D_ClusterManager, CetClusterManager)
+		Reg_EtCore_Obj_Str(Nest2D_StrategyManager, CetStrategyManager)
 		//Reg_EtCore_Obj_Str(File_Load, CetFile)
 	}
 

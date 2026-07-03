@@ -1,8 +1,10 @@
 #pragma once
+#include"Nest2D_PrivateDataType.h"
 #include<vector>
 #include<string>
 #include <cstddef>
 //
+//using CetTNestItemVector = std::vector<libnest2d::Item>;
 typedef void(*NestProgressCallback)(int current_finished, int total);
 struct TetNestPoint
 {
@@ -67,4 +69,48 @@ struct TetNestResult
 	int Code = 0;
 	std::size_t UsedBins = 0;
 	std::string Message ="";
+};
+
+enum class MetClusterStrategy
+{
+	None,
+	RightTrianglePair
+};
+
+enum class MetENestOrderStrategy
+{
+	LargeFirst,
+	SmallFirst,
+	LongSideFirst,
+	ThinFirst
+};
+
+struct TetTetTNestEvalResult
+{
+	int FirstBinCount = 0;
+	double FirstBinArea = 0.0;
+	std::size_t Layers = 0;
+};
+
+struct TetItemTransform
+{
+	int OriginalId = -1;
+	double RelativeX = 0.0;
+	double RelativeY = 0.0;
+	double RelativeRotation = 0.0;
+};
+
+struct TetMetaItem
+{
+
+	int PackedItemIndex = -1;
+	bool IsCluster = false;
+	std::string ClusterType = "Single";
+	std::vector<TetItemTransform> TransformData;
+};
+
+struct TetClusterBuildResult
+{
+	CetTNestItemVector NestItems;
+	std::vector<TetMetaItem> MetaItems;
 };

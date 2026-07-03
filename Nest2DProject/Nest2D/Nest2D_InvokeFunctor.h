@@ -31,6 +31,9 @@ namespace ET {
             ET::CORE::CetCoreObject* m_GeometryUtils = nullptr;
             ET::CORE::CetCoreObject* m_SvgUtils = nullptr;
             ET::CORE::CetCoreObject* m_PolygonBoardRepairer = nullptr;
+
+            ET::CORE::CetCoreObject* m_StartegManager = nullptr;
+            ET::CORE::CetCoreObject* m_ClusterManager = nullptr;
         public:   
             //ET::CORE::CetCoreObjFunctor<int(int, int)> WWFunct1;
             ET::CORE::CetCoreObjFunctor<int(CetTNestItemVector&, const TetNestOptions&, std::size_t*)> RunNestingFunctor;
@@ -57,6 +60,18 @@ namespace ET {
             ET::CORE::CetCoreObjFunctor<void(const std::string&,const std::string&)> InsertTextBeforeSvgEnd;
             ET::CORE::CetCoreObjFunctor<void(CetTNestItemVector&,const TetNestOptions&,const libnest2d::PolygonImpl&,double,double)> SetPolygonBoardRepairContext;
             ET::CORE::CetCoreObjFunctor<void(std::size_t&)> RepairPolygonBoard;
+
+            ET::CORE::CetCoreObjFunctor<TetTetTNestEvalResult (const CetTNestItemVector& , std::size_t )> EvaluateNestResult;
+            ET::CORE::CetCoreObjFunctor< bool (const TetTetTNestEvalResult& , const TetTetTNestEvalResult& ) > IsBetterNestResult;
+            ET::CORE::CetCoreObjFunctor<void (CetTNestItemVector& , MetENestOrderStrategy )> ApplyNestPriorityStrategy;
+            ET::CORE::CetCoreObjFunctor<void (const CetTNestItemVector& )> PrintBinCount;
+
+            ET::CORE::CetCoreObjFunctor< TetClusterBuildResult (const CetTNestItemVector& , const TetNestOptions& , MetClusterStrategy )> BuildClusterItems;
+            ET::CORE::CetCoreObjFunctor< void (const CetTNestItemVector& , const CetTNestItemVector& , const std::vector<TetMetaItem>& , CetTNestItemVector& )> ExpandClusterResultToOriginalItems;
+           
+           
+
+
         };
     }
 }

@@ -69,6 +69,12 @@
     <ClInclude Include="Nest2D_PolygonBoardRepairer.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="Nest2D_ClusterManager.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Nest2D_StrategyManager.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
@@ -114,6 +120,12 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Nest2D_PolygonBoardRepairer.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Nest2D_ClusterManager.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Nest2D_StrategyManager.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

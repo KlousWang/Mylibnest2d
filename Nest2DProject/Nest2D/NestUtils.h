@@ -1,4 +1,4 @@
-
+#pragma once
 #include <cmath>
 #include <stdexcept>
 #include <limits>
