@@ -43,6 +43,7 @@ namespace ET {
 			bool IsRightTriangleLike(const CetNestItem& AItem);
 			bool IsSameSizeTrianglePair(const CetNestItem& AItem, const CetNestItem& BItem);
 			CetNestItem MakeRectangleNestItemByNestCoord(double W, double H);
+			double CalcTrianglePairAxisGap(double W, double H, double Spacing);
 		};
 	}
 }

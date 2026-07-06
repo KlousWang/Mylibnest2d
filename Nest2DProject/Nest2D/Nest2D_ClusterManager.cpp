@@ -208,20 +208,30 @@ namespace ET {
                 if (W <= 0.0 || H <= 0.0){
                     return false;
                 }
+
+                double InternalSpacing = static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing));
+                double AxisGap = CalcTrianglePairAxisGap(W, H, InternalSpacing);
+                double ClusterW = W + AxisGap;
+                double ClusterH = H + AxisGap;
+
                 double BinW = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth));
                 double BinH = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinHeight));
-                if (W > BinW || H > BinH){
+                if (ClusterW > BinW || ClusterH > BinH){
                     std::cout << "[CLUSTER][REJECT] cluster bigger than bin: "
                         << AIndex << " + " << BIndex
                         << ", W = " << W
                         << ", H = " << H
+                        << ", InternalSpacing = " << InternalSpacing
+                        << ", AxisGap = " << AxisGap
+                        << ", ClusterW = " << ClusterW
+                        << ", ClusterH = " << ClusterH
                         << ", BinW = " << BinW
                         << ", BinH = " << BinH
                         << std::endl;
 
                     return false;
                 }
-                auto ClusterItem = MakeRectangleNestItemByNestCoord(W, H);
+                auto ClusterItem = MakeRectangleNestItemByNestCoord(ClusterW, ClusterH);
                 const int PackedIndex = static_cast<int>(AResult.NestItems.size());
                 AResult.NestItems.push_back(std::move(ClusterItem));
 
@@ -239,8 +249,8 @@ namespace ET {
 
                 TetItemTransform TransformB;
                 TransformB.OriginalId = BIndex;
-                TransformB.RelativeX = W;
-                TransformB.RelativeY = H;
+                TransformB.RelativeX = ClusterW;
+                TransformB.RelativeY = ClusterH;
                 TransformB.RelativeRotation = CET_CLUSTER_PI;
                 Meta.TransformData.push_back(TransformB);
 
@@ -250,6 +260,10 @@ namespace ET {
                     << AIndex << " + " << BIndex
                     << ", W = " << W
                     << ", H = " << H
+                    << ", InternalSpacing = " << InternalSpacing
+                    << ", AxisGap = " << AxisGap
+                    << ", ClusterW = " << ClusterW
+                    << ", ClusterH = " << ClusterH
                     << ", PackedIndex = " << PackedIndex
                     << std::endl;
 
@@ -326,6 +340,21 @@ namespace ET {
 				return CetTNestItemVector::value_type(std::move(poly));
 
 			}
+
+            double CetClusterManager::CalcTrianglePairAxisGap(double AW, double AH, double ASpacing)
+            {
+                if (AW <= 0.0 || AH <= 0.0 || ASpacing <= 0.0)
+                {
+                    return 0.0;
+                }
+
+                // Spacing 是希望两个三角形斜边之间保留的真实间隙
+                // AxisGap 是 X/Y 方向各自需要增加的距离
+                double AxisGap = ASpacing * std::sqrt(AW * AW + AH * AH) / (AW + AH);
+
+                // 因为后面会转成整数坐标，向上取整，避免实际间隙被截断变小
+                return std::ceil(AxisGap);
+            }
 
 		}
 }

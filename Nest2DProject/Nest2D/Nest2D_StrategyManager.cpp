@@ -11,12 +11,10 @@ ET::NEST2DMANAGERLIB::CetStrategyManager::~CetStrategyManager()
 
 TetTetTNestEvalResult ET::NEST2DMANAGERLIB::CetStrategyManager::EvaluateNestResult(const CetTNestItemVector& Items, std::size_t Layers)
 {
-	TetTetTNestEvalResult Result;
+	TetTetTNestEvalResult Result{};
 	Result.Layers = Layers;
-	for (const auto& Item : Items)
-	{
-		if (Item.binId() == 0)
-		{
+	for (const auto& Item : Items){
+		if (Item.binId() == 0){
 			Result.FirstBinCount++;
 			Result.FirstBinArea += std::abs( static_cast<double>(Item.area()));
 		}
@@ -27,20 +25,25 @@ TetTetTNestEvalResult ET::NEST2DMANAGERLIB::CetStrategyManager::EvaluateNestResu
 
 bool ET::NEST2DMANAGERLIB::CetStrategyManager::IsBetterNestResult(const TetTetTNestEvalResult& A, const TetTetTNestEvalResult& B)
 {
-	// 第一个 bin 里零件数量最多
-	if (A.FirstBinCount != B.FirstBinCount)
-	{
-		return A.FirstBinCount > B.FirstBinCount;
+	std::cout << "[NEST][COMPARE FUNC] "<< "A.Count = " << A.FirstBinCount<< ", A.Area = " << A.FirstBinArea<< ", A.Layers = " << A.Layers<< ", B.Count = " << B.FirstBinCount
+		<< ", B.Area = " << B.FirstBinArea<< ", B.Layers = " << B.Layers<< std::endl;
+
+	if (A.FirstBinCount != B.FirstBinCount){
+		bool Result = A.FirstBinCount > B.FirstBinCount;
+		std::cout << "[NEST][COMPARE FUNC] compare count, result = "<< Result << std::endl;
+		return Result;
 	}
 
-	//数量相同，则第一个 bin 里使用面积更大
-	if (std::abs(A.FirstBinArea - B.FirstBinArea) > 1e-6)
-	{
-		return A.FirstBinArea > B.FirstBinArea;
+	if (std::abs(A.FirstBinArea - B.FirstBinArea) > 1e-6){
+		bool Result = A.FirstBinArea > B.FirstBinArea;
+		std::cout << "[NEST][COMPARE FUNC] compare area, result = "<< Result << std::endl;
+		return Result;
 	}
 
-	// 总层数更少
-	return A.Layers < B.Layers;
+	bool Result = A.Layers < B.Layers;
+	std::cout << "[NEST][COMPARE FUNC] compare layers, result = "<< Result << std::endl;
+
+	return Result;
 }
 
 void ET::NEST2DMANAGERLIB::CetStrategyManager::ApplyNestPriorityStrategy(CetTNestItemVector& AItems, MetENestOrderStrategy AStrategy)
@@ -112,14 +115,10 @@ void ET::NEST2DMANAGERLIB::CetStrategyManager::ApplyNestPriorityStrategy(CetTNes
 void ET::NEST2DMANAGERLIB::CetStrategyManager::PrintBinCount(const CetTNestItemVector& AItems)
 {
 	std::map<int, int> BinCount;
-
-	for (const auto& Item : AItems)
-	{
+	for (const auto& Item : AItems){
 		BinCount[Item.binId()]++;
 	}
-
-	for (const auto& Pair : BinCount)
-	{
+	for (const auto& Pair : BinCount){
 		std::cout << "[NEST] binId = " << Pair.first
 			<< ", count = " << Pair.second << std::endl;
 	}

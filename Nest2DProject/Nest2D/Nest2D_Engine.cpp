@@ -164,7 +164,7 @@ namespace ET {
 			};
 			bool HasBest = false;
 			CetTNestItemVector BestItems;
-			TetTetTNestEvalResult BestEval;
+			TetTetTNestEvalResult BestEval{};
 			std::size_t BestLayers = 0;
 
 			// 保存最佳结果对应的 cluster 元信息
@@ -243,36 +243,54 @@ namespace ET {
 				}
 				return Layers;
 				};
-			auto EvaluatePackedResultWithMeta =[&](const CetTNestItemVector& PackedItems,const std::vector<TetMetaItem>& MetaItems,std::size_t Layers) -> TetTetTNestEvalResult{
-					TetTetTNestEvalResult Result;
-					Result.Layers = Layers;
-
-					if (PackedItems.size() != MetaItems.size()){
-						std::cout << "[NEST][EVAL][ERROR] PackedItems size != MetaItems size. "
-							<< "PackedItems = " << PackedItems.size()
-							<< ", MetaItems = " << MetaItems.size()
-							<< std::endl;
-						return Result;
+			auto EvaluatePackedResultWithMeta = [&](const CetTNestItemVector& PackedItems, const std::vector<TetMetaItem>& MetaItems, std::size_t Layers) -> TetTetTNestEvalResult {
+				TetTetTNestEvalResult Result{};
+				Result.Layers = Layers;
+				
+				if (PackedItems.size() != MetaItems.size()) {
+					std::cout << "[NEST][EVAL][ERROR] PackedItems size != MetaItems size. "
+						<< "PackedItems = " << PackedItems.size()
+						<< ", MetaItems = " << MetaItems.size()
+						<< std::endl;
+					return Result;
+				}
+				for (std::size_t PackedIndex = 0; PackedIndex < PackedItems.size(); ++PackedIndex) {
+					const auto& PackedItem = PackedItems[PackedIndex];
+					const auto& Meta = MetaItems[PackedIndex];
+					if (PackedItem.binId() != 0) {
+						continue;
 					}
-					for (std::size_t PackedIndex = 0; PackedIndex < PackedItems.size(); ++PackedIndex){
-						const auto& PackedItem = PackedItems[PackedIndex];
-						const auto& Meta = MetaItems[PackedIndex];
-						if (PackedItem.binId() != 0){
+					// 这里统计原始零件数量，不是 packed item 数量
+					for (const auto& Transform : Meta.TransformData) {
+						int OriginalId = Transform.OriginalId;
+						if (OriginalId < 0 || OriginalId >= static_cast<int>(OriginalItems.size())) {
 							continue;
 						}
-						// 这里统计原始零件数量，不是 packed item 数量
-						for (const auto& Transform : Meta.TransformData){
-							int OriginalId = Transform.OriginalId;
-							if (OriginalId < 0 ||OriginalId >= static_cast<int>(OriginalItems.size())){
-								continue;
-							}
-							Result.FirstBinCount++;
+						Result.FirstBinCount++;
 
-							// 面积也用原始零件面积，而不是 cluster 矩形面积
-							Result.FirstBinArea +=std::abs(static_cast<double>(OriginalItems[OriginalId].area()));
-						}
+						// 面积也用原始零件面积，而不是 cluster 矩形面积
+						Result.FirstBinArea += std::abs(static_cast<double>(OriginalItems[OriginalId].area()));
 					}
-					return Result;
+				}
+				return Result;
+				};
+			auto IsBetterEval = [](const TetTetTNestEvalResult& A,
+				const TetTetTNestEvalResult& B) -> bool
+				{
+					// 第一优先级：第一张板里的原始零件数量更多
+					if (A.FirstBinCount != B.FirstBinCount)
+					{
+						return A.FirstBinCount > B.FirstBinCount;
+					}
+
+					// 第二优先级：第一张板里的原始零件面积更大
+					if (std::abs(A.FirstBinArea - B.FirstBinArea) > 1e-6)
+					{
+						return A.FirstBinArea > B.FirstBinArea;
+					}
+
+					// 第三优先级：总板数更少
+					return A.Layers < B.Layers;
 				};
 			std::vector<MetClusterStrategy> ClusterStrategies = {
 				 MetClusterStrategy::None,
@@ -308,12 +326,22 @@ namespace ET {
 
 					//TetTetTNestEvalResult Eval = Nest2DUtils->EvaluateNestResult(TestItems, Layers);
 					TetTetTNestEvalResult Eval =EvaluatePackedResultWithMeta(TestItems,ClusterResult.MetaItems,Layers);
+
+					std::cout << "[NEST][EVAL] HasCluster = " << CurrentHasCluster
+						<< ", Eval.FirstBinCount = " << Eval.FirstBinCount
+						<< ", Eval.FirstBinArea = " << Eval.FirstBinArea
+						<< ", Eval.Layers = " << Eval.Layers
+						<< ", Best.FirstBinCount = " << BestEval.FirstBinCount
+						<< ", Best.FirstBinArea = " << BestEval.FirstBinArea
+						<< ", Best.Layers = " << BestEval.Layers
+						<< std::endl;
+
 					bool Better = false;
 
 					if (!HasBest){
 						Better = true;
 					}
-					else if (Nest2DUtils->IsBetterNestResult(Eval, BestEval)){
+					else if (IsBetterEval(Eval, BestEval)){
 						Better = true;
 					}
 					else{
