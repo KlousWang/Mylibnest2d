@@ -77,7 +77,7 @@ namespace ET {
 			if (AOptions.BinHeight <= 0 || AOptions.BinWidth <= 0) return  NEST2D_ERR_CORE_INVALID_SIZE;
 			//Box bin(NestUtils::ToNestCoord(AOptions.BinWidth), NestUtils::ToNestCoord(AOptions.BinHeight));
 			//std::vector<Item> nestItems = CetNestDataMapper::BuildNestItems(AItems);
-			CetTNestItemVector* NestItemsPtr = AsNestItems(_Lib2DItemDataType);
+			CetTNestItemVector* NestItemsPtr = AsNestItems(_Lib2DItemDataType);//准备内部数据
 			if (NestItemsPtr == nullptr)return NEST2D_ERR_CORE_NESTING_FAILED;
 			CetTNestItemVector& NestItems = *NestItemsPtr;
 			NestItems.clear();
@@ -85,10 +85,10 @@ namespace ET {
 			// ==================== 对源数据进行排序 ====================
 			std::cout << "[NEST] Sorting original AItems by Bounding Box Area (Descending)..." << std::endl;
 			//bool isSort = Nest2DUtils->CalcBoardBoundsLocal(AOptions.Board).Valid;
-			std::sort(AItems.begin(), AItems.end(), [&](const TetNestPolygon& ADataa, const TetNestPolygon& ADatab) {
+		/*	std::sort(AItems.begin(), AItems.end(), [&](const TetNestPolygon& ADataa, const TetNestPolygon& ADatab) {
 				return Nest2DUtils->ComparePolygonAreaDesc(ADataa, ADatab);
-				});
-
+				});*/
+			SortItemsByAreaDesc(AItems);
 			// ==========================================================================
 
 			Nest2DUtils->BuildNestms(AItems,NestItems);
@@ -111,7 +111,7 @@ namespace ET {
 			if (NestCode != Nest2D_Success)return NestCode;
 
 			Nest2DUtils->ApplyResults(NestItems, AItems);
-            for (const auto& Item : AItems) {
+            for (const auto& Item : AItems) {  
                 std::cout << "[RESULT] item id = " << Item.Id
                     << ", bin = " << Item.Out_bin
                     << ", x = " << Item.Out_x
@@ -151,6 +151,13 @@ namespace ET {
 				AResult->Message = "Nesting success.";
 			}
 			return 0;
+		}
+
+		void CetNest2DManager::SortItemsByAreaDesc(std::vector<TetNestPolygon>& AItems)
+		{
+			std::sort(AItems.begin(), AItems.end(), [&](const TetNestPolygon& ADataa, const TetNestPolygon& ADatab) {
+				return Nest2DUtils->ComparePolygonAreaDesc(ADataa, ADatab);
+				});
 		}
 		
 	}

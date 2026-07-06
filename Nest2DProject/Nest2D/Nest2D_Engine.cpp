@@ -167,10 +167,10 @@ namespace ET {
 			TetTetTNestEvalResult BestEval;
 			std::size_t BestLayers = 0;
 
-			// 新增：保存最佳结果对应的 cluster 元信息
+			// 保存最佳结果对应的 cluster 元信息
 			std::vector<TetMetaItem> BestMetaItems;
 
-			// 新增：标记最佳结果里面是否真的包含组合件
+			// 标记最佳结果里面是否真的包含组合件
 			bool BestHasCluster = false;
 
 			auto RunOnce = [&](CetTNestItemVector& TestItems)->std::size_t {
@@ -247,43 +247,31 @@ namespace ET {
 					TetTetTNestEvalResult Result;
 					Result.Layers = Layers;
 
-					if (PackedItems.size() != MetaItems.size())
-					{
+					if (PackedItems.size() != MetaItems.size()){
 						std::cout << "[NEST][EVAL][ERROR] PackedItems size != MetaItems size. "
 							<< "PackedItems = " << PackedItems.size()
 							<< ", MetaItems = " << MetaItems.size()
 							<< std::endl;
 						return Result;
 					}
-
-					for (std::size_t PackedIndex = 0; PackedIndex < PackedItems.size(); ++PackedIndex)
-					{
+					for (std::size_t PackedIndex = 0; PackedIndex < PackedItems.size(); ++PackedIndex){
 						const auto& PackedItem = PackedItems[PackedIndex];
 						const auto& Meta = MetaItems[PackedIndex];
-
-						if (PackedItem.binId() != 0)
-						{
+						if (PackedItem.binId() != 0){
 							continue;
 						}
-
-						// 关键：这里统计原始零件数量，不是 packed item 数量
-						for (const auto& Transform : Meta.TransformData)
-						{
+						// 这里统计原始零件数量，不是 packed item 数量
+						for (const auto& Transform : Meta.TransformData){
 							int OriginalId = Transform.OriginalId;
-
-							if (OriginalId < 0 ||
-								OriginalId >= static_cast<int>(OriginalItems.size()))
-							{
+							if (OriginalId < 0 ||OriginalId >= static_cast<int>(OriginalItems.size())){
 								continue;
 							}
-
 							Result.FirstBinCount++;
 
 							// 面积也用原始零件面积，而不是 cluster 矩形面积
 							Result.FirstBinArea +=std::abs(static_cast<double>(OriginalItems[OriginalId].area()));
 						}
 					}
-
 					return Result;
 				};
 			std::vector<MetClusterStrategy> ClusterStrategies = {
@@ -293,10 +281,8 @@ namespace ET {
 			for(auto ClusterStrategy : ClusterStrategies){
 				TetClusterBuildResult ClusterResult =Nest2DUtils->BuildClusterItems(OriginalItems, AOptions, ClusterStrategy);
 				int ClusterCount = 0;
-				for (const auto& Meta : ClusterResult.MetaItems)
-				{
-					if (Meta.IsCluster)
-					{
+				for (const auto& Meta : ClusterResult.MetaItems){
+					if (Meta.IsCluster){
 						ClusterCount++;
 					}
 				}
@@ -308,51 +294,40 @@ namespace ET {
 					<< ", ClusterCount = " << ClusterCount
 					<< std::endl;
 				bool CurrentHasCluster = false;
-				for (const auto& Meta : ClusterResult.MetaItems)
-				{
-					if (Meta.IsCluster)
-					{
+				for (const auto& Meta : ClusterResult.MetaItems){
+					if (Meta.IsCluster){
 						CurrentHasCluster = true;
 						break;
 					}
 				}
 
-				for (MetENestOrderStrategy Strategy : Strategies)
-				{
+				for (MetENestOrderStrategy Strategy : Strategies){
 					CetTNestItemVector TestItems = ClusterResult.NestItems;
-
 					Nest2DUtils->ApplyNestPriorityStrategy(TestItems, Strategy);
-
-					std::size_t Layers = RunOnce(TestItems);
+	   		     	std::size_t Layers = RunOnce(TestItems);
 
 					//TetTetTNestEvalResult Eval = Nest2DUtils->EvaluateNestResult(TestItems, Layers);
 					TetTetTNestEvalResult Eval =EvaluatePackedResultWithMeta(TestItems,ClusterResult.MetaItems,Layers);
 					bool Better = false;
 
-					if (!HasBest)
-					{
+					if (!HasBest){
 						Better = true;
 					}
-					else if (Nest2DUtils->IsBetterNestResult(Eval, BestEval))
-					{
+					else if (Nest2DUtils->IsBetterNestResult(Eval, BestEval)){
 						Better = true;
 					}
-					else
-					{
+					else{
 						bool SameCount = (Eval.FirstBinCount == BestEval.FirstBinCount);
 						bool SameLayers = (Eval.Layers == BestEval.Layers);
 						bool SameArea =std::abs(Eval.FirstBinArea - BestEval.FirstBinArea) <= 1e-6;
 						// 同等结果时，优先选择带 cluster 的方案
-						if (SameCount && SameLayers && SameArea)
-						{
-							if (CurrentHasCluster && !BestHasCluster)
-							{
+						if (SameCount && SameLayers && SameArea){
+							if (CurrentHasCluster && !BestHasCluster){
 								Better = true;
 							}
 						}
 					}
-					if (Better)
-					{
+					if (Better){
 						HasBest = true;
 						BestEval = Eval;
 						BestLayers = Layers;
@@ -364,46 +339,27 @@ namespace ET {
 					}
 				}
 			}
-			if (HasBest)
-			{
-				std::cout << "[NEST][FINAL BEST] BestHasCluster = "
-					<< BestHasCluster
-					<< ", BestItems.size = " << BestItems.size()
-					<< ", BestMetaItems.size = " << BestMetaItems.size()
-					<< std::endl;
+			if (HasBest){
+				std::cout << "[NEST][FINAL BEST] BestHasCluster = "<< BestHasCluster<< ", BestItems.size = " << BestItems.size()<< ", BestMetaItems.size = " << BestMetaItems.size()<< std::endl;
 
-				if (!BestHasCluster)
-				{
+				if (!BestHasCluster){
 					std::cout << "[NEST][FINAL BEST] Use normal items." << std::endl;
 					ANestItems = BestItems;
 				}
-				else
-				{
+				else{
 					std::cout << "[NEST][FINAL BEST] Use cluster expand." << std::endl;
 
-					Nest2DUtils->ExpandClusterResultToOriginalItems(
-						OriginalItems,
-						BestItems,
-						BestMetaItems,
-						ANestItems
+					Nest2DUtils->ExpandClusterResultToOriginalItems(OriginalItems,BestItems,BestMetaItems,ANestItems
 					);
 				}
 			}
-			std::cout << "================ BEST NEST RESULT ================"
-				<< std::endl;
+			std::cout << "================ BEST NEST RESULT ================"<< std::endl;
 
-			std::cout << "[NEST BEST] bin0 count = "
-				<< BestEval.FirstBinCount
-				<< ", bin0 area = "
-				<< BestEval.FirstBinArea
-				<< ", layers = "
-				<< BestEval.Layers
-				<< std::endl;
-
+			std::cout << "[NEST BEST] bin0 count = "<< BestEval.FirstBinCount<< ", bin0 area = "<< BestEval.FirstBinArea
+				<< ", layers = "<< BestEval.Layers<< std::endl;
 			Nest2DUtils-> PrintBinCount(ANestItems);
 
-			std::cout << "=================================================="
-				<< std::endl;
+			std::cout << "=================================================="<< std::endl;
 
 			return BestLayers;
 		}

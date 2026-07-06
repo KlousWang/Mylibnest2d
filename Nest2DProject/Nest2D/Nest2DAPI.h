@@ -29,6 +29,7 @@ namespace ET {
 			int PerformNestingEx(std::vector<TetNestPolygon>& AItems, const TetNestOptions& AOptions, TetNestResult* AResult = nullptr);
 
 		protected:
+			void SortItemsByAreaDesc(std::vector<TetNestPolygon>& AItems);
 			TetLib2DItemDataType* _Lib2DItemDataType = nullptr;
 		};
 	}

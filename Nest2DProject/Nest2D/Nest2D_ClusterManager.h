@@ -37,6 +37,12 @@ namespace ET {
 		protected:
 			void AddSingleItem(const CetTNestItemVector& AOriginalItems, int AOriginalIndex, TetClusterBuildResult& AResult);
 			bool TryMakeRightTrianglePair(const CetTNestItemVector& AOriginalItems, int AIndex, int BIndex, const TetNestOptions& AOptions, TetClusterBuildResult& AResult);
+			bool NearlyEqual(double A, double B, double RelTol);
+			double GetItemWidth(const CetNestItem& AItem);
+			double GetItemHeight(const CetNestItem& AItem);
+			bool IsRightTriangleLike(const CetNestItem& AItem);
+			bool IsSameSizeTrianglePair(const CetNestItem& AItem, const CetNestItem& BItem);
+			CetNestItem MakeRectangleNestItemByNestCoord(double W, double H);
 		};
 	}
 }
