@@ -43,6 +43,7 @@ namespace ET {
             std::size_t RunPolygonBoardNesting(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, TetNestProgressTracker& Tracker);
             std::size_t RunRectangleBoardNesting(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, TetNestProgressTracker& Tracker);
             std::size_t RunRectangleNestOnce(CetTNestItemVector& ATestItems,const TetNestOptions& AOptions,TetNestProgressTracker& ATracker);
+            TetLocalBestResult EvaluateSortingStrategies(const TetClusterBuildResult& ClusterResult, const CetTNestItemVector& OriginalItems, const TetNestOptions& AOptions, TetNestProgressTracker& Tracker);
             //std::size_t RunRectangleBoardNestingFill(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, TetNestProgressTracker& Tracker);
         };
     }

@@ -114,3 +114,11 @@ struct TetClusterBuildResult
 	CetTNestItemVector NestItems;
 	std::vector<TetMetaItem> MetaItems;
 };
+
+struct TetLocalBestResult {
+	bool HasBest = false;
+	std::size_t Layers = 0;
+	TetTNestEvalResult Eval{};
+	CetTNestItemVector Items;
+	bool HasCluster = false;
+};

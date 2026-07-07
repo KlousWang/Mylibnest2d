@@ -156,115 +156,101 @@ namespace ET {
 			std::cout << "[NEST] use original rectangle BIN" << std::endl;
 
 			CetTNestItemVector OriginalItems = ANestItems;
-			std::vector<MetENestOrderStrategy> Strategies = {
-				MetENestOrderStrategy::LargeFirst,
-				MetENestOrderStrategy::SmallFirst,
-				MetENestOrderStrategy::LongSideFirst,
-				MetENestOrderStrategy::ThinFirst
-			};
+
+			// 全局最优解的状态记录
 			bool HasBest = false;
 			CetTNestItemVector BestItems;
 			TetTNestEvalResult BestEval{};
 			std::size_t BestLayers = 0;
-
-			// 保存最佳结果对应的 cluster 元信息
 			std::vector<TetMetaItem> BestMetaItems;
+			bool BestHasCluster = false;
 
-			// 标记最佳结果里面是否真的包含组合件
-			bool BestHasCluster = false;			
+			// 外层：组合件/聚类策略
 			std::vector<MetClusterStrategy> ClusterStrategies = {
 				 MetClusterStrategy::None,
 				 MetClusterStrategy::RightTrianglePair
 			};
-			for(auto ClusterStrategy : ClusterStrategies){
-				TetClusterBuildResult ClusterResult =Nest2DUtils->BuildClusterItems(OriginalItems, AOptions, ClusterStrategy);
+			for (auto ClusterStrategy : ClusterStrategies) {
+
+				//  构建当前策略下的 Cluster 数据
+				TetClusterBuildResult ClusterResult = Nest2DUtils->BuildClusterItems(OriginalItems, AOptions, ClusterStrategy);
+				// 打印调试信息
 				int ClusterCount = 0;
-				for (const auto& Meta : ClusterResult.MetaItems){
-					if (Meta.IsCluster){
-						ClusterCount++;
-					}
+				for (const auto& Meta : ClusterResult.MetaItems) {
+					if (Meta.IsCluster) ClusterCount++;
 				}
-				std::cout << "[CLUSTER][BUILD] Strategy = "
-					<< static_cast<int>(ClusterStrategy)
+				std::cout << "[CLUSTER][BUILD] Strategy = " << static_cast<int>(ClusterStrategy)
 					<< ", OriginalItems = " << OriginalItems.size()
 					<< ", PackedItems = " << ClusterResult.NestItems.size()
 					<< ", MetaItems = " << ClusterResult.MetaItems.size()
-					<< ", ClusterCount = " << ClusterCount
-					<< std::endl;
-				bool CurrentHasCluster = false;
-				for (const auto& Meta : ClusterResult.MetaItems){
-					if (Meta.IsCluster){
-						CurrentHasCluster = true;
-						break;
-					}
+					<< ", ClusterCount = " << ClusterCount << std::endl;
+
+				// 调用抽离的内层函数，获取该 Cluster 策略下的局部最优解
+				TetLocalBestResult LocalResult = EvaluateSortingStrategies(ClusterResult, OriginalItems, AOptions, Tracker);
+				// 如果当前策略连一个有效结果都没有，直接跳过
+				if (!LocalResult.HasBest) {
+					continue;
 				}
+				//  将局部最优解与全局最优解打擂台
+				bool Better = false;
+				if (!HasBest) {
+					Better = true; // 第一个跑出来的直接当擂主
+				}
+				else if (Nest2DUtils->IsBetterNestResult(LocalResult.Eval, BestEval)) {
+					Better = true; // 分数更高，踢馆成功
+				}
+				else {
+					// 同等结果时，进入断路器规则
+					bool SameCount = (LocalResult.Eval.FirstBinCount == BestEval.FirstBinCount);
+					bool SameLayers = (LocalResult.Layers == BestLayers);
+					bool SameArea = std::abs(LocalResult.Eval.FirstBinArea - BestEval.FirstBinArea) <= 1e-6;
 
-				for (MetENestOrderStrategy Strategy : Strategies){
-					CetTNestItemVector TestItems = ClusterResult.NestItems;			
-					Nest2DUtils->ApplyNestPriorityStrategy(TestItems, Strategy);
-	   		     	std::size_t Layers = RunRectangleNestOnce(TestItems, AOptions, Tracker);
-					//TetTetTNestEvalResult Eval = Nest2DUtils->EvaluateNestResult(TestItems, Layers);
-					TetTNestEvalResult Eval = Nest2DUtils-> EvaluatePackedResultWithMeta(TestItems,ClusterResult.MetaItems,OriginalItems,Layers);
-
-					std::cout << "[NEST][EVAL] HasCluster = " << CurrentHasCluster
-						<< ", Eval.FirstBinCount = " << Eval.FirstBinCount
-						<< ", Eval.FirstBinArea = " << Eval.FirstBinArea
-						<< ", Eval.Layers = " << Eval.Layers
-						<< ", Best.FirstBinCount = " << BestEval.FirstBinCount
-						<< ", Best.FirstBinArea = " << BestEval.FirstBinArea
-						<< ", Best.Layers = " << BestEval.Layers
-						<< std::endl;					
-					bool Better = false;
-					if (!HasBest) {
-						Better = true;
-					}
-					else if (Nest2DUtils->IsBetterNestResult(Eval, BestEval)){
-						Better = true;
-					}
-					else{
-						bool SameCount = (Eval.FirstBinCount == BestEval.FirstBinCount);
-						bool SameLayers = (Eval.Layers == BestEval.Layers);
-						bool SameArea =std::abs(Eval.FirstBinArea - BestEval.FirstBinArea) <= 1e-6;
-						// 同等结果时，优先选择带 cluster 的方案
-						if (SameCount && SameLayers && SameArea){
-							if (CurrentHasCluster && !BestHasCluster){
-								Better = true;
-							}
+					if (SameCount && SameLayers && SameArea) {
+						if (LocalResult.HasCluster && !BestHasCluster) {
+							Better = true; // 优先选择带 cluster 的方案
 						}
 					}
-					if (Better){
-						HasBest = true;
-						BestEval = Eval;
-						BestLayers = Layers;
-						BestItems = std::move(TestItems);
-						BestMetaItems = ClusterResult.MetaItems;
-						BestHasCluster = CurrentHasCluster;
-						std::cout << "[NEST][BEST UPDATE] HasCluster = "<< BestHasCluster<< ", count = " << BestEval.FirstBinCount<< ", area = " << BestEval.FirstBinArea
-							<< ", layers = " << BestEval.Layers<< ", packedItems = " << BestItems.size()<< std::endl;
-					}
+				}
+
+				//  如果更好，更新全局最优解状态
+				if (Better) {
+					HasBest = true;
+					BestEval = LocalResult.Eval;
+					BestLayers = LocalResult.Layers;
+
+					// 安全的移动：将局部最优数据转移给全局最优
+					BestItems = std::move(LocalResult.Items);
+					BestMetaItems = ClusterResult.MetaItems;
+					BestHasCluster = LocalResult.HasCluster;
+
+					std::cout << "[NEST][GLOBAL BEST UPDATE] HasCluster = " << BestHasCluster
+						<< ", count = " << BestEval.FirstBinCount
+						<< ", area = " << BestEval.FirstBinArea
+						<< ", layers = " << BestEval.Layers
+						<< ", packedItems = " << BestItems.size() << std::endl;
 				}
 			}
-			if (HasBest){
-				std::cout << "[NEST][FINAL BEST] BestHasCluster = "<< BestHasCluster<< ", BestItems.size = " << BestItems.size()<< ", BestMetaItems.size = " << BestMetaItems.size()<< std::endl;
+			//  最终结果处理与还原展开
+			if (HasBest) {
+				std::cout << "[NEST][FINAL BEST] BestHasCluster = " << BestHasCluster
+					<< ", BestItems.size = " << BestItems.size()
+					<< ", BestMetaItems.size = " << BestMetaItems.size() << std::endl;
 
-				if (!BestHasCluster){
+				if (!BestHasCluster) {
 					std::cout << "[NEST][FINAL BEST] Use normal items." << std::endl;
-					ANestItems = BestItems;
+					ANestItems = std::move(BestItems); // 最终交接给外部
 				}
-				else{
+				else {
 					std::cout << "[NEST][FINAL BEST] Use cluster expand." << std::endl;
-
-					Nest2DUtils->ExpandClusterResultToOriginalItems(OriginalItems,BestItems,BestMetaItems,ANestItems
-					);
+					Nest2DUtils->ExpandClusterResultToOriginalItems(OriginalItems, BestItems, BestMetaItems, ANestItems);
 				}
 			}
-			std::cout << "================ BEST NEST RESULT ================"<< std::endl;
-
-			std::cout << "[NEST BEST] bin0 count = "<< BestEval.FirstBinCount<< ", bin0 area = "<< BestEval.FirstBinArea
-				<< ", layers = "<< BestEval.Layers<< std::endl;
-			Nest2DUtils-> PrintBinCount(ANestItems);
-		
-			std::cout << "=================================================="<< std::endl;
+			std::cout << "================ BEST NEST RESULT ================" << std::endl;
+			std::cout << "[NEST BEST] bin0 count = " << BestEval.FirstBinCount
+				<< ", bin0 area = " << BestEval.FirstBinArea
+				<< ", layers = " << BestEval.Layers << std::endl;
+			Nest2DUtils->PrintBinCount(ANestItems);
+			std::cout << "==================================================" << std::endl;
 
 			return BestLayers;
 		}
@@ -334,6 +320,97 @@ namespace ET {
 			Nest2DUtils->PrintBinCount(ATestItems);
 
 			return Layers;
+		}
+
+		TetLocalBestResult CetNest2DEngine::EvaluateSortingStrategies(const TetClusterBuildResult& AClusterResult, const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker)
+		{
+			// 初始化局部最优解状态
+			TetLocalBestResult LocalBest;
+
+			// 定义要测试的所有排序策略
+			std::vector<MetENestOrderStrategy> Strategies = {
+				MetENestOrderStrategy::LargeFirst,
+				MetENestOrderStrategy::SmallFirst,
+				MetENestOrderStrategy::LongSideFirst,
+				MetENestOrderStrategy::ThinFirst
+			};
+
+			// 检查当前的 Cluster 结果中是否真的包含组合件
+			bool CurrentHasCluster = false;
+			for (const auto& Meta : AClusterResult.MetaItems) {
+				if (Meta.IsCluster) {
+					CurrentHasCluster = true;
+					break;
+				}
+			}
+			// 遍历所有排序策略打擂台
+			for (MetENestOrderStrategy Strategy : Strategies) {
+				// 准备测试数据（拷贝一份，避免相互污染）
+				CetTNestItemVector TestItems = AClusterResult.NestItems;
+
+				//  应用排序策略
+				Nest2DUtils->ApplyNestPriorityStrategy(TestItems, Strategy);
+
+				// 执行单次排版（调用底层引擎）
+				std::size_t Layers = RunRectangleNestOnce(TestItems, AOptions, ATracker);
+
+				//  评估本次排版结果
+				TetTNestEvalResult Eval = Nest2DUtils->EvaluatePackedResultWithMeta(TestItems,AClusterResult.MetaItems,AOriginalItems,Layers);
+
+				std::cout << "[NEST][EVAL] Strategy = " << static_cast<int>(Strategy)
+					<< ", HasCluster = " << CurrentHasCluster
+					<< ", Eval.FirstBinCount = " << Eval.FirstBinCount
+					<< ", Eval.FirstBinArea = " << Eval.FirstBinArea
+					<< ", Eval.Layers = " << Eval.Layers
+					<< ", LocalBest.FirstBinCount = " << LocalBest.Eval.FirstBinCount
+					<< ", LocalBest.FirstBinArea = " << LocalBest.Eval.FirstBinArea
+					<< ", LocalBest.Layers = " << LocalBest.Eval.Layers
+					<< std::endl;
+
+				//  比较是否是更好的结果
+				bool Better = false;
+				if (!LocalBest.HasBest) {
+					// 如果这是第一个跑出来的结果，直接当擂主
+					Better = true;
+				}
+				else if (Nest2DUtils->IsBetterNestResult(Eval, LocalBest.Eval)) {
+					// 如果按照评估标准，当前分数更高，踢馆成功
+					Better = true;
+				}
+				else {
+					// 如果主要分数相同，进入“抢七”断路器规则（优先选择带组合件的方案）
+					bool SameCount = (Eval.FirstBinCount == LocalBest.Eval.FirstBinCount);
+					bool SameLayers = (Eval.Layers == LocalBest.Eval.Layers);
+					bool SameArea = std::abs(Eval.FirstBinArea - LocalBest.Eval.FirstBinArea) <= 1e-6;
+
+					if (SameCount && SameLayers && SameArea) {
+						if (CurrentHasCluster && !LocalBest.HasCluster) {
+							Better = true;
+						}
+					}
+				}
+
+				//  如果更好，更新局部最优解状态
+				if (Better) {
+					LocalBest.HasBest = true;
+					LocalBest.Eval = Eval;
+					LocalBest.Layers = Layers;
+
+					// 安全使用 std::move，因为 TestItems 的生命周期仅在当前单次循环内
+					LocalBest.Items = std::move(TestItems);
+					LocalBest.HasCluster = CurrentHasCluster;
+
+					std::cout << "[NEST][LOCAL BEST UPDATE] HasCluster = " << LocalBest.HasCluster
+						<< ", count = " << LocalBest.Eval.FirstBinCount
+						<< ", area = " << LocalBest.Eval.FirstBinArea
+						<< ", layers = " << LocalBest.Eval.Layers
+						<< ", packedItems = " << LocalBest.Items.size()
+						<< std::endl;
+				}
+			}
+
+			// 将这一批测试中的最高分返回给外层主函数
+			return LocalBest;
 		}
 
 		//std::size_t CetNest2DEngine::RunRectangleBoardNestingFill(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, TetNestProgressTracker& Tracker)

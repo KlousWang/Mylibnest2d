@@ -5,6 +5,7 @@
 #include <libnest2d/backends/clipper/geometries.hpp>
 #include <libnest2d/libnest2d.hpp>
 
+
 // 将别名定义在这里，让整个模块内部都能看到
 using CetTNestItemVector = std::vector<libnest2d::Item>;
 using CetNestItem = CetTNestItemVector::value_type;
