@@ -9,9 +9,9 @@ ET::NEST2DMANAGERLIB::CetStrategyManager::~CetStrategyManager()
 {
 }
 
-TetTetTNestEvalResult ET::NEST2DMANAGERLIB::CetStrategyManager::EvaluateNestResult(const CetTNestItemVector& Items, std::size_t Layers)
+TetTNestEvalResult ET::NEST2DMANAGERLIB::CetStrategyManager::EvaluateNestResult(const CetTNestItemVector& Items, std::size_t Layers)
 {
-	TetTetTNestEvalResult Result{};
+	TetTNestEvalResult Result{};
 	Result.Layers = Layers;
 	for (const auto& Item : Items){
 		if (Item.binId() == 0){
@@ -23,27 +23,32 @@ TetTetTNestEvalResult ET::NEST2DMANAGERLIB::CetStrategyManager::EvaluateNestResu
 	return Result;
 }
 
-bool ET::NEST2DMANAGERLIB::CetStrategyManager::IsBetterNestResult(const TetTetTNestEvalResult& A, const TetTetTNestEvalResult& B)
+bool ET::NEST2DMANAGERLIB::CetStrategyManager::IsBetterNestResult(const TetTNestEvalResult& A, const TetTNestEvalResult& B)
 {
 	std::cout << "[NEST][COMPARE FUNC] "<< "A.Count = " << A.FirstBinCount<< ", A.Area = " << A.FirstBinArea<< ", A.Layers = " << A.Layers<< ", B.Count = " << B.FirstBinCount
 		<< ", B.Area = " << B.FirstBinArea<< ", B.Layers = " << B.Layers<< std::endl;
-
-	if (A.FirstBinCount != B.FirstBinCount){
-		bool Result = A.FirstBinCount > B.FirstBinCount;
-		std::cout << "[NEST][COMPARE FUNC] compare count, result = "<< Result << std::endl;
+	//总板数更少
+	if (A.Layers != B.Layers){
+		bool Result = A.Layers < B.Layers;
+		std::cout << "[NEST][COMPARE FUNC] compare layers, result = "<< Result << std::endl;
 		return Result;
 	}
 
+	// 第一张板原始件总面积更大
 	if (std::abs(A.FirstBinArea - B.FirstBinArea) > 1e-6){
 		bool Result = A.FirstBinArea > B.FirstBinArea;
 		std::cout << "[NEST][COMPARE FUNC] compare area, result = "<< Result << std::endl;
 		return Result;
 	}
 
-	bool Result = A.Layers < B.Layers;
-	std::cout << "[NEST][COMPARE FUNC] compare layers, result = "<< Result << std::endl;
+	// 第一张板原始件数量更多
+	if (A.FirstBinCount != B.FirstBinCount){
+		bool Result = A.FirstBinCount > B.FirstBinCount;
+		std::cout << "[NEST][COMPARE FUNC] compare count, result = "<< Result << std::endl;
+		return Result;
+	}
 
-	return Result;
+	return false;
 }
 
 void ET::NEST2DMANAGERLIB::CetStrategyManager::ApplyNestPriorityStrategy(CetTNestItemVector& AItems, MetENestOrderStrategy AStrategy)
@@ -122,5 +127,57 @@ void ET::NEST2DMANAGERLIB::CetStrategyManager::PrintBinCount(const CetTNestItemV
 		std::cout << "[NEST] binId = " << Pair.first
 			<< ", count = " << Pair.second << std::endl;
 	}
+}
+
+TetTNestEvalResult ET::NEST2DMANAGERLIB::CetStrategyManager::EvaluatePackedResultWithMeta(const CetTNestItemVector& AItems, const std::vector<TetMetaItem>& AMetaItems, const CetTNestItemVector& AOriginalItems, std::size_t ALayers)
+{
+	TetTNestEvalResult Result{};
+	Result.Layers = ALayers;
+
+	if(AItems.size() != AMetaItems.size()){
+		std::cout << "[NEST][EVAL][ERROR] PackedItems size != MetaItems size. "
+			<< "PackedItems = " << AItems.size()
+			<< ", MetaItems = " << AMetaItems.size()
+			<< std::endl;
+		return Result;
+	}
+
+	for(std::size_t PackedIndex = 0; PackedIndex < AItems.size(); ++PackedIndex){
+		const auto& PackedItem = AItems[PackedIndex];
+		const auto& Meta = AMetaItems[PackedIndex];
+		int PackedBinId = PackedItem.binId();
+		std::cout << "[NEST][EVAL][PACKED] "<< "PackedIndex = " << PackedIndex<< ", BinId = " << PackedBinId<< ", IsCluster = " << Meta.IsCluster<< ", Children = " << Meta.TransformData.size()<< std::endl;
+
+		if(PackedItem.binId() != 0)
+		{
+			continue;
+		}
+		for(const auto& Transform : Meta.TransformData)
+		{
+			int OriginalId = Transform.OriginalId;
+			if(OriginalId < 0 || OriginalId >= static_cast<int>(AOriginalItems.size()))
+			{
+				std::cout << "[NEST][EVAL][WARN] Invalid OriginalId = "
+					<< OriginalId
+					<< ", OriginalItems.size = "
+					<< AOriginalItems.size()
+					<< std::endl;
+				continue;
+			}
+			double OriginalArea = std::abs(static_cast<double>(AOriginalItems[OriginalId].area()));
+			Result.FirstBinCount++;
+			Result.FirstBinArea += OriginalArea;
+			std::cout << "[NEST][EVAL][CHILD] "
+				<< "OriginalId = " << OriginalId
+				<< ", OriginalArea = " << OriginalArea
+				<< std::endl;
+		}
+	}
+	std::cout << "[NEST][EVAL][RETURN] "
+		<< "Count = " << Result.FirstBinCount
+		<< ", Area = " << Result.FirstBinArea
+		<< ", Layers = " << Result.Layers
+		<< std::endl;
+	return Result;
 }
 

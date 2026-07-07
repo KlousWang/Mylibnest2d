@@ -68,10 +68,11 @@ namespace ET {
             CetNest2DInvokeFunctor::SetPolygonBoardRepairContext.Reload(m_PolygonBoardRepairer, "SetContext");
             CetNest2DInvokeFunctor::RepairPolygonBoard.Reload(m_PolygonBoardRepairer, "Repair");
 
-			CetNest2DInvokeFunctor::EvaluateNestResult.Reload(m_ClusterManager, "EvaluateNestResult");
-			CetNest2DInvokeFunctor::IsBetterNestResult.Reload(m_ClusterManager, "IsBetterNestResult");
+			CetNest2DInvokeFunctor::EvaluateNestResult.Reload(m_StartegManager, "EvaluateNestResult");
+			CetNest2DInvokeFunctor::IsBetterNestResult.Reload(m_StartegManager, "IsBetterNestResult");
 			CetNest2DInvokeFunctor::ApplyNestPriorityStrategy.Reload(m_StartegManager, "ApplyNestPriorityStrategy");
 			CetNest2DInvokeFunctor::PrintBinCount.Reload(m_StartegManager, "PrintBinCount");
+			CetNest2DInvokeFunctor::EvaluatePackedResultWithMeta.Reload(m_StartegManager, "EvaluatePackedResultWithMeta");
 
 			CetNest2DInvokeFunctor::BuildClusterItems.Reload(m_ClusterManager, "BuildClusterItems");
 			CetNest2DInvokeFunctor::ExpandClusterResultToOriginalItems.Reload(m_ClusterManager, "ExpandClusterResultToOriginalItems");

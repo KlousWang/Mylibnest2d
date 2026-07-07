@@ -85,7 +85,7 @@ enum class MetENestOrderStrategy
 	ThinFirst
 };
 
-struct TetTetTNestEvalResult
+struct TetTNestEvalResult
 {
 	int FirstBinCount = 0;
 	double FirstBinArea = 0.0;

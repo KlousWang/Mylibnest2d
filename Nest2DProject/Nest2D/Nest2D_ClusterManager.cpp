@@ -106,41 +106,8 @@ namespace ET {
                         << ", PackedRotation = " << PackedRotation
                         << ", Children = " << Meta.TransformData.size()
                         << std::endl;
-                    for (const auto& Transform : Meta.TransformData) {
-						int originalId = Transform.OriginalId;
-                        if (originalId < 0 || originalId >= static_cast<int>(AOutOriginalItems.size())) {
-							std::cout << "[ClusTer][WARM]Invalid originalId in TransformData: " << originalId << std::endl;
-                            continue;
-                        }
-						auto& OriginalItem = AOutOriginalItems[originalId];
 
-						double LocalX = Transform.RelativeX;
-						double LocalY = Transform.RelativeY;
-
-                        //把组合件内部的相对坐标，跟随组合件旋转
-						double RotatedLocalX = LocalX * CosR - LocalY * SinR;
-						double RotatedLocalY = LocalX * SinR + LocalY * CosR;
-
-						double FinalX = PackedX + RotatedLocalX;
-						double FinalY = PackedY + RotatedLocalY;
-
-						double FinalRotation = PackedRotation + Transform.RelativeRotation;
-
-                        //继承组合件所在的板号
-						OriginalItem.binId(PackedItem.binId());
-
-                        //回填原始零件最终位置
-						OriginalItem.translation(ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(FinalX), static_cast<ClipperLib::cInt>(FinalY)));
-
-						OriginalItem.rotation(FinalRotation);
-                        std::cout << "[CLUSTER][EXPAND ITEM] OriginalId = "
-                            << originalId
-                            << ", Local = (" << LocalX << ", " << LocalY << ")"
-                            << ", Final = (" << FinalX << ", " << FinalY << ")"
-                            << ", FinalRotation = " << FinalRotation
-                            << ", Bin = " << PackedItem.binId()
-                            << std::endl;
-                    }
+					ExpandClusterChildren(PackedItem, Meta, AOutOriginalItems);
                 }
                 std::cout << "[CLUSTER] ExpandClusterResultToOriginalItems done. "<< "Original count = " << AOutOriginalItems.size()<< std::endl;
             }
@@ -321,15 +288,15 @@ namespace ET {
                 return SameDirection || SwappedDirection;
             }
 
-			CetNestItem CetClusterManager::MakeRectangleNestItemByNestCoord(double W, double H)
+			CetNestItem CetClusterManager::MakeRectangleNestItemByNestCoord(double AW, double AH)
 			{
 				using namespace libnest2d;
 				Path outerPoints;
 				outerPoints.reserve(4);
 				outerPoints.push_back(Point(0, 0));
-				outerPoints.push_back(Point(static_cast<ClipperLib::cInt>(W), 0));
-				outerPoints.push_back(Point(static_cast<ClipperLib::cInt>(W), static_cast<ClipperLib::cInt>(H)));
-				outerPoints.push_back(Point(0, static_cast<ClipperLib::cInt>(H)));
+				outerPoints.push_back(Point(static_cast<ClipperLib::cInt>(AW), 0));
+				outerPoints.push_back(Point(static_cast<ClipperLib::cInt>(AW), static_cast<ClipperLib::cInt>(AH)));
+				outerPoints.push_back(Point(0, static_cast<ClipperLib::cInt>(AH)));
 				if (ClipperLib::Orientation(outerPoints) == false) {
 					std::reverse(outerPoints.begin(), outerPoints.end());
 				}
@@ -354,6 +321,62 @@ namespace ET {
 
                 // 因为后面会转成整数坐标，向上取整，避免实际间隙被截断变小
                 return std::ceil(AxisGap);
+            }
+
+            void CetClusterManager::ExpandClusterChildren(const CetNestItem& APackedItem, const TetMetaItem& AMeta, CetTNestItemVector& AOutOriginalItems)
+            {
+                auto PackedTranslation = APackedItem.translation();
+                double PackedX = static_cast<double>(PackedTranslation.X);
+                double PackedY = static_cast<double>(PackedTranslation.Y);
+                double PackedRotation = APackedItem.rotation();
+
+                // 在处理子零件前计算一次三角函数，避免在内部循环中重复计算
+                double CosR = std::cos(PackedRotation);
+                double SinR = std::sin(PackedRotation);
+
+                std::cout << "[CLUSTER][EXPAND PACKED] IsCluster = " << AMeta.IsCluster
+                    << ", PackedBin = " << APackedItem.binId()
+                    << ", PackedX = " << PackedX
+                    << ", PackedY = " << PackedY
+                    << ", PackedRotation = " << PackedRotation
+                    << ", Children = " << AMeta.TransformData.size()
+                    << std::endl;
+
+                for (const auto& Transform : AMeta.TransformData) {
+                    int originalId = Transform.OriginalId;
+                    if (originalId < 0 || originalId >= static_cast<int>(AOutOriginalItems.size())) {
+                        std::cout << "[ClusTer][WARN] Invalid originalId in TransformData: " << originalId << std::endl;
+                        continue;
+                    }
+
+                    auto& OriginalItem = AOutOriginalItems[originalId];
+
+                    double LocalX = Transform.RelativeX;
+                    double LocalY = Transform.RelativeY;
+
+                    // 把组合件内部的相对坐标，跟随组合件旋转
+                    double RotatedLocalX = LocalX * CosR - LocalY * SinR;
+                    double RotatedLocalY = LocalX * SinR + LocalY * CosR;
+
+                    double FinalX = PackedX + RotatedLocalX;
+                    double FinalY = PackedY + RotatedLocalY;
+                    double FinalRotation = PackedRotation + Transform.RelativeRotation;
+
+                    // 继承组合件所在的板号并回填最终位置
+                    OriginalItem.binId(APackedItem.binId());
+                    OriginalItem.translation(ClipperLib::IntPoint(
+                        static_cast<ClipperLib::cInt>(FinalX),
+                        static_cast<ClipperLib::cInt>(FinalY)
+                    ));
+                    OriginalItem.rotation(FinalRotation);
+
+                    std::cout << "[CLUSTER][EXPAND ITEM] OriginalId = " << originalId
+                        << ", Local = (" << LocalX << ", " << LocalY << ")"
+                        << ", Final = (" << FinalX << ", " << FinalY << ")"
+                        << ", FinalRotation = " << FinalRotation
+                        << ", Bin = " << APackedItem.binId()
+                        << std::endl;
+                }
             }
 
 		}

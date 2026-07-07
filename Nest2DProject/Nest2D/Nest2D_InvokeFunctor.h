@@ -61,13 +61,14 @@ namespace ET {
             ET::CORE::CetCoreObjFunctor<void(CetTNestItemVector&,const TetNestOptions&,const libnest2d::PolygonImpl&,double,double)> SetPolygonBoardRepairContext;
             ET::CORE::CetCoreObjFunctor<void(std::size_t&)> RepairPolygonBoard;
 
-            ET::CORE::CetCoreObjFunctor<TetTetTNestEvalResult (const CetTNestItemVector& , std::size_t )> EvaluateNestResult;
-            ET::CORE::CetCoreObjFunctor< bool (const TetTetTNestEvalResult& , const TetTetTNestEvalResult& ) > IsBetterNestResult;
+            ET::CORE::CetCoreObjFunctor<TetTNestEvalResult (const CetTNestItemVector& , std::size_t )> EvaluateNestResult;
+            ET::CORE::CetCoreObjFunctor<bool (const TetTNestEvalResult& , const TetTNestEvalResult& ) > IsBetterNestResult;
             ET::CORE::CetCoreObjFunctor<void (CetTNestItemVector& , MetENestOrderStrategy )> ApplyNestPriorityStrategy;
             ET::CORE::CetCoreObjFunctor<void (const CetTNestItemVector& )> PrintBinCount;
+            ET::CORE::CetCoreObjFunctor< TetTNestEvalResult (const CetTNestItemVector& , const std::vector<TetMetaItem>& , const CetTNestItemVector& , std::size_t )> EvaluatePackedResultWithMeta;
 
             ET::CORE::CetCoreObjFunctor< TetClusterBuildResult (const CetTNestItemVector& , const TetNestOptions& , MetClusterStrategy )> BuildClusterItems;
-            ET::CORE::CetCoreObjFunctor< void (const CetTNestItemVector& , const CetTNestItemVector& , const std::vector<TetMetaItem>& , CetTNestItemVector& )> ExpandClusterResultToOriginalItems;
+            ET::CORE::CetCoreObjFunctor< void (const CetTNestItemVector& , const CetTNestItemVector& , const std::vector<TetMetaItem>& ,CetTNestItemVector& )> ExpandClusterResultToOriginalItems;
            
            
 

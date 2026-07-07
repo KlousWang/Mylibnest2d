@@ -164,134 +164,14 @@ namespace ET {
 			};
 			bool HasBest = false;
 			CetTNestItemVector BestItems;
-			TetTetTNestEvalResult BestEval{};
+			TetTNestEvalResult BestEval{};
 			std::size_t BestLayers = 0;
 
 			// 保存最佳结果对应的 cluster 元信息
 			std::vector<TetMetaItem> BestMetaItems;
 
 			// 标记最佳结果里面是否真的包含组合件
-			bool BestHasCluster = false;
-
-			auto RunOnce = [&](CetTNestItemVector& TestItems)->std::size_t {
-				double BinWidth = AOptions.BinWidth;
-				double BinHeight = AOptions.BinHeight;
-
-				auto width = NestUtils::ToNestCoord(BinWidth);
-				auto height = NestUtils::ToNestCoord(BinHeight);
-				Box Bin(width, height, { width / 2, height / 2 });
-				//Box Bin(width, height);
-
-				//using CetMyPlacer = placers::_NofitPolyPlacer<PolygonImpl, Box>;
-				using CetMyPlacer = placers::_BottomLeftPlacer<PolygonImpl>;
-				using CetMySelector = selections::_FirstFitSelection<PolygonImpl>;
-				//using CetMySelector = selections::_FillerSelection<PolygonImpl>;
-				//using CetMySelector = selections::_DJDHeuristic<PolygonImpl>;
-
-				NestConfig<CetMyPlacer, CetMySelector> cfg;
-				////nfp配置
-				//cfg.placer_config.accuracy = AOptions.Placer.Accuracy;
-				////cfg.placer_config.alignment = placers::NfpPConfig<PolygonImpl>::Alignment::DONT_ALIGN;
-				//cfg.placer_config.alignment = ToLibNestAlignment(AOptions.Placer.Alignment);
-				//cfg.placer_config.starting_point = ToLibNestAlignment(AOptions.Placer.StartingPoint);
-				//cfg.placer_config.parallel = AOptions.Placer.Parallel;
-				//cfg.placer_config.explore_holes = AOptions.Placer.Parallel;
-				//cfg.placer_config.rotations.clear();
-				//FillRotations(cfg.placer_config.rotations, AOptions.Rotations);
-
-				// BottomLeftPlacer 的配置
-				cfg.placer_config.min_obj_distance = NestUtils::ToNestCoord(AOptions.Spacing);
-				cfg.placer_config.epsilon = 1;
-
-				// BottomLeftPlacer 只支持“不旋转 / 失败后尝试 90 度”这种简单旋转
-				cfg.placer_config.allow_rotations = (AOptions.Rotations > 1);
-
-				////DJD配置
-				//cfg.selector_config.try_pairs = true;
-				//cfg.selector_config.try_triplets = false;
-				//cfg.selector_config.try_reverse_order = true;
-				//cfg.selector_config.initial_fill_proportion = 0.2f;
-				//cfg.selector_config.waste_increment = 0.1f;
-				//cfg.selector_config.allow_parallel = true;
-				//cfg.selector_config.force_parallel = false;
-
-				std::cout << "================ DEBUG INFO ================" << std::endl;
-				std::cout << "UsePolygonBoard: false" << std::endl;
-				std::cout << "Bin Width: " << Bin.width()
-					<< ", Height: " << Bin.height() << std::endl;
-				std::cout << "Spacing: "
-					<< NestUtils::ToNestCoord(AOptions.Spacing) << std::endl;
-				std::cout << "============================================" << std::endl;
-
-				std::size_t Layers = nest(
-					TestItems,
-					Bin,
-					NestUtils::ToNestCoord(AOptions.Spacing),
-					cfg,
-					ProgressFunction{ Tracker }
-				);
-
-				std::cout << "[NEST] Layers = " << Layers << std::endl;
-
-				std::map<int, int> BinCount;
-				for (const auto& Item : TestItems){
-					BinCount[Item.binId()]++;
-				}
-				for (const auto& Pair : BinCount){
-					std::cout << "[NEST] binId = " << Pair.first
-						<< ", count = " << Pair.second << std::endl;
-				}
-				return Layers;
-				};
-			auto EvaluatePackedResultWithMeta = [&](const CetTNestItemVector& PackedItems, const std::vector<TetMetaItem>& MetaItems, std::size_t Layers) -> TetTetTNestEvalResult {
-				TetTetTNestEvalResult Result{};
-				Result.Layers = Layers;
-				
-				if (PackedItems.size() != MetaItems.size()) {
-					std::cout << "[NEST][EVAL][ERROR] PackedItems size != MetaItems size. "
-						<< "PackedItems = " << PackedItems.size()
-						<< ", MetaItems = " << MetaItems.size()
-						<< std::endl;
-					return Result;
-				}
-				for (std::size_t PackedIndex = 0; PackedIndex < PackedItems.size(); ++PackedIndex) {
-					const auto& PackedItem = PackedItems[PackedIndex];
-					const auto& Meta = MetaItems[PackedIndex];
-					if (PackedItem.binId() != 0) {
-						continue;
-					}
-					// 这里统计原始零件数量，不是 packed item 数量
-					for (const auto& Transform : Meta.TransformData) {
-						int OriginalId = Transform.OriginalId;
-						if (OriginalId < 0 || OriginalId >= static_cast<int>(OriginalItems.size())) {
-							continue;
-						}
-						Result.FirstBinCount++;
-
-						// 面积也用原始零件面积，而不是 cluster 矩形面积
-						Result.FirstBinArea += std::abs(static_cast<double>(OriginalItems[OriginalId].area()));
-					}
-				}
-				return Result;
-				};
-			auto IsBetterEval = [](const TetTetTNestEvalResult& A,
-				const TetTetTNestEvalResult& B) -> bool
-				{
-					// 第一优先级：第一张板里的原始零件数量更多
-					if (A.FirstBinCount != B.FirstBinCount)
-					{
-						return A.FirstBinCount > B.FirstBinCount;
-					}
-
-					// 第二优先级：第一张板里的原始零件面积更大
-					if (std::abs(A.FirstBinArea - B.FirstBinArea) > 1e-6)
-					{
-						return A.FirstBinArea > B.FirstBinArea;
-					}
-
-					// 第三优先级：总板数更少
-					return A.Layers < B.Layers;
-				};
+			bool BestHasCluster = false;			
 			std::vector<MetClusterStrategy> ClusterStrategies = {
 				 MetClusterStrategy::None,
 				 MetClusterStrategy::RightTrianglePair
@@ -320,12 +200,11 @@ namespace ET {
 				}
 
 				for (MetENestOrderStrategy Strategy : Strategies){
-					CetTNestItemVector TestItems = ClusterResult.NestItems;
+					CetTNestItemVector TestItems = ClusterResult.NestItems;			
 					Nest2DUtils->ApplyNestPriorityStrategy(TestItems, Strategy);
-	   		     	std::size_t Layers = RunOnce(TestItems);
-
+	   		     	std::size_t Layers = RunRectangleNestOnce(TestItems, AOptions, Tracker);
 					//TetTetTNestEvalResult Eval = Nest2DUtils->EvaluateNestResult(TestItems, Layers);
-					TetTetTNestEvalResult Eval =EvaluatePackedResultWithMeta(TestItems,ClusterResult.MetaItems,Layers);
+					TetTNestEvalResult Eval = Nest2DUtils-> EvaluatePackedResultWithMeta(TestItems,ClusterResult.MetaItems,OriginalItems,Layers);
 
 					std::cout << "[NEST][EVAL] HasCluster = " << CurrentHasCluster
 						<< ", Eval.FirstBinCount = " << Eval.FirstBinCount
@@ -334,14 +213,12 @@ namespace ET {
 						<< ", Best.FirstBinCount = " << BestEval.FirstBinCount
 						<< ", Best.FirstBinArea = " << BestEval.FirstBinArea
 						<< ", Best.Layers = " << BestEval.Layers
-						<< std::endl;
-
+						<< std::endl;					
 					bool Better = false;
-
-					if (!HasBest){
+					if (!HasBest) {
 						Better = true;
 					}
-					else if (IsBetterEval(Eval, BestEval)){
+					else if (Nest2DUtils->IsBetterNestResult(Eval, BestEval)){
 						Better = true;
 					}
 					else{
@@ -386,10 +263,77 @@ namespace ET {
 			std::cout << "[NEST BEST] bin0 count = "<< BestEval.FirstBinCount<< ", bin0 area = "<< BestEval.FirstBinArea
 				<< ", layers = "<< BestEval.Layers<< std::endl;
 			Nest2DUtils-> PrintBinCount(ANestItems);
-
+		
 			std::cout << "=================================================="<< std::endl;
 
 			return BestLayers;
+		}
+
+		std::size_t CetNest2DEngine::RunRectangleNestOnce(CetTNestItemVector& ATestItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker)
+		{
+			double BinWidth = AOptions.BinWidth;
+			double BinHeight = AOptions.BinHeight;
+
+			auto Width = NestUtils::ToNestCoord(BinWidth);
+			auto Height = NestUtils::ToNestCoord(BinHeight);
+
+			Box Bin(Width, Height, { Width / 2, Height / 2 });
+			//Box Bin(width, height);
+
+			//using CetMyPlacer = placers::_NofitPolyPlacer<PolygonImpl, Box>;
+			using CetMyPlacer = placers::_BottomLeftPlacer<PolygonImpl>;
+			using CetMySelector = selections::_FirstFitSelection<PolygonImpl>;
+			//using CetMySelector = selections::_FillerSelection<PolygonImpl>;
+			//using CetMySelector = selections::_DJDHeuristic<PolygonImpl>;
+
+			NestConfig<CetMyPlacer, CetMySelector> cfg;
+			////nfp配置
+			//cfg.placer_config.accuracy = AOptions.Placer.Accuracy;
+			////cfg.placer_config.alignment = placers::NfpPConfig<PolygonImpl>::Alignment::DONT_ALIGN;
+			//cfg.placer_config.alignment = ToLibNestAlignment(AOptions.Placer.Alignment);
+			//cfg.placer_config.starting_point = ToLibNestAlignment(AOptions.Placer.StartingPoint);
+			//cfg.placer_config.parallel = AOptions.Placer.Parallel;
+			//cfg.placer_config.explore_holes = AOptions.Placer.Parallel;
+			//cfg.placer_config.rotations.clear();
+			//FillRotations(cfg.placer_config.rotations, AOptions.Rotations);
+
+			// BottomLeftPlacer 的配置
+			cfg.placer_config.min_obj_distance = NestUtils::ToNestCoord(AOptions.Spacing);
+			cfg.placer_config.epsilon = 1;
+
+			// BottomLeftPlacer 只支持“不旋转 / 失败后尝试 90 度”这种简单旋转
+			cfg.placer_config.allow_rotations = (AOptions.Rotations > 1);
+
+			////DJD配置
+			//cfg.selector_config.try_pairs = true;
+			//cfg.selector_config.try_triplets = false;
+			//cfg.selector_config.try_reverse_order = true;
+			//cfg.selector_config.initial_fill_proportion = 0.2f;
+			//cfg.selector_config.waste_increment = 0.1f;
+			//cfg.selector_config.allow_parallel = true;
+			//cfg.selector_config.force_parallel = false;
+
+			std::cout << "================ DEBUG INFO ================" << std::endl;
+			std::cout << "UsePolygonBoard: false" << std::endl;
+			std::cout << "Bin Width: " << Bin.width()
+				<< ", Height: " << Bin.height() << std::endl;
+			std::cout << "Spacing: "
+				<< NestUtils::ToNestCoord(AOptions.Spacing) << std::endl;
+			std::cout << "============================================" << std::endl;
+
+			std::size_t Layers = nest(
+				ATestItems,
+				Bin,
+				NestUtils::ToNestCoord(AOptions.Spacing),
+				cfg,
+				ProgressFunction{ ATracker }
+			);
+
+			std::cout << "[NEST] Layers = " << Layers << std::endl;
+
+			Nest2DUtils->PrintBinCount(ATestItems);
+
+			return Layers;
 		}
 
 		//std::size_t CetNest2DEngine::RunRectangleBoardNestingFill(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, TetNestProgressTracker& Tracker)

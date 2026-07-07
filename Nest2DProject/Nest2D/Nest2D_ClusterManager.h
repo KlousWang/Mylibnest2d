@@ -42,8 +42,10 @@ namespace ET {
 			double GetItemHeight(const CetNestItem& AItem);
 			bool IsRightTriangleLike(const CetNestItem& AItem);
 			bool IsSameSizeTrianglePair(const CetNestItem& AItem, const CetNestItem& BItem);
-			CetNestItem MakeRectangleNestItemByNestCoord(double W, double H);
-			double CalcTrianglePairAxisGap(double W, double H, double Spacing);
+			CetNestItem MakeRectangleNestItemByNestCoord(double AW, double AH);
+			double CalcTrianglePairAxisGap(double AW, double AH, double ASpacing);
+			//void ExpandOnePackedItemToOriginalItems(std::size_t APackedIndex,const CetNestItem& APackedItem,const TetMetaItem& AMeta,CetTNestItemVector& AOutOriginalItems);
+			void ExpandClusterChildren(const CetNestItem& PackedItem,const TetMetaItem& Meta,CetTNestItemVector& AOutOriginalItems);
 		};
 	}
 }

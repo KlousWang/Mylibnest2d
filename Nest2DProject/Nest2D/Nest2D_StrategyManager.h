@@ -20,15 +20,17 @@ namespace ET {
 				_WrapFunc("IsBetterNestResult", Type_Class_Func(IsBetterNestResult));
 				_WrapFunc("ApplyNestPriorityStrategy", Type_Class_Func(ApplyNestPriorityStrategy));
 				_WrapFunc("PrintBinCount", Type_Class_Func(PrintBinCount));
+				_WrapFunc("EvaluatePackedResultWithMeta", Type_Class_Func(EvaluatePackedResultWithMeta));
 			}
 		public:
 			CetStrategyManager();
 			~CetStrategyManager();
 		public:
-			TetTetTNestEvalResult EvaluateNestResult(const CetTNestItemVector& Items, std::size_t Layers);
-			bool IsBetterNestResult(const TetTetTNestEvalResult& A, const TetTetTNestEvalResult& B);
+			TetTNestEvalResult EvaluateNestResult(const CetTNestItemVector& Items, std::size_t Layers);
+			bool IsBetterNestResult(const TetTNestEvalResult& A, const TetTNestEvalResult& B);
 			void ApplyNestPriorityStrategy(CetTNestItemVector& AItems, MetENestOrderStrategy AStrategy);
 			void PrintBinCount(const CetTNestItemVector& AItems);
+			TetTNestEvalResult EvaluatePackedResultWithMeta(const CetTNestItemVector& AItems, const std::vector<TetMetaItem>& AMetaItems, const CetTNestItemVector& AOriginalItems, std::size_t ALayers);
 		};
 	}
 }
