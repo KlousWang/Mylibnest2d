@@ -19,7 +19,6 @@ TetTNestEvalResult ET::NEST2DMANAGERLIB::CetStrategyManager::EvaluateNestResult(
 			Result.FirstBinArea += std::abs( static_cast<double>(Item.area()));
 		}
 	}
-
 	return Result;
 }
 
@@ -33,21 +32,18 @@ bool ET::NEST2DMANAGERLIB::CetStrategyManager::IsBetterNestResult(const TetTNest
 		std::cout << "[NEST][COMPARE FUNC] compare layers, result = "<< Result << std::endl;
 		return Result;
 	}
-
 	// 第一张板原始件总面积更大
 	if (std::abs(A.FirstBinArea - B.FirstBinArea) > 1e-6){
 		bool Result = A.FirstBinArea > B.FirstBinArea;
 		std::cout << "[NEST][COMPARE FUNC] compare area, result = "<< Result << std::endl;
 		return Result;
 	}
-
 	// 第一张板原始件数量更多
-	if (A.FirstBinCount != B.FirstBinCount){
+	if (A.FirstBinCount != B.FirstBinCount) {
 		bool Result = A.FirstBinCount > B.FirstBinCount;
-		std::cout << "[NEST][COMPARE FUNC] compare count, result = "<< Result << std::endl;
+		std::cout << "[NEST][COMPARE FUNC] compare count, result = " << Result << std::endl;
 		return Result;
 	}
-
 	return false;
 }
 
@@ -61,27 +57,21 @@ void ET::NEST2DMANAGERLIB::CetStrategyManager::ApplyNestPriorityStrategy(CetTNes
 	auto GetArea = [&](std::size_t Index) -> double{
 			return static_cast<double>(AItems[Index].area());
 		};
-
 	auto GetBox = [&](std::size_t Index){
 			return AItems[Index].boundingBox();
 		};
-
 	auto GetWidth = [&](std::size_t Index) -> double{
 		return static_cast<double>(GetBox(Index).width());
 		};
-
 	auto GetHeight = [&](std::size_t Index) -> double{
 			return static_cast<double>(GetBox(Index).height());
 		};
-
 	std::sort(Indices.begin(),Indices.end(),[&](std::size_t A, std::size_t B){
 			switch (AStrategy){
 			case MetENestOrderStrategy::LargeFirst:
 				return GetArea(A) > GetArea(B);
-
 			case MetENestOrderStrategy::SmallFirst:
 				return GetArea(A) < GetArea(B);
-
 			case MetENestOrderStrategy::LongSideFirst:{
 				double LongA = std::max(GetWidth(A), GetHeight(A));
 				double LongB = std::max(GetWidth(B), GetHeight(B));
@@ -92,16 +82,12 @@ void ET::NEST2DMANAGERLIB::CetStrategyManager::ApplyNestPriorityStrategy(CetTNes
 				double HA = GetHeight(A);
 				double WB = GetWidth(B);
 				double HB = GetHeight(B);
-
 				double ShortA = std::max(1.0, std::min(WA, HA));
 				double ShortB = std::max(1.0, std::min(WB, HB));
-
 				double RatioA = std::max(WA, HA) / ShortA;
 				double RatioB = std::max(WB, HB) / ShortB;
-
 				return RatioA > RatioB;
 			}
-
 			default:
 				return GetArea(A) > GetArea(B);
 			}
@@ -133,7 +119,6 @@ TetTNestEvalResult ET::NEST2DMANAGERLIB::CetStrategyManager::EvaluatePackedResul
 {
 	TetTNestEvalResult Result{};
 	Result.Layers = ALayers;
-
 	if(AItems.size() != AMetaItems.size()){
 		std::cout << "[NEST][EVAL][ERROR] PackedItems size != MetaItems size. "
 			<< "PackedItems = " << AItems.size()

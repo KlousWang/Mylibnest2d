@@ -34,7 +34,7 @@ namespace ET {
 			
 			//CetPolygonBoardRepairer(CetTNestItemVector& ANestItems,const TetNestOptions& AOptions,const libnest2d::PolygonImpl& ABinPoly,double ABoardBinWidth,double ABoardBinHeight);
 		protected:
-			struct TetPlacementCandidate;
+			struct TetPlacementCandidate;			
 
 		protected:
 			void PackFromScratch(std::size_t& ALayers);
@@ -50,7 +50,12 @@ namespace ET {
 			bool _IsCurrentPlacementValid(std::size_t AItemIndex);
 
 			void _FixInvalidItems(std::size_t& ALayers);
-
+			//МоІ№
+			void _FillHoles(std::size_t& ALayers);
+			bool _FindBestCandidateForTargetBin(int ATargetBin,TetHoleFillCandidate& ABestCandidate);
+			bool _TryFindBestPlacementInBin(std::size_t AItemIndex,int ATargetBin,TetHoleFillCandidate& ABestCandidate);
+			void _ApplyHoleFillCandidate(const TetHoleFillCandidate& ACandidate);
+			double _CalcHoleFillScore(std::size_t AItemIndex,int AOldBin,int ATargetBin,const libnest2d::Point& ATranslation);
 		protected:
 			CetTNestItemVector* _Items = nullptr;
 			const TetNestOptions* _Options = nullptr;

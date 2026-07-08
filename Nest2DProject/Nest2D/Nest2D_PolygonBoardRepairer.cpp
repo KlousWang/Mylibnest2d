@@ -81,38 +81,8 @@ namespace ET {
                     << std::endl;
                 return;
             }
-            bool Changed = true;
 
-            while (Changed) {
-                Changed = false;
-
-                for (std::size_t i = 0; i < Items.size(); ++i) {
-                    int OriginalBin = static_cast<int>(Items[i].binId());
-
-                    if (OriginalBin <= 0) {
-                        continue;
-                    }
-
-                    Point OldTranslation = Items[i].translation();
-                    libnest2d::Radians OldRotation = Items[i].rotation();
-
-                    bool Placed = false;
-
-                    for (int TargetBin = 0; TargetBin < OriginalBin; ++TargetBin) {
-                        if (_TryPlaceItemInBinByGrid(i, TargetBin)) {
-                            Placed = true;
-                            Changed = true;
-                            break;
-                        }
-                    }
-
-                    if (!Placed) {
-                        Items[i].translation(OldTranslation);
-                        Items[i].rotation(OldRotation);
-                        Items[i].binId(OriginalBin);
-                    }
-                }
-            }
+			_FillHoles(ALayers);
 
             ALayers = _CompactItemBins();
 
@@ -529,6 +499,141 @@ namespace ET {
                         << std::endl;
                 }
             }
+        }
+
+        void CetPolygonBoardRepairer::_FillHoles(std::size_t& ALayers)
+        {
+            if (_Items == nullptr || ALayers <= 1) {
+                return;
+            }
+			auto Items = *_Items;
+
+			bool Changed = true;
+
+			int Iteration = 0;
+			int MaxIterations = static_cast<int>(Items.size())*3;
+
+			//查找所有空隙，尝试填补
+
+            while (Changed && Iteration < MaxIterations) {
+                Changed = false;
+                ++Iteration;
+
+                for(int TargetBin = 0; TargetBin < static_cast<int>(ALayers); ++TargetBin) {
+					TetHoleFillCandidate BestCandidate;
+                    if (!_FindBestCandidateForTargetBin(TargetBin,BestCandidate)) {
+                        continue;
+                    }
+                    _ApplyHoleFillCandidate(BestCandidate);
+                    Changed = true;
+
+                    std::cout << "[HOLE_FILL] move item "<< BestCandidate.ItemIndex<< " from bin "<< BestCandidate.OldBin<< " to bin "
+                        << BestCandidate.TargetBin<< ", score = "<< BestCandidate.Score<< std::endl;
+                }
+                ALayers = _CompactItemBins();
+            }
+            std::cout << "[HOLE_FILL] finish. Iteration = "<< Iteration<< ", Layers = "<< ALayers<< std::endl;
+        }
+
+        bool CetPolygonBoardRepairer::_FindBestCandidateForTargetBin(int ATargetBin, TetHoleFillCandidate& ABestCandidate)
+        {
+            if (_Items = nullptr) {
+                return false;
+            }
+
+			auto& Items = *_Items;
+            bool Found = false;
+
+            for (std::size_t i = 0; i < Items.size(); ++i) {
+                int OldBin = static_cast<int>(Items[i].binId());
+
+                // 只考虑后面板材的零件。
+				// 如果你未来有未排零件 binId == -1，也可以放开这个条件。
+				if (OldBin >= 0 && OldBin <= ATargetBin) {
+					continue;
+				}
+				TetHoleFillCandidate Candidate;
+
+				if (!_TryFindBestPlacementInBin(i, ATargetBin, Candidate)) {
+					continue;
+				}
+				if (!Found || Candidate.Score > ABestCandidate.Score) {
+					ABestCandidate = Candidate;
+					Found = true;
+				}
+			}
+            return Found;
+        }
+
+        bool CetPolygonBoardRepairer::_TryFindBestPlacementInBin(std::size_t AItemIndex, int ATargetBin, TetHoleFillCandidate& ABestCandidate)
+        {
+            if (_Items == nullptr || _Options == nullptr || _BinPoly == nullptr) {
+                return false;
+            }
+            auto& Items = *_Items;
+            if (AItemIndex >= Items.size()) {
+                return false;
+            }
+            int OldBin = static_cast<int>(Items[AItemIndex].binId());
+            bool Found = false;
+            for (auto Angle : m_Rotations) {
+                for (double Y = 0.0; Y < m_BoardBinHeight; Y += m_StepMm) {
+                    for (double X = 0.0; X < m_BoardBinWidth; X += m_StepMm) {
+                        TetPlacementCandidate Placement;
+                        Placement.ItemIndex = AItemIndex;
+                        Placement.TargetBin = ATargetBin;
+                        Placement.Rotation = Angle;
+                        _FillTranslationForBBoxMin(Placement,X,Y);
+                        if (!_CanPlaceAt(Placement)) {
+                            continue;
+                        }
+                        double Score = _CalcHoleFillScore(AItemIndex,OldBin,ATargetBin,Placement.Translation);
+                        if (!Found || Score > ABestCandidate.Score) {
+                            ABestCandidate.Valid = true;
+                            ABestCandidate.ItemIndex = AItemIndex;
+                            ABestCandidate.OldBin = OldBin;
+                            ABestCandidate.TargetBin = ATargetBin;
+                            ABestCandidate.Translation = Placement.Translation;
+                            ABestCandidate.Rotation = Placement.Rotation;
+                            ABestCandidate.Score = Score;
+                            Found = true;
+                        }
+                    }
+                }
+            }
+
+            return Found;
+        }
+
+        void CetPolygonBoardRepairer::_ApplyHoleFillCandidate(const TetHoleFillCandidate& ACandidate)
+        {
+            if (_Items == nullptr || !ACandidate.Valid) {
+                return;
+            }
+            auto& Items = *_Items;
+            if (ACandidate.ItemIndex >= Items.size()) {
+                return;
+            }
+            auto& Item = Items[ACandidate.ItemIndex];
+            Item.translation(ACandidate.Translation);
+            Item.rotation(ACandidate.Rotation);
+            Item.binId(ACandidate.TargetBin);
+        }
+
+        double CetPolygonBoardRepairer::_CalcHoleFillScore(std::size_t AItemIndex, int AOldBin, int ATargetBin, const libnest2d::Point& ATranslation)
+        {
+            if (_Items == nullptr || AItemIndex >= _Items->size()) {
+                return -std::numeric_limits<double>::max();
+            }
+            const auto& Item = (*_Items)[AItemIndex];
+            double ItemArea = std::abs(static_cast<double>(Item.area()));
+            // 从越靠后的板材搬到越靠前的板材，收益越大。
+            double BinImprove = static_cast<double>(AOldBin - ATargetBin);
+           // 稍微偏好左下角，避免到处乱放。
+            double XPenalty = static_cast<double>(ATranslation.X) * 0.000001;
+            double YPenalty = static_cast<double>(ATranslation.Y) * 0.000001;
+            double Score =ItemArea * 10.0+ BinImprove * 1000000.0- XPenalty- YPenalty;
+            return Score;
         }
 
     } // namespace NEST2DMANAGERLIB

@@ -57,8 +57,6 @@ namespace ET {
 			}
 		}	
 		
-
-
 		int CetNest2DEngine::RunNesting_Impl(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, std::size_t* AUsedBins)
 		{
 			std::cout << "[DLL]this is running nesting" << std::endl;
@@ -237,13 +235,7 @@ namespace ET {
 			std::cout << "[POLYGON ONCE] before repair, Layers = "
 				<< Layers << std::endl;
 
-			Nest2DUtils->SetPolygonBoardRepairContext(
-				ATestItems,
-				AOptions,
-				BinPoly,
-				BoardBinWidth,
-				BoardBinHeight
-			);
+			Nest2DUtils->SetPolygonBoardRepairContext(ATestItems,AOptions,BinPoly,BoardBinWidth,BoardBinHeight);
 
 			Nest2DUtils->RepairPolygonBoard(Layers);
 

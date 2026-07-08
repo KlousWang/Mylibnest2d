@@ -26,6 +26,16 @@ struct TetBoardBounds
     bool Valid = false;
 };
 
+struct TetHoleFillCandidate 
+{
+	bool Valid = false;
+	std::size_t ItemIndex = 0;
+	int OldBin = -1;
+	int TargetBin = -1;
+	libnest2d::Point Translation{ 0, 0 };
+	libnest2d::Radians Rotation{ 0.0 }; 
+	double Score = 0.0;
+};
 
 
 
