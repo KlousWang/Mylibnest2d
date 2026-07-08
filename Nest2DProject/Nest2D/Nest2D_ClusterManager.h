@@ -35,17 +35,25 @@ namespace ET {
 			void ExpandClusterResultToOriginalItems(const CetTNestItemVector& AOriginalItems,const CetTNestItemVector& APackedItems,const std::vector<TetMetaItem>& AMetaItems,CetTNestItemVector& AOutOriginalItems);
 
 		protected:
-			void AddSingleItem(const CetTNestItemVector& AOriginalItems, int AOriginalIndex, TetClusterBuildResult& AResult);
-			bool TryMakeRightTrianglePair(const CetTNestItemVector& AOriginalItems, int AIndex, int BIndex, const TetNestOptions& AOptions, TetClusterBuildResult& AResult);
-			bool NearlyEqual(double A, double B, double RelTol);
-			double GetItemWidth(const CetNestItem& AItem);
-			double GetItemHeight(const CetNestItem& AItem);
-			bool IsRightTriangleLike(const CetNestItem& AItem);
-			bool IsSameSizeTrianglePair(const CetNestItem& AItem, const CetNestItem& BItem);
-			CetNestItem MakeRectangleNestItemByNestCoord(double AW, double AH);
-			double CalcTrianglePairAxisGap(double AW, double AH, double ASpacing);
+			void _AddSingleItem(const CetTNestItemVector& AOriginalItems, int AOriginalIndex, TetClusterBuildResult& AResult);
+			bool _TryMakeRightTrianglePair(const CetTNestItemVector& AOriginalItems, int AIndex, int BIndex, const TetNestOptions& AOptions, TetClusterBuildResult& AResult);
+			bool _NearlyEqual(double A, double B, double RelTol);
+			double _GetItemWidth(const CetNestItem& AItem);
+			double _GetItemHeight(const CetNestItem& AItem);
+			bool _IsRightTriangleLike(const CetNestItem& AItem);
+			bool _IsSameSizeTrianglePair(const CetNestItem& AItem, const CetNestItem& BItem);
+			CetNestItem _MakeRectangleNestItemByNestCoord(double AW, double AH);
+			double _CalcTrianglePairAxisGap(double AW, double AH, double ASpacing);
 			//void ExpandOnePackedItemToOriginalItems(std::size_t APackedIndex,const CetNestItem& APackedItem,const TetMetaItem& AMeta,CetTNestItemVector& AOutOriginalItems);
-			void ExpandClusterChildren(const CetNestItem& PackedItem,const TetMetaItem& Meta,CetTNestItemVector& AOutOriginalItems);
+			void _ExpandClusterChildren(const CetNestItem& PackedItem,const TetMetaItem& Meta,CetTNestItemVector& AOutOriginalItems);
+
+			//
+			TetClusterBuildResult _BuildAutoPairClusters(const CetTNestItemVector& AOriginalItems,const TetNestOptions& AOptions);
+			bool _TryFindBestAutoPairCandidate(const CetTNestItemVector& AOriginalItems,int AIndex,int BIndex,const TetNestOptions& AOptions,TetAutoPairCandidate& ABestCandidate);
+			bool _TryBuildAutoPairAt(const CetTNestItemVector& AOriginalItems,const TetNestOptions& AOptions,const TetAutoPairBuildInput& AInput,TetAutoPairCandidate& ACandidate);
+			void _AddAutoPairCluster(const TetAutoPairCandidate& ACandidate,TetClusterBuildResult& AResult);
+			double _CalcAutoPairScore(double ABeforeBBoxArea,double AAfterBBoxArea,double ARealArea,double AClusterW,double AClusterH);
+			bool _RunAutoPairGridSearch(const CetTNestItemVector& AOriginalItems,int AIndex, int BIndex,const TetNestOptions& AOptions,const TetAutoPairGridConfig& AConfig,TetAutoPairCandidate& OutBest);
 		};
 	}
 }

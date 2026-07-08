@@ -73,8 +73,9 @@ struct TetNestResult
 
 enum class MetClusterStrategy
 {
-	None,
-	RightTrianglePair
+	None = 0,
+	RightTrianglePair =1,
+	AutoPairCluster =2
 };
 
 enum class MetENestOrderStrategy
@@ -121,4 +122,27 @@ struct TetLocalBestResult {
 	TetTNestEvalResult Eval{};
 	CetTNestItemVector Items;
 	bool HasCluster = false;
+};
+struct TetAutoPairCandidate
+{
+	bool Valid = false;
+
+	int AIndex = -1;
+	int BIndex = -1;
+
+	double RelAX = 0.0;
+	double RelAY = 0.0;
+	double RelARotation = 0.0;
+
+	double RelBX = 0.0;
+	double RelBY = 0.0;
+	double RelBRotation = 0.0;
+	// 用于粗搜后局部细搜
+	double RawBOffsetX = 0.0;
+	double RawBOffsetY = 0.0;
+
+	double ClusterW = 0.0;
+	double ClusterH = 0.0;
+
+	double Score = 0.0;
 };

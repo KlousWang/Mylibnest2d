@@ -37,5 +37,29 @@ struct TetHoleFillCandidate
 	double Score = 0.0;
 };
 
+struct TetAutoPairBuildInput
+{
+    int AIndex = -1;
+    int BIndex = -1;
 
+    double ARotation = 0.0;
+    double BRotation = 0.0;
 
+    double BOffsetX = 0.0;
+    double BOffsetY = 0.0;
+};
+
+struct TetAutoPairGridConfig {
+    double ARot = 0.0;
+    double BRot = 0.0;
+    double RotWA = 0.0;
+    double RotHA = 0.0;
+    double RotWB = 0.0;
+    double RotHB = 0.0;
+    double MinOffsetX = 0.0;
+    double MaxOffsetX = 0.0;
+    double MinOffsetY = 0.0;
+    double MaxOffsetY = 0.0;
+    double Step = 0.0;
+    int MaxCheckedCount = 0;
+};
