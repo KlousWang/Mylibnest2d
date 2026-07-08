@@ -50,7 +50,7 @@ namespace ET {
             m_BoardBinWidth = ABoardBinWidth;
             m_BoardBinHeight = ABoardBinHeight;
 
-            m_StepMm = std::max(1.0, _Options->Spacing);
+            m_StepMm = std::max(0.5, _Options->Spacing/AOptions.Spacing);
             m_SpacingCoord = NestUtils::ToNestCoord(_Options->Spacing);
 
             _BuildRotations();
@@ -62,20 +62,11 @@ namespace ET {
                 std::cout << "[REPAIR][ERROR] Repairer context is null." << std::endl;
                 return;
             }
-
             if (ALayers == 0) {
                 PackFromScratch(ALayers);
                 return;
-            }
-            if (ALayers <= 1) {
-                return;
-            }
-            if (!_Options->Board.Enabled || _Options->Board.Vertices.size() < 3) {
-                return;
-            }
-
+            }      
             auto& Items = *_Items;
-
             std::cout << "[REPAIR] start polygon board repair. Layers = "
                 << ALayers
                 << ", StepMm = "
@@ -88,7 +79,6 @@ namespace ET {
                 std::cout << "[REPAIR] finish polygon board repair. Layers = "
                     << ALayers
                     << std::endl;
-
                 return;
             }
             bool Changed = true;
@@ -394,11 +384,7 @@ namespace ET {
             return CanPlace;
         }
 
-        void CetPolygonBoardRepairer::_FillTranslationForBBoxMin(
-            TetPlacementCandidate& APlacement,
-            double ATargetMinX,
-            double ATargetMinY
-        )
+        void CetPolygonBoardRepairer::_FillTranslationForBBoxMin(TetPlacementCandidate& APlacement,double ATargetMinX,double ATargetMinY)
         {
             if (_Items == nullptr) {
                 APlacement.Translation = Point(0, 0);

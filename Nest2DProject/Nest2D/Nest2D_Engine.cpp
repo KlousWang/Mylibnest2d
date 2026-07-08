@@ -97,67 +97,11 @@ namespace ET {
 
 		std::size_t CetNest2DEngine::RunPolygonBoardNesting(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, TetNestProgressTracker& Tracker)
 		{
-			std::cout << "[NEST] use custom polygon board" << std::endl;
-
-			double BoardBinWidth = AOptions.BinWidth;
-			double BoardBinHeight = AOptions.BinHeight;
-
-			PolygonImpl binPoly =Nest2DUtils->BuildBinPolygonFromOptions(AOptions,BoardBinWidth,BoardBinHeight);
-			using CetMyPlacer =placers::_NofitPolyPlacer<PolygonImpl, PolygonImpl>;
-			using CetMySelector =selections::_FirstFitSelection<PolygonImpl>;
-
-			NestConfig<CetMyPlacer, CetMySelector> cfg;
-			cfg.placer_config.alignment =placers::NfpPConfig<PolygonImpl>::Alignment::DONT_ALIGN;
-			cfg.placer_config.starting_point =placers::NfpPConfig<PolygonImpl>::Alignment::BOTTOM_LEFT;
-
-			cfg.placer_config.accuracy = 1.0f;
-			cfg.placer_config.parallel = true;
-			cfg.placer_config.explore_holes = false;
-
-			FillRotations(cfg.placer_config.rotations, AOptions.Rotations);
-
-			std::cout << "================ DEBUG INFO ================" << std::endl;
-			std::cout << "UsePolygonBoard: true" << std::endl;
-			std::cout << "BoardBinWidth: " << BoardBinWidth
-				<< ", BoardBinHeight: " << BoardBinHeight << std::endl;
-			std::cout << "Spacing: "
-				<< NestUtils::ToNestCoord(AOptions.Spacing) << std::endl;
-			std::cout << "Board.Vertices.size: "
-				<< AOptions.Board.Vertices.size() << std::endl;
-			std::cout << "============================================" << std::endl;
-
-			std::size_t Layers = nest(
-				ANestItems,
-				binPoly,
-				NestUtils::ToNestCoord(AOptions.Spacing),
-				cfg,
-				ProgressFunction{ Tracker }
-			);
-
-			std::cout << "[NEST] before repair, Layers = " << Layers << std::endl;
-
-			Nest2DUtils->SetPolygonBoardRepairContext(
-				ANestItems,
-				AOptions,
-				binPoly,
-				BoardBinWidth,
-				BoardBinHeight
-			);
-
-			Nest2DUtils->RepairPolygonBoard(Layers);
-
-			std::cout << "[NEST] after repair, Layers = " << Layers << std::endl;
-
-			return Layers;
-		}
-
-		std::size_t CetNest2DEngine::RunRectangleBoardNesting(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, TetNestProgressTracker& Tracker)
-		{
-			std::cout << "[NEST] use original rectangle BIN" << std::endl;
+			std::cout << "[NEST] use custom polygon board with strategy loop"
+				<< std::endl;
 
 			CetTNestItemVector OriginalItems = ANestItems;
 
-			// 全局最优解的状态记录
 			bool HasBest = false;
 			CetTNestItemVector BestItems;
 			TetTNestEvalResult BestEval{};
@@ -165,13 +109,169 @@ namespace ET {
 			std::vector<TetMetaItem> BestMetaItems;
 			bool BestHasCluster = false;
 
+			std::vector<MetClusterStrategy> ClusterStrategies = {
+				MetClusterStrategy::None,
+				MetClusterStrategy::RightTrianglePair
+			};
+
+			for (auto ClusterStrategy : ClusterStrategies) {
+				TetClusterBuildResult ClusterResult =Nest2DUtils->BuildClusterItems(OriginalItems,AOptions,ClusterStrategy);
+				int ClusterCount = 0;
+				for (const auto& Meta : ClusterResult.MetaItems) {
+					if (Meta.IsCluster) {
+						ClusterCount++;
+					}
+				}
+
+				std::cout << "[POLYGON][CLUSTER][BUILD] Strategy = "
+					<< static_cast<int>(ClusterStrategy)
+					<< ", OriginalItems = " << OriginalItems.size()
+					<< ", PackedItems = " << ClusterResult.NestItems.size()
+					<< ", MetaItems = " << ClusterResult.MetaItems.size()
+					<< ", ClusterCount = " << ClusterCount
+					<< std::endl;
+
+				TetLocalBestResult LocalResult =EvaluateSortingStrategies(ClusterResult,OriginalItems,AOptions,Tracker);
+
+				bool Better = ShoouldUpdateGlobalBest(LocalResult,HasBest,BestEval,BestLayers,BestHasCluster);
+
+				if (Better) {
+					HasBest = true;
+					BestEval = LocalResult.Eval;
+					BestLayers = LocalResult.Layers;
+					BestItems = std::move(LocalResult.Items);
+					BestMetaItems = ClusterResult.MetaItems;
+					BestHasCluster = LocalResult.HasCluster;
+
+					std::cout << "[POLYGON][GLOBAL BEST UPDATE] HasCluster = "
+						<< BestHasCluster
+						<< ", count = " << BestEval.FirstBinCount
+						<< ", area = " << BestEval.FirstBinArea
+						<< ", layers = " << BestEval.Layers
+						<< ", packedItems = " << BestItems.size()
+						<< std::endl;
+				}
+			}
+
+			if (!HasBest) {
+				std::cout << "[POLYGON][FINAL] no valid best result."
+					<< std::endl;
+				return 0;
+			}
+
+			if (!BestHasCluster) {
+				std::cout << "[POLYGON][FINAL BEST] Use normal items."
+					<< std::endl;
+				ANestItems = std::move(BestItems);
+			}
+			else {
+				std::cout << "[POLYGON][FINAL BEST] Use cluster expand."<< std::endl;
+				Nest2DUtils->ExpandClusterResultToOriginalItems(OriginalItems,BestItems,BestMetaItems,ANestItems);
+			}
+			// Cluster 展开后，必须再做一次不规则板材合法性修复。
+			double BoardBinWidth = AOptions.BinWidth;
+			double BoardBinHeight = AOptions.BinHeight;
+			PolygonImpl BinPoly = Nest2DUtils->BuildBinPolygonFromOptions(AOptions,BoardBinWidth,BoardBinHeight);
+
+			Nest2DUtils->SetPolygonBoardRepairContext(ANestItems,AOptions,BinPoly,BoardBinWidth,BoardBinHeight);
+			Nest2DUtils->RepairPolygonBoard(BestLayers);
+			std::cout << "================ POLYGON BEST NEST RESULT ================"<< std::endl;
+			std::cout << "[POLYGON BEST] bin0 count = "
+				<< BestEval.FirstBinCount
+				<< ", bin0 area = " << BestEval.FirstBinArea
+				<< ", layers = " << BestLayers
+				<< std::endl;
+
+			Nest2DUtils->PrintBinCount(ANestItems);
+			std::cout << "==========================================================="<< std::endl;
+
+			return BestLayers;
+		}
+
+		std::size_t CetNest2DEngine::RunPolygonNestOnce(CetTNestItemVector& ATestItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker)
+		{
+			double BoardBinWidth = AOptions.BinWidth;
+			double BoardBinHeight = AOptions.BinHeight;
+
+			PolygonImpl BinPoly = Nest2DUtils->BuildBinPolygonFromOptions(
+				AOptions,
+				BoardBinWidth,
+				BoardBinHeight
+			);
+
+			using CetMyPlacer = placers::_NofitPolyPlacer<PolygonImpl, PolygonImpl>;
+			using CetMySelector = selections::_FirstFitSelection<PolygonImpl>;
+
+			NestConfig<CetMyPlacer, CetMySelector> cfg;
+
+			cfg.placer_config.alignment =
+				placers::NfpPConfig<PolygonImpl>::Alignment::DONT_ALIGN;
+
+			cfg.placer_config.starting_point =
+				placers::NfpPConfig<PolygonImpl>::Alignment::BOTTOM_LEFT;
+
+			cfg.placer_config.accuracy = 1.0f;
+			cfg.placer_config.parallel = true;
+			cfg.placer_config.explore_holes = false;
+
+			FillRotations(cfg.placer_config.rotations, AOptions.Rotations);
+
+			std::cout << "================ POLYGON ONCE DEBUG ================" << std::endl;
+			std::cout << "UsePolygonBoard: true" << std::endl;
+			std::cout << "BoardBinWidth: " << BoardBinWidth
+				<< ", BoardBinHeight: " << BoardBinHeight << std::endl;
+			std::cout << "Spacing: "
+				<< NestUtils::ToNestCoord(AOptions.Spacing) << std::endl;
+			std::cout << "Board.Vertices.size: "
+				<< AOptions.Board.Vertices.size() << std::endl;
+			std::cout << "====================================================" << std::endl;
+
+			std::size_t Layers = nest(
+				ATestItems,
+				BinPoly,
+				NestUtils::ToNestCoord(AOptions.Spacing),
+				cfg,
+				ProgressFunction{ ATracker }
+			);
+
+			std::cout << "[POLYGON ONCE] before repair, Layers = "
+				<< Layers << std::endl;
+
+			Nest2DUtils->SetPolygonBoardRepairContext(
+				ATestItems,
+				AOptions,
+				BinPoly,
+				BoardBinWidth,
+				BoardBinHeight
+			);
+
+			Nest2DUtils->RepairPolygonBoard(Layers);
+
+			std::cout << "[POLYGON ONCE] after repair, Layers = "
+				<< Layers << std::endl;
+
+			Nest2DUtils->PrintBinCount(ATestItems);
+
+			return Layers;
+		}
+
+		std::size_t CetNest2DEngine::RunRectangleBoardNesting(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, TetNestProgressTracker& Tracker)
+		{
+			std::cout << "[NEST] use original rectangle BIN" << std::endl;
+			CetTNestItemVector OriginalItems = ANestItems;
+			// 全局最优解的状态记录
+			bool HasBest = false;
+			CetTNestItemVector BestItems;
+			TetTNestEvalResult BestEval{};
+			std::size_t BestLayers = 0;
+			std::vector<TetMetaItem> BestMetaItems;
+			bool BestHasCluster = false;
 			// 外层：组合件/聚类策略
 			std::vector<MetClusterStrategy> ClusterStrategies = {
 				 MetClusterStrategy::None,
 				 MetClusterStrategy::RightTrianglePair
 			};
 			for (auto ClusterStrategy : ClusterStrategies) {
-
 				//  构建当前策略下的 Cluster 数据
 				TetClusterBuildResult ClusterResult = Nest2DUtils->BuildClusterItems(OriginalItems, AOptions, ClusterStrategy);
 				// 打印调试信息
@@ -187,42 +287,16 @@ namespace ET {
 
 				// 调用抽离的内层函数，获取该 Cluster 策略下的局部最优解
 				TetLocalBestResult LocalResult = EvaluateSortingStrategies(ClusterResult, OriginalItems, AOptions, Tracker);
-				// 如果当前策略连一个有效结果都没有，直接跳过
-				if (!LocalResult.HasBest) {
-					continue;
-				}
-				//  将局部最优解与全局最优解打擂台
-				bool Better = false;
-				if (!HasBest) {
-					Better = true; // 第一个跑出来的直接当擂主
-				}
-				else if (Nest2DUtils->IsBetterNestResult(LocalResult.Eval, BestEval)) {
-					Better = true; // 分数更高，踢馆成功
-				}
-				else {
-					// 同等结果时，进入断路器规则
-					bool SameCount = (LocalResult.Eval.FirstBinCount == BestEval.FirstBinCount);
-					bool SameLayers = (LocalResult.Layers == BestLayers);
-					bool SameArea = std::abs(LocalResult.Eval.FirstBinArea - BestEval.FirstBinArea) <= 1e-6;
-
-					if (SameCount && SameLayers && SameArea) {
-						if (LocalResult.HasCluster && !BestHasCluster) {
-							Better = true; // 优先选择带 cluster 的方案
-						}
-					}
-				}
-
+				bool Better = ShoouldUpdateGlobalBest(LocalResult, HasBest, BestEval, BestLayers, BestHasCluster);
 				//  如果更好，更新全局最优解状态
 				if (Better) {
 					HasBest = true;
 					BestEval = LocalResult.Eval;
 					BestLayers = LocalResult.Layers;
-
-					// 安全的移动：将局部最优数据转移给全局最优
+					// 将局部最优数据转移给全局最优
 					BestItems = std::move(LocalResult.Items);
 					BestMetaItems = ClusterResult.MetaItems;
 					BestHasCluster = LocalResult.HasCluster;
-
 					std::cout << "[NEST][GLOBAL BEST UPDATE] HasCluster = " << BestHasCluster
 						<< ", count = " << BestEval.FirstBinCount
 						<< ", area = " << BestEval.FirstBinArea
@@ -327,6 +401,7 @@ namespace ET {
 			// 初始化局部最优解状态
 			TetLocalBestResult LocalBest;
 
+			const bool UsePolygonBoard = AOptions.Board.Enabled && AOptions.Board.Vertices.size() >= 3;
 			// 定义要测试的所有排序策略
 			std::vector<MetENestOrderStrategy> Strategies = {
 				MetENestOrderStrategy::LargeFirst,
@@ -350,9 +425,14 @@ namespace ET {
 
 				//  应用排序策略
 				Nest2DUtils->ApplyNestPriorityStrategy(TestItems, Strategy);
-
 				// 执行单次排版（调用底层引擎）
-				std::size_t Layers = RunRectangleNestOnce(TestItems, AOptions, ATracker);
+				std::size_t Layers = 0;
+				if (UsePolygonBoard) {
+					 Layers = RunPolygonNestOnce(TestItems, AOptions, ATracker);
+				}
+				else{
+					 Layers = RunRectangleNestOnce(TestItems, AOptions, ATracker);
+				}	
 
 				//  评估本次排版结果
 				TetTNestEvalResult Eval = Nest2DUtils->EvaluatePackedResultWithMeta(TestItems,AClusterResult.MetaItems,AOriginalItems,Layers);
@@ -411,6 +491,33 @@ namespace ET {
 
 			// 将这一批测试中的最高分返回给外层主函数
 			return LocalBest;
+		}
+
+		bool CetNest2DEngine::ShoouldUpdateGlobalBest(const TetLocalBestResult& ALocalResult, bool AHasBest, const TetTNestEvalResult& ABestEval, std::size_t ABestLayers, bool ABestHasCluster)
+		{
+			// 还没有全局最优，当前局部结果直接成为全局最优
+			if (!AHasBest) {
+				return true;
+			}
+
+			// 按原有评分逻辑比较，当前结果更优
+			if (Nest2DUtils->IsBetterNestResult(ALocalResult.Eval, ABestEval)) {
+				return true;
+			}
+
+			// 分数没有更优时，进入同等结果下的断路器规则
+			bool SameCount = (ALocalResult.Eval.FirstBinCount == ABestEval.FirstBinCount);
+			bool SameLayers = (ALocalResult.Layers == ABestLayers);
+			bool SameArea = std::abs(ALocalResult.Eval.FirstBinArea - ABestEval.FirstBinArea) <= 1e-6;
+
+			if (SameCount && SameLayers && SameArea) {
+				// 同等结果下，优先选择带 cluster 的方案
+				if (ALocalResult.HasCluster && !ABestHasCluster) {
+					return true;
+				}
+			}
+
+			return false;
 		}
 
 		//std::size_t CetNest2DEngine::RunRectangleBoardNestingFill(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, TetNestProgressTracker& Tracker)
