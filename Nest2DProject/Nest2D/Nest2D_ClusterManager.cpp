@@ -383,86 +383,88 @@ namespace ET {
                 }
             }
 
-            TetClusterBuildResult CetClusterManager::_BuildAutoPairClusters(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions)
-            {
-                TetClusterBuildResult Result;
-                Result.NestItems.reserve(AOriginalItems.size());
-                Result.MetaItems.reserve(AOriginalItems.size());
+			TetClusterBuildResult CetClusterManager::_BuildAutoPairClusters(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions)
+			{
+				TetClusterBuildResult Result;
+				Result.NestItems.reserve(AOriginalItems.size());
+				Result.MetaItems.reserve(AOriginalItems.size());
 
-                std::vector<bool> Used(AOriginalItems.size(), false);
-               // const int MaxPartnerPerItem = 8;
-                auto IsWorthAutoPair = [&](const CetNestItem& Item) -> bool {
-                    double W = _GetItemWidth(Item);
-                    double H = _GetItemHeight(Item);
+				const int Count = static_cast<int>(AOriginalItems.size());
+				std::vector<bool> Used(Count, false);
+				std::vector<TetAutoPairCandidate> AllCandidates;
 
-                    if (W <= 0.0 || H <= 0.0) {
-                        return false;
-                    }
+				auto IsWorthAutoPair = [&](const CetNestItem& Item) -> bool {
+					double W = _GetItemWidth(Item);
+					double H = _GetItemHeight(Item);
 
-                    double BoxArea = W * H;
-                    double RealArea = std::abs(static_cast<double>(Item.area()));
+					if (W <= 0.0 || H <= 0.0) {
+						return false;
+					}
+					double BoxArea = W * H;
+					double RealArea = std::abs(static_cast<double>(Item.area()));
+					if (BoxArea <= 0.0 || RealArea <= 0.0) {
+						return false;
+					}
+					double FillRatio = RealArea / BoxArea;
+					return FillRatio < 0.92;
+					};
+				// 1. 先收集所有可行组合候选
+				for (int i = 0; i < Count; ++i) {
+					for (int j = i + 1; j < Count; ++j) {
+						// 两个都是接近矩形的零件，先跳过
+						if (!IsWorthAutoPair(AOriginalItems[i]) &&!IsWorthAutoPair(AOriginalItems[j])) {
+							continue;
+						}
+						TetAutoPairCandidate Candidate;
+						if (_TryFindBestAutoPairCandidate(AOriginalItems,i,j,AOptions,Candidate)){
+							if (Candidate.Valid) {
+								AllCandidates.push_back(Candidate);
+							}
+						}
+					}
+				}
+				// 2. 按分数从高到低排序
+				std::sort(AllCandidates.begin(),AllCandidates.end(),[](const TetAutoPairCandidate& A, const TetAutoPairCandidate& B) {
+						return A.Score > B.Score;
+					}
+				);
+				std::cout << "[AUTO_PAIR][GLOBAL] CandidateCount = "
+					<< AllCandidates.size()
+					<< std::endl;
 
-                    if (BoxArea <= 0.0 || RealArea <= 0.0) {
-                        return false;
-                    }
+				// 3. 全局选择：谁分数高谁先用，但一个零件只能被用一次
+				for (const auto& Candidate : AllCandidates) {
+					if (!Candidate.Valid) {
+						continue;
+					}
 
-                    double FillRatio = RealArea / BoxArea;
+					if (Used[Candidate.AIndex] || Used[Candidate.BIndex]) {
+						continue;
+					}
 
-                    // 越小越异形，越值得做 AutoPair。
-                    // 矩形一般接近 1，不需要参与 AutoPair。
-                    return FillRatio < 0.92;
-                    };
+					_AddAutoPairCluster(AOriginalItems, Candidate, Result);
 
-                for (int i = 0; i < static_cast<int>(AOriginalItems.size()); ++i) {
-                    if (Used[i]) {
-                        continue;
-                    }
+					Used[Candidate.AIndex] = true;
+					Used[Candidate.BIndex] = true;
 
-                    bool Paired = false;
-                    TetAutoPairCandidate BestCandidate;
+					std::cout << "[AUTO_PAIR][GLOBAL ACCEPT] "
+						<< Candidate.AIndex << " + " << Candidate.BIndex
+						<< ", Score = " << Candidate.Score
+						<< ", ClusterW = " << Candidate.ClusterW
+						<< ", ClusterH = " << Candidate.ClusterH
+						<< std::endl;
+				}
 
-                    //int PartnerTested = 0;
+				// 4. 没组合成功的零件，作为单件加入
+				for (int i = 0; i < Count; ++i) {
+					if (!Used[i]) {
+						_AddSingleItem(AOriginalItems, i, Result);
+						Used[i] = true;
+					}
+				}
 
-                    for (int j = i + 1; j < static_cast<int>(AOriginalItems.size()); ++j) {
-                        if (Used[j]) {
-                            continue;
-                        }
-
-                        // 两个都是矩形/高填充率零件时，不做 AutoPair。
-                        if (!IsWorthAutoPair(AOriginalItems[i]) &&!IsWorthAutoPair(AOriginalItems[j])){
-                            continue;
-                        }
-                      /*  ++PartnerTested;
-                        if (PartnerTested > MaxPartnerPerItem) {
-                            break;
-                        }*/
-                        TetAutoPairCandidate Candidate;
-                        if (!_TryFindBestAutoPairCandidate(AOriginalItems,i,j,AOptions,Candidate)){
-                            continue;
-                        }
-
-                        if (!BestCandidate.Valid ||Candidate.Score > BestCandidate.Score){
-                            BestCandidate = Candidate;
-                        }
-                    }
-
-                    if (BestCandidate.Valid) {
-                        _AddAutoPairCluster(BestCandidate, Result);
-                        Used[BestCandidate.AIndex] = true;
-                        Used[BestCandidate.BIndex] = true;
-                        Paired = true;
-
-                        std::cout << "[AUTO_PAIR] accepted: "<< BestCandidate.AIndex<< " + "<< BestCandidate.BIndex<< ", Score = "<< BestCandidate.Score<< ", ClusterW = "<< BestCandidate.ClusterW
-                            << ", ClusterH = "<< BestCandidate.ClusterH<< std::endl;
-                    }
-                    if (!Paired) {
-                        Used[i] = true;
-                        _AddSingleItem(AOriginalItems, i, Result);
-                    }
-                }
-
-                return Result;
-            }
+				return Result;
+			}
 
             bool CetClusterManager::_TryFindBestAutoPairCandidate(const CetTNestItemVector& AOriginalItems, int AIndex, int BIndex, const TetNestOptions& AOptions, TetAutoPairCandidate& ABestCandidate)
             {
@@ -668,12 +670,13 @@ namespace ET {
                 return true;
             }
 
-            void CetClusterManager::_AddAutoPairCluster(const TetAutoPairCandidate& ACandidate, TetClusterBuildResult& AResult)
+            void CetClusterManager::_AddAutoPairCluster(const CetTNestItemVector& AOriginalItems, const TetAutoPairCandidate& ACandidate, TetClusterBuildResult& AResult)
             {
                 if (!ACandidate.Valid) {
                     return;
                 }
-                auto ClusterItem = _MakeRectangleNestItemByNestCoord(ACandidate.ClusterW,ACandidate.ClusterH);
+                auto ClusterItem = _MakeUnionNestItemFromCandidate(AOriginalItems,ACandidate);
+                //auto ClusterItem = _MakeRectangleNestItemByNestCoord(ACandidate.ClusterW,ACandidate.ClusterH);
                const int PackedIndex = static_cast<int>(AResult.NestItems.size());
                 AResult.NestItems.push_back(std::move(ClusterItem));
 
@@ -784,6 +787,88 @@ namespace ET {
                     }
                 }
                 return Found;
+            }
+
+			CetNestItem CetClusterManager::_MakeUnionNestItemFromCandidate(const CetTNestItemVector& AOriginalItems, const TetAutoPairCandidate& ACandidate)
+			{
+				CetNestItem A = AOriginalItems[ACandidate.AIndex];
+				CetNestItem B = AOriginalItems[ACandidate.BIndex];
+
+				A.translation(libnest2d::Point(static_cast<ClipperLib::cInt>(ACandidate.RelAX),static_cast<ClipperLib::cInt>(ACandidate.RelAY)));
+				A.rotation(libnest2d::Radians(ACandidate.RelARotation));
+				A.inflation(0);
+
+				B.translation(libnest2d::Point(static_cast<ClipperLib::cInt>(ACandidate.RelBX),static_cast<ClipperLib::cInt>(ACandidate.RelBY)));
+				B.rotation(libnest2d::Radians(ACandidate.RelBRotation));
+				B.inflation(0);
+
+				// 这里需要把 A / B 的 polygon 取出来，转成 Clipper Paths
+				// 然后做 union。
+				ClipperLib::Paths Subject;
+                ClipperLib::Paths Solution;
+                _AddTransformedItemPathToSubject(AOriginalItems[ACandidate.AIndex],ACandidate.RelAX,ACandidate.RelAY,ACandidate.RelARotation,Subject);
+                _AddTransformedItemPathToSubject(AOriginalItems[ACandidate.BIndex],ACandidate.RelBX,ACandidate.RelBY,ACandidate.RelBRotation,Subject);
+				
+				// TODO:
+				// Subject.push_back(A 的外轮廓);
+				// Subject.push_back(B 的外轮廓);
+				ClipperLib::Clipper Clipper;
+				Clipper.AddPaths(Subject, ClipperLib::ptSubject, true);
+				Clipper.Execute(ClipperLib::ctUnion,Solution,ClipperLib::pftNonZero,ClipperLib::pftNonZero);
+
+				if (Solution.empty()) {
+					return _MakeRectangleNestItemByNestCoord(ACandidate.ClusterW,ACandidate.ClusterH);
+				}
+				// 第一阶段先取面积最大的 union 外轮廓
+				auto BestIt = std::max_element(Solution.begin(),Solution.end(),[](const ClipperLib::Path& A, const ClipperLib::Path& B) {
+						return std::abs(ClipperLib::Area(A)) < std::abs(ClipperLib::Area(B));
+					}
+				);
+				ClipperLib::Path Outer = *BestIt;
+				if (ClipperLib::Orientation(Outer) == false) {
+					std::reverse(Outer.begin(), Outer.end());
+				}
+				ClipperLib::Paths Holes;
+				PolygonImpl Poly(std::move(Outer), std::move(Holes));
+				return CetTNestItemVector::value_type(std::move(Poly));
+			}
+
+            void CetClusterManager::_AddTransformedItemPathToSubject(const CetNestItem& AItem, double AOffsetX, double AOffsetY, double ARotation, ClipperLib::Paths& ASubject)
+            {
+                ClipperLib::Path Outer;
+
+                // TODO: 替换成你项目里真实的取轮廓接口
+                // Outer = AItem.transformedShape().contour();
+                // 或 Outer = AItem.rawShape().contour();
+
+                if (Outer.empty()) {
+                    return;
+                }
+
+                double CosR = std::cos(ARotation);
+                double SinR = std::sin(ARotation);
+
+                ClipperLib::Path Transformed;
+                Transformed.reserve(Outer.size());
+
+                for (const auto& P : Outer) {
+                    double X = static_cast<double>(P.X);
+                    double Y = static_cast<double>(P.Y);
+
+                    double RX = X * CosR - Y * SinR + AOffsetX;
+                    double RY = X * SinR + Y * CosR + AOffsetY;
+
+                    Transformed.push_back(ClipperLib::IntPoint(
+                        static_cast<ClipperLib::cInt>(std::llround(RX)),
+                        static_cast<ClipperLib::cInt>(std::llround(RY))
+                    ));
+                }
+
+                if (ClipperLib::Orientation(Transformed) == false) {
+                    std::reverse(Transformed.begin(), Transformed.end());
+                }
+
+                ASubject.push_back(std::move(Transformed));
             }
 
 		}

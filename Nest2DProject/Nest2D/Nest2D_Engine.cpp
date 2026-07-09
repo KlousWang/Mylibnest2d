@@ -258,8 +258,8 @@ namespace ET {
 			// 外层：组合件/聚类策略
 			std::vector<MetClusterStrategy> ClusterStrategies = {
 				 MetClusterStrategy::None,
-				 MetClusterStrategy::RightTrianglePair,
-				 //MetClusterStrategy::AutoPairCluster//速度巨慢
+				 //MetClusterStrategy::RightTrianglePair,
+				 MetClusterStrategy::AutoPairCluster//速度巨慢
 			};
 			for (auto ClusterStrategy : ClusterStrategies) {
 				//  构建当前策略下的 Cluster 数据
