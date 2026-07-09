@@ -91,7 +91,7 @@ namespace ET {
 			SortItemsByAreaDesc(AItems);
 			// ==========================================================================
 
-			Nest2DUtils->BuildNestms(AItems,NestItems);
+			Nest2DUtils->NestDataMapperIns->BuildNestItems(AItems,NestItems);
             std::cout << "[DEBUG] AItems.size = " << AItems.size()
                 << ", NestItems.size = " << NestItems.size()
                 << std::endl;
@@ -106,11 +106,12 @@ namespace ET {
 			 //int i  =Nest2DUtils->BuildNestms.GetResult();
 			 //std::cout << i << std::endl;
 			std::size_t UsedBins = 0;
-			int NestCode = Nest2DUtils->RunNestingFunctor(NestItems, AOptions, &UsedBins);
+			int NestCode = Nest2DUtils->Nest2DEngineIns->RunNesting_Impl(NestItems, AOptions, &UsedBins);
+			//int NestCode = Nest2DUtils->RunNestingFunctor(NestItems, AOptions, &UsedBins);
 
 			if (NestCode != Nest2D_Success)return NestCode;
 
-			Nest2DUtils->ApplyResults(NestItems, AItems);
+			Nest2DUtils->NestDataMapperIns->ApplyResults(NestItems, AItems);
             for (const auto& Item : AItems) {  
                 std::cout << "[RESULT] item id = " << Item.Id
                     << ", bin = " << Item.Out_bin
@@ -120,7 +121,7 @@ namespace ET {
                     << std::endl;
             }
 			if (AOptions.Board.Enabled) {
-                TetBoardBounds BoardBounds =Nest2DUtils->CalcBoardBoundsLocal(AOptions.Board);
+                TetBoardBounds BoardBounds = Nest2DUtils->Nest2DBord->CalcBoardBoundsLocal(AOptions.Board);
                 if (!BoardBounds.Valid) {
                     if (AResult) {
                         AResult->Code = NEST2D_ERR_CORE_INVALID_SIZE;
@@ -137,13 +138,13 @@ namespace ET {
                         }
                     }
                 }
-			   Nest2DUtils->ValidateItemsInsideBoard(AItems, AOptions.Board);
+			   Nest2DUtils->Nest2DGeometryUtils->ValidateItemsInsideBoard(AItems, AOptions.Board);
                 UsedBins = RecalcUsedBinsFromItems(AItems);
 			}
 			if (AOptions.ExportSvg) {
 				
 				//CetExportPhoto::ExportSvg(AItems, AOptions, static_cast<int>(layers)); // 调用我们之前拆出来的函数
-				Nest2DUtils->ExportSvgbd(AItems, AOptions, static_cast<int>(UsedBins));
+				Nest2DUtils->Nest2DExportPhoto->ExportSvg(AItems, AOptions, static_cast<int>(UsedBins));
 			}
 
 			if (AResult) {
@@ -155,9 +156,10 @@ namespace ET {
 
 		void CetNest2DManager::SortItemsByAreaDesc(std::vector<TetNestPolygon>& AItems)
 		{
-			std::sort(AItems.begin(), AItems.end(), [&](const TetNestPolygon& ADataa, const TetNestPolygon& ADatab) {
+			Nest2DUtils->Nest2DSortIns->Sort(AItems);
+			/*std::sort(AItems.begin(), AItems.end(), [&](const TetNestPolygon& ADataa, const TetNestPolygon& ADatab) {
 				return Nest2DUtils->ComparePolygonAreaDesc(ADataa, ADatab);
-				});
+				});*/
 		}
 		
 	}

@@ -28,8 +28,8 @@ namespace ET {
 
 		public:
 			TetBoardBounds CalcBoardBoundsLocal(const TetNestBoard& ABoard);
-			Path BuildPathFromPoints(const std::vector<TetNestPoint>& APoints, double AOffsetX, double AOffsetY, bool AWantOuter);
-            PolygonImpl BuildBinPolygonFromOptions(const TetNestOptions& AOptions, double& AOutBinWidth, double& AOutBinHeight);
+			CetPath BuildPathFromPoints(const std::vector<TetNestPoint>& APoints, double AOffsetX, double AOffsetY, bool AWantOuter);
+            CetPolygonImpl BuildBinPolygonFromOptions(const TetNestOptions& AOptions, double& AOutBinWidth, double& AOutBinHeight);
         };
     }
 }

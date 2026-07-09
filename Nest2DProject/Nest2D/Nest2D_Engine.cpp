@@ -114,7 +114,7 @@ namespace ET {
 			};
 
 			for (auto ClusterStrategy : ClusterStrategies) {
-				TetClusterBuildResult ClusterResult =Nest2DUtils->BuildClusterItems(OriginalItems,AOptions,ClusterStrategy);
+				TetClusterBuildResult ClusterResult =Nest2DUtils->Nest2DCluster->BuildClusterItems(OriginalItems,AOptions,ClusterStrategy);
 				int ClusterCount = 0;
 				for (const auto& Meta : ClusterResult.MetaItems) {
 					if (Meta.IsCluster) {
@@ -165,15 +165,15 @@ namespace ET {
 			}
 			else {
 				std::cout << "[POLYGON][FINAL BEST] Use cluster expand."<< std::endl;
-				Nest2DUtils->ExpandClusterResultToOriginalItems(OriginalItems,BestItems,BestMetaItems,ANestItems);
+				Nest2DUtils->Nest2DCluster->ExpandClusterResultToOriginalItems(OriginalItems,BestItems,BestMetaItems,ANestItems);
 			}
 			// Cluster 展开后，必须再做一次不规则板材合法性修复。
 			double BoardBinWidth = AOptions.BinWidth;
 			double BoardBinHeight = AOptions.BinHeight;
-			PolygonImpl BinPoly = Nest2DUtils->BuildBinPolygonFromOptions(AOptions,BoardBinWidth,BoardBinHeight);
+			PolygonImpl BinPoly = Nest2DUtils->Nest2DBord->BuildBinPolygonFromOptions(AOptions,BoardBinWidth,BoardBinHeight);
 
-			Nest2DUtils->SetPolygonBoardRepairContext(ANestItems,AOptions,BinPoly,BoardBinWidth,BoardBinHeight);
-			Nest2DUtils->RepairPolygonBoard(BestLayers);
+			Nest2DUtils->Nest2DPolygonBord->SetContext(ANestItems,AOptions,BinPoly,BoardBinWidth,BoardBinHeight);
+			Nest2DUtils->Nest2DPolygonBord->Repair(BestLayers);
 			std::cout << "================ POLYGON BEST NEST RESULT ================"<< std::endl;
 			std::cout << "[POLYGON BEST] bin0 count = "
 				<< BestEval.FirstBinCount
@@ -181,7 +181,7 @@ namespace ET {
 				<< ", layers = " << BestLayers
 				<< std::endl;
 
-			Nest2DUtils->PrintBinCount(ANestItems);
+			Nest2DUtils->Nest2DStrategy->PrintBinCount(ANestItems);
 			std::cout << "==========================================================="<< std::endl;
 
 			return BestLayers;
@@ -192,11 +192,7 @@ namespace ET {
 			double BoardBinWidth = AOptions.BinWidth;
 			double BoardBinHeight = AOptions.BinHeight;
 
-			PolygonImpl BinPoly = Nest2DUtils->BuildBinPolygonFromOptions(
-				AOptions,
-				BoardBinWidth,
-				BoardBinHeight
-			);
+			PolygonImpl BinPoly = Nest2DUtils->Nest2DBord->BuildBinPolygonFromOptions(AOptions,BoardBinWidth,BoardBinHeight);
 
 			using CetMyPlacer = placers::_NofitPolyPlacer<PolygonImpl, PolygonImpl>;
 			using CetMySelector = selections::_FirstFitSelection<PolygonImpl>;
@@ -236,14 +232,14 @@ namespace ET {
 			std::cout << "[POLYGON ONCE] before repair, Layers = "
 				<< Layers << std::endl;
 
-			Nest2DUtils->SetPolygonBoardRepairContext(ATestItems,AOptions,BinPoly,BoardBinWidth,BoardBinHeight);
+			Nest2DUtils->Nest2DPolygonBord->SetContext(ATestItems,AOptions,BinPoly,BoardBinWidth,BoardBinHeight);
 
-			Nest2DUtils->RepairPolygonBoard(Layers);
+			Nest2DUtils->Nest2DPolygonBord->Repair(Layers);
 
 			std::cout << "[POLYGON ONCE] after repair, Layers = "
 				<< Layers << std::endl;
 
-			Nest2DUtils->PrintBinCount(ATestItems);
+			Nest2DUtils->Nest2DStrategy->PrintBinCount(ATestItems);
 
 			return Layers;
 		}
@@ -262,12 +258,12 @@ namespace ET {
 			// 外层：组合件/聚类策略
 			std::vector<MetClusterStrategy> ClusterStrategies = {
 				 MetClusterStrategy::None,
-				 //MetClusterStrategy::RightTrianglePair,
-				 MetClusterStrategy::AutoPairCluster//速度巨慢
+				 MetClusterStrategy::RightTrianglePair,
+				 //MetClusterStrategy::AutoPairCluster//速度巨慢
 			};
 			for (auto ClusterStrategy : ClusterStrategies) {
 				//  构建当前策略下的 Cluster 数据
-				TetClusterBuildResult ClusterResult = Nest2DUtils->BuildClusterItems(OriginalItems, AOptions, ClusterStrategy);
+				TetClusterBuildResult ClusterResult = Nest2DUtils->Nest2DCluster->BuildClusterItems(OriginalItems, AOptions, ClusterStrategy);
 				// 打印调试信息
 				int ClusterCount = 0;
 				for (const auto& Meta : ClusterResult.MetaItems) {
@@ -310,14 +306,14 @@ namespace ET {
 				}
 				else {
 					std::cout << "[NEST][FINAL BEST] Use cluster expand." << std::endl;
-					Nest2DUtils->ExpandClusterResultToOriginalItems(OriginalItems, BestItems, BestMetaItems, ANestItems);
+					Nest2DUtils->Nest2DCluster->ExpandClusterResultToOriginalItems(OriginalItems, BestItems, BestMetaItems, ANestItems);
 				}
 			}
 			std::cout << "================ BEST NEST RESULT ================" << std::endl;
 			std::cout << "[NEST BEST] bin0 count = " << BestEval.FirstBinCount
 				<< ", bin0 area = " << BestEval.FirstBinArea
 				<< ", layers = " << BestEval.Layers << std::endl;
-			Nest2DUtils->PrintBinCount(ANestItems);
+			Nest2DUtils->Nest2DStrategy->PrintBinCount(ANestItems);
 			std::cout << "==================================================" << std::endl;
 
 			return BestLayers;
@@ -385,7 +381,7 @@ namespace ET {
 
 			std::cout << "[NEST] Layers = " << Layers << std::endl;
 
-			Nest2DUtils->PrintBinCount(ATestItems);
+			Nest2DUtils->Nest2DStrategy->PrintBinCount(ATestItems);
 
 			return Layers;
 		}
@@ -418,7 +414,7 @@ namespace ET {
 				CetTNestItemVector TestItems = AClusterResult.NestItems;
 
 				//  应用排序策略
-				Nest2DUtils->ApplyNestPriorityStrategy(TestItems, Strategy);
+				Nest2DUtils->Nest2DStrategy->ApplyNestPriorityStrategy(TestItems, Strategy);
 				// 执行单次排版（调用底层引擎）
 				std::size_t Layers = 0;
 				if (UsePolygonBoard) {
@@ -429,7 +425,7 @@ namespace ET {
 				}	
 
 				//  评估本次排版结果
-				TetTNestEvalResult Eval = Nest2DUtils->EvaluatePackedResultWithMeta(TestItems,AClusterResult.MetaItems,AOriginalItems,Layers);
+				TetTNestEvalResult Eval = Nest2DUtils->Nest2DStrategy->EvaluatePackedResultWithMeta(TestItems,AClusterResult.MetaItems,AOriginalItems,Layers);
 
 				std::cout << "[NEST][EVAL] Strategy = " << static_cast<int>(Strategy)
 					<< ", HasCluster = " << CurrentHasCluster
@@ -447,7 +443,7 @@ namespace ET {
 					// 如果这是第一个跑出来的结果，直接当擂主
 					Better = true;
 				}
-				else if (Nest2DUtils->IsBetterNestResult(Eval, LocalBest.Eval)) {
+				else if (Nest2DUtils->Nest2DStrategy->IsBetterNestResult(Eval, LocalBest.Eval)) {
 					// 如果按照评估标准，当前分数更高，踢馆成功
 					Better = true;
 				}
@@ -495,7 +491,7 @@ namespace ET {
 			}
 
 			// 按原有评分逻辑比较，当前结果更优
-			if (Nest2DUtils->IsBetterNestResult(ALocalResult.Eval, ABestEval)) {
+			if (Nest2DUtils->Nest2DStrategy->IsBetterNestResult(ALocalResult.Eval, ABestEval)) {
 				return true;
 			}
 

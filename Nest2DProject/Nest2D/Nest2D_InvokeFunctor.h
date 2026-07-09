@@ -4,7 +4,16 @@
 #include "Nest2D_PrivateDataType.h" // 包含你定义的 TNestItemVector 别名
 #include "EtTechCore_InvokeFunctor.h"
 #include "EtTechCore_Functor.h"
-
+#include"Nest2D_Engine.h"
+#include"Nest2D_Sort.h"
+#include"NestDataMapper.h"
+#include"ExportPhoto.h"
+#include"Nest2D_BoardUtils.h"
+#include"Nest2D_GeometryUtils.h"
+#include"Nest2D_SvgUtils.h"
+#include"Nest2D_PolygonBoardRepairer.h"
+#include"Nest2D_StrategyManager.h"
+#include"Nest2D_ClusterManager.h"
 namespace ET {
     namespace NEST2DMANAGERLIB {
 
@@ -19,59 +28,41 @@ namespace ET {
 
         public:
             CetNest2DInvokeFunctor();
-            ~CetNest2DInvokeFunctor();      
-
+            ~CetNest2DInvokeFunctor();    
+        public:
+            CetNest2DEngine* Nest2DEngineIns = nullptr;
+            CetSort* Nest2DSortIns = nullptr;
+            CetNestDataMapper* NestDataMapperIns = nullptr;
+            CetExportPhoto* Nest2DExportPhoto = nullptr;
+            CetNest2DBoardUtils* Nest2DBord = nullptr;
+            CetGeometryUtils* Nest2DGeometryUtils = nullptr;
+            CetSvgUtils* Nest2DSvgUtils = nullptr;
+            CetPolygonBoardRepairer* Nest2DPolygonBord = nullptr;
+            CetStrategyManager* Nest2DStrategy = nullptr;
+            CetClusterManager* Nest2DCluster = nullptr;
         protected:
             // 缓存底层引擎的指针
-            ET::CORE::CetCoreObject* m_pNest2DEngine = nullptr;
-            ET::CORE::CetCoreObject* m_NestDataMapper = nullptr;
-            ET::CORE::CetCoreObject* m_ExportPhoto = nullptr;
+          //  ET::CORE::CetCoreObject* m_SvgUtils = nullptr;
+           // ET::CORE::CetCoreObject* m_PolygonBoardRepairer = nullptr;
 
-            ET::CORE::CetCoreObject* m_BoardUtils = nullptr;
-            ET::CORE::CetCoreObject* m_GeometryUtils = nullptr;
-            ET::CORE::CetCoreObject* m_SvgUtils = nullptr;
-            ET::CORE::CetCoreObject* m_PolygonBoardRepairer = nullptr;
-
-            ET::CORE::CetCoreObject* m_StartegManager = nullptr;
-            ET::CORE::CetCoreObject* m_ClusterManager = nullptr;
+           // ET::CORE::CetCoreObject* m_StartegManager = nullptr;
+           // ET::CORE::CetCoreObject* m_ClusterManager = nullptr;
+            //CetSort* Nest2DSortIns = nullptr;
         public:   
-            //ET::CORE::CetCoreObjFunctor<int(int, int)> WWFunct1;
-            ET::CORE::CetCoreObjFunctor<int(CetTNestItemVector&, const TetNestOptions&, std::size_t*)> RunNestingFunctor;
-            ET::CORE::CetCoreObjFunctor<void(const std::vector< TetNestPolygon>&, CetTNestItemVector&)>BuildNestms;
-            ET::CORE::CetCoreObjFunctor<void(const CetTNestItemVector&, std::vector<TetNestPolygon>&)>ApplyResults;
-            ET::CORE::CetCoreObjFunctor<int(CetTNestItemVector&, const TetNestOptions&, int)>ExportSvg;
-            ET::CORE::CetCoreObjFunctor<int(const std::vector<TetNestPolygon>&, const TetNestOptions&, int)>ExportSvgbd;
-            ET::CORE::CetCoreObjFunctor<int(const CetPackGround& , const TetNestOptions& )> ExportSvgPackGroup;
-          
+           /* ET::CORE::CetCoreObjFunctor<std::string(const TetNestBoard&,double)> MakeBoardSvgPath;
+            ET::CORE::CetCoreObjFunctor<void(const std::string&,const std::string&)> InsertTextBeforeSvgEnd;*/
 
-            ET::CORE::CetCoreObjFunctor<TetBoardBounds(const TetNestBoard&)> CalcBoardBoundsLocal;
-            ET::CORE::CetCoreObjFunctor<ClipperLib::Path(const std::vector<TetNestPoint>&,double,double,bool)> BuildPathFromPoints;
-            ET::CORE::CetCoreObjFunctor<libnest2d::PolygonImpl(const TetNestOptions&,double&,double&)> BuildBinPolygonFromOptions;
-            ET::CORE::CetCoreObjFunctor<TetNestPoint(const TetNestPoint&,double,double,double)> TransformPoint;
-            ET::CORE::CetCoreObjFunctor<double(double)> RadToDeg;
-            ET::CORE::CetCoreObjFunctor<bool(const TetNestPoint&,const std::vector<TetNestPoint>&)> PointInPolygon;
-            ET::CORE::CetCoreObjFunctor<bool(const TetNestPoint&, const TetNestBoard&)> IsPointInsideBoard;
-            ET::CORE::CetCoreObjFunctor<double(const TetNestPolygon&)> CalcPolygonBoundingBoxArea;
-            ET::CORE::CetCoreObjFunctor<bool(const TetNestPolygon& , const TetNestPolygon&)> ComparePolygonAreaDesc;
+         /*   ET::CORE::CetCoreObjFunctor<void(CetTNestItemVector&,const TetNestOptions&,const libnest2d::PolygonImpl&,double,double)> SetPolygonBoardRepairContext;
+            ET::CORE::CetCoreObjFunctor<void(std::size_t&)> RepairPolygonBoard;*/
 
-
-            ET::CORE::CetCoreObjFunctor<void(std::vector<TetNestPolygon>&,const TetNestBoard&)> ValidateItemsInsideBoard;
-            ET::CORE::CetCoreObjFunctor<std::string(const TetNestBoard&,double)> MakeBoardSvgPath;
-            ET::CORE::CetCoreObjFunctor<void(const std::string&,const std::string&)> InsertTextBeforeSvgEnd;
-            ET::CORE::CetCoreObjFunctor<void(CetTNestItemVector&,const TetNestOptions&,const libnest2d::PolygonImpl&,double,double)> SetPolygonBoardRepairContext;
-            ET::CORE::CetCoreObjFunctor<void(std::size_t&)> RepairPolygonBoard;
-
-            ET::CORE::CetCoreObjFunctor<TetTNestEvalResult (const CetTNestItemVector& , std::size_t )> EvaluateNestResult;
+         /*   ET::CORE::CetCoreObjFunctor<TetTNestEvalResult (const CetTNestItemVector& , std::size_t )> EvaluateNestResult;
             ET::CORE::CetCoreObjFunctor<bool (const TetTNestEvalResult& , const TetTNestEvalResult& ) > IsBetterNestResult;
             ET::CORE::CetCoreObjFunctor<void (CetTNestItemVector& , MetENestOrderStrategy )> ApplyNestPriorityStrategy;
             ET::CORE::CetCoreObjFunctor<void (const CetTNestItemVector& )> PrintBinCount;
-            ET::CORE::CetCoreObjFunctor< TetTNestEvalResult (const CetTNestItemVector& , const std::vector<TetMetaItem>& , const CetTNestItemVector& , std::size_t )> EvaluatePackedResultWithMeta;
+            ET::CORE::CetCoreObjFunctor< TetTNestEvalResult (const CetTNestItemVector& , const std::vector<TetMetaItem>& , const CetTNestItemVector& , std::size_t )> EvaluatePackedResultWithMeta;*/
 
-            ET::CORE::CetCoreObjFunctor< TetClusterBuildResult (const CetTNestItemVector& , const TetNestOptions& , MetClusterStrategy )> BuildClusterItems;
-            ET::CORE::CetCoreObjFunctor< void (const CetTNestItemVector& , const CetTNestItemVector& , const std::vector<TetMetaItem>& ,CetTNestItemVector& )> ExpandClusterResultToOriginalItems;
-           
-           
-
+            //ET::CORE::CetCoreObjFunctor< TetClusterBuildResult (const CetTNestItemVector& , const TetNestOptions& , MetClusterStrategy )> BuildClusterItems;
+            //ET::CORE::CetCoreObjFunctor< void (const CetTNestItemVector& , const CetTNestItemVector& , const std::vector<TetMetaItem>& ,CetTNestItemVector& )> ExpandClusterResultToOriginalItems;
 
         };
     }

@@ -174,6 +174,7 @@
     <ClInclude Include="Nest2D_PolygonBoardRepairer.h" />
     <ClInclude Include="Nest2D_SelfFunction.h" />
     <ClInclude Include="Nest2D_DataConst.h" />
+    <ClInclude Include="Nest2D_Sort.h" />
     <ClInclude Include="Nest2D_StrategyManager.h" />
     <ClInclude Include="Nest2D_SvgUtils.h" />
     <ClInclude Include="NestDataMapper.h" />
@@ -199,6 +200,7 @@
     <ClCompile Include="Nest2D_PolygonBoardRepairer.cpp" />
     <ClCompile Include="Nest2D_PrivateDataType.h" />
     <ClCompile Include="Nest2D_Reg.cpp" />
+    <ClCompile Include="Nest2d_Sort.cpp" />
     <ClCompile Include="Nest2D_StrategyManager.cpp" />
     <ClCompile Include="Nest2D_SvgUtils.cpp" />
     <ClCompile Include="NestDataMapper.cpp" />

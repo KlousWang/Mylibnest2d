@@ -33,9 +33,9 @@ TetBoardBounds ET::NEST2DMANAGERLIB::CetNest2DBoardUtils:: CalcBoardBoundsLocal(
 
 	return B;
 }
-Path ET::NEST2DMANAGERLIB::CetNest2DBoardUtils::BuildPathFromPoints(const std::vector<TetNestPoint>& APoints, double AOffsetX, double AOffsetY, bool AWantOuter)
+CetPath ET::NEST2DMANAGERLIB::CetNest2DBoardUtils::BuildPathFromPoints(const std::vector<TetNestPoint>& APoints, double AOffsetX, double AOffsetY, bool AWantOuter)
 {
-	Path Result;
+	CetPath Result;
 	Result.reserve(APoints.size());
 
 	for (const auto& P : APoints) {
@@ -61,7 +61,7 @@ Path ET::NEST2DMANAGERLIB::CetNest2DBoardUtils::BuildPathFromPoints(const std::v
 
 	return Result;
 }
-PolygonImpl ET::NEST2DMANAGERLIB::CetNest2DBoardUtils::BuildBinPolygonFromOptions(const TetNestOptions& AOptions, double& AOutBinWidth, double& AOutBinHeight)
+CetPolygonImpl ET::NEST2DMANAGERLIB::CetNest2DBoardUtils::BuildBinPolygonFromOptions(const TetNestOptions& AOptions, double& AOutBinWidth, double& AOutBinHeight)
 {
 	if (AOptions.Board.Enabled && AOptions.Board.Vertices.size() >= 3) {
 		TetBoardBounds Bounds = CalcBoardBoundsLocal(AOptions.Board);
@@ -110,5 +110,5 @@ PolygonImpl ET::NEST2DMANAGERLIB::CetNest2DBoardUtils::BuildBinPolygonFromOption
 
 	Paths Holes;
 
-	return PolygonImpl(std::move(Outer), std::move(Holes));
+	return CetPolygonImpl(std::move(Outer), std::move(Holes));
 }

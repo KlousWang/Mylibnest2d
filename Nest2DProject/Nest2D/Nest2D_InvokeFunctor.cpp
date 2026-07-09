@@ -12,85 +12,51 @@ namespace ET {
             // 1. 必须先调用基类的初始化 [cite: 150]
             CetCoreInvokeFunctor::_EnableFunctor();
             //WWFunct1.Reload(_);
-            m_ExportPhoto = m_LibConfig->GetLocalCoreObjIns("l_ExportPhoto");
-            if (!m_ExportPhoto)return -1;
-            m_NestDataMapper = m_LibConfig->GetLocalCoreObjIns("l_NestDataMapper");
-            if (!m_NestDataMapper)return -1;
+            Nest2DExportPhoto = (decltype(Nest2DExportPhoto))m_LibConfig->GetLocalCoreObjIns("l_ExportPhoto");
+            //if (!m_ExportPhoto)return -1;
+            NestDataMapperIns = (decltype(NestDataMapperIns))m_LibConfig->GetLocalCoreObjIns("l_NestDataMapper");
+           /* if (!m_NestDataMapper)return -1;*/
             // 2. 通过框架基类自带的 m_LibConfig，根据变量名抓取到底层的 Object 实例 [cite: 128, 149]
             // 注意：这里的 "g_Nest2DEngine" 是你在 JSON 中配置的 GlobalObjIns 变量名
-            m_pNest2DEngine = m_LibConfig->GetLocalCoreObjIns("l_Nest2DEngine");
-            if (!m_pNest2DEngine) return -1;
+            Nest2DEngineIns =(decltype(Nest2DEngineIns)) m_LibConfig->GetLocalCoreObjIns("l_Nest2DEngine");
+           // if (!Nest2DEngineIns) return -1;
 
-            m_BoardUtils = m_LibConfig->GetLocalCoreObjIns("l_BoardUtils");
-            if (!m_BoardUtils) return -1;
+            Nest2DBord =(decltype(Nest2DBord)) m_LibConfig->GetLocalCoreObjIns("l_BoardUtils");
+           // if (!m_BoardUtils) return -1;
 
-            m_GeometryUtils = m_LibConfig->GetLocalCoreObjIns("l_GeometryUtils");
-            if (!m_GeometryUtils) return -1;
+            Nest2DGeometryUtils =(decltype(Nest2DGeometryUtils)) m_LibConfig->GetLocalCoreObjIns("l_GeometryUtils");
+            //if (!m_GeometryUtils) return -1;
 
-            m_SvgUtils = m_LibConfig->GetLocalCoreObjIns("l_SvgUtils");
-            if (!m_SvgUtils) return -1;
+            Nest2DSvgUtils =(decltype(Nest2DSvgUtils)) m_LibConfig->GetLocalCoreObjIns("l_SvgUtils");
+           // if (!m_SvgUtils) return -1;
 
-            m_PolygonBoardRepairer = m_LibConfig->GetLocalCoreObjIns("l_PolygonBoardRepairer");
-            if (!m_PolygonBoardRepairer) return -1;
+            Nest2DPolygonBord =(decltype(Nest2DPolygonBord)) m_LibConfig->GetLocalCoreObjIns("l_PolygonBoardRepairer");
+            //if (!m_PolygonBoardRepairer) return -1;
 
-			m_ClusterManager = m_LibConfig->GetLocalCoreObjIns("l_ClusterManager");
-			if (!m_ClusterManager) return -1;
+			Nest2DCluster =(decltype(Nest2DCluster)) m_LibConfig->GetLocalCoreObjIns("l_ClusterManager");
+			//if (!m_ClusterManager) return -1;
 
-			m_StartegManager = m_LibConfig->GetLocalCoreObjIns("l_StrategyManager");
-			if (!m_StartegManager) return -1;
-            //WWFunct1.Reload(m_pNest2DEngine, "func1");
-            // 3. 将 Functor 变量与底层的真实字符串暗号 "RunNesting" 绑定起来 [cite: 84]
-            CetNest2DInvokeFunctor::RunNestingFunctor.Reload(m_pNest2DEngine, "RunNesting");
+			Nest2DStrategy =(decltype(Nest2DStrategy)) m_LibConfig->GetLocalCoreObjIns("l_StrategyManager");
+		    
+            Nest2DSortIns = (decltype(Nest2DSortIns))m_LibConfig->GetLocalCoreObjIns("l_Sort");
 
-            CetNest2DInvokeFunctor::BuildNestms.Reload(m_NestDataMapper, "BuildNestItems");
-            CetNest2DInvokeFunctor::ApplyResults.Reload(m_NestDataMapper, "ApplyResults");
+           /* CetNest2DInvokeFunctor::MakeBoardSvgPath.Reload(m_SvgUtils, "MakeBoardSvgPath");
+            CetNest2DInvokeFunctor::InsertTextBeforeSvgEnd.Reload(m_SvgUtils, "InsertTextBeforeSvgEnd");*/
 
-           
-            CetNest2DInvokeFunctor::ExportSvg.Reload(m_ExportPhoto, "ExportSvg");
-            CetNest2DInvokeFunctor::ExportSvgbd.Reload(m_ExportPhoto, "ExportSvgbd");
-            CetNest2DInvokeFunctor::ExportSvgPackGroup.Reload(m_ExportPhoto, "ExportSvgPackGroup");
+           /* CetNest2DInvokeFunctor::SetPolygonBoardRepairContext.Reload(m_PolygonBoardRepairer, "SetContext");
+            CetNest2DInvokeFunctor::RepairPolygonBoard.Reload(m_PolygonBoardRepairer, "Repair");*/
 
-            CetNest2DInvokeFunctor::CalcBoardBoundsLocal.Reload(m_BoardUtils, "CalcBoardBoundsLocal");
-            CetNest2DInvokeFunctor::BuildPathFromPoints.Reload(m_BoardUtils, "BuildPathFromPoints");
-            CetNest2DInvokeFunctor::BuildBinPolygonFromOptions.Reload(m_BoardUtils, "BuildBinPolygonFromOptions");
-
-            CetNest2DInvokeFunctor::TransformPoint.Reload(m_GeometryUtils, "TransformPoint");
-            CetNest2DInvokeFunctor::RadToDeg.Reload(m_GeometryUtils, "RadToDeg");
-            CetNest2DInvokeFunctor::PointInPolygon.Reload(m_GeometryUtils, "PointInPolygon");
-            CetNest2DInvokeFunctor::IsPointInsideBoard.Reload(m_GeometryUtils, "IsPointInsideBoard");
-            CetNest2DInvokeFunctor::ValidateItemsInsideBoard.Reload(m_GeometryUtils, "ValidateItemsInsideBoard");
-            CetNest2DInvokeFunctor::CalcPolygonBoundingBoxArea.Reload(m_GeometryUtils, "CalcPolygonBoundingBoxArea");
-            CetNest2DInvokeFunctor::ComparePolygonAreaDesc.Reload(m_GeometryUtils,"ComparePolygonAreaDesc");
-
-            CetNest2DInvokeFunctor::MakeBoardSvgPath.Reload(m_SvgUtils, "MakeBoardSvgPath");
-            CetNest2DInvokeFunctor::InsertTextBeforeSvgEnd.Reload(m_SvgUtils, "InsertTextBeforeSvgEnd");
-
-            CetNest2DInvokeFunctor::SetPolygonBoardRepairContext.Reload(m_PolygonBoardRepairer, "SetContext");
-            CetNest2DInvokeFunctor::RepairPolygonBoard.Reload(m_PolygonBoardRepairer, "Repair");
-
-			CetNest2DInvokeFunctor::EvaluateNestResult.Reload(m_StartegManager, "EvaluateNestResult");
+		/*	CetNest2DInvokeFunctor::EvaluateNestResult.Reload(m_StartegManager, "EvaluateNestResult");
 			CetNest2DInvokeFunctor::IsBetterNestResult.Reload(m_StartegManager, "IsBetterNestResult");
 			CetNest2DInvokeFunctor::ApplyNestPriorityStrategy.Reload(m_StartegManager, "ApplyNestPriorityStrategy");
 			CetNest2DInvokeFunctor::PrintBinCount.Reload(m_StartegManager, "PrintBinCount");
-			CetNest2DInvokeFunctor::EvaluatePackedResultWithMeta.Reload(m_StartegManager, "EvaluatePackedResultWithMeta");
+			CetNest2DInvokeFunctor::EvaluatePackedResultWithMeta.Reload(m_StartegManager, "EvaluatePackedResultWithMeta");*/
 
-			CetNest2DInvokeFunctor::BuildClusterItems.Reload(m_ClusterManager, "BuildClusterItems");
-			CetNest2DInvokeFunctor::ExpandClusterResultToOriginalItems.Reload(m_ClusterManager, "ExpandClusterResultToOriginalItems");
+		/*	CetNest2DInvokeFunctor::BuildClusterItems.Reload(m_ClusterManager, "BuildClusterItems");
+			CetNest2DInvokeFunctor::ExpandClusterResultToOriginalItems.Reload(m_ClusterManager, "ExpandClusterResultToOriginalItems");*/
 
             return 0;
         }
-
-        // 外部包裹函数的实现
-        //int CetNest2DInvokeFunctor::RunNesting(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, std::size_t* AUsedBins)
-        //{
-        //    // 如果暗号绑定成功 (即底层引擎确实公布了这个函数) [cite: 74]
-        //    if (m_RunNestingFunctor.GetResult()) {
-
-        //        return m_RunNestingFunctor(ANestItems, AOptions, AUsedBins);
-        //    }
-
-        //    return -1; 
-        //}
 
     }
 }

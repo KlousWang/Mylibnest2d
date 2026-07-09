@@ -9,7 +9,8 @@
     "Nest2D_SvgUtils, Nest2D_SvgUtils",
     "Nest2D_PolygonBoardRepairer, Nest2D_PolygonBoardRepairer",
 	"Nest2D_ClusterManager,Nest2D_ClusterManager",
-	"Nest2D_StrategyManager,Nest2D_StrategyManager"
+	"Nest2D_StrategyManager,Nest2D_StrategyManager",
+	"Nest2D_Sort,Nest2D_Sort"
 	],
   "ComponentClassType": [],
   "LocalObjIns_LocalType": [ 
@@ -21,8 +22,8 @@
     "l_SvgUtils, Nest2D_SvgUtils",
     "l_PolygonBoardRepairer, Nest2D_PolygonBoardRepairer",
 	"l_ClusterManager,Nest2D_ClusterManager",
-	"l_StrategyManager,Nest2D_StrategyManager"
-	
+	"l_StrategyManager,Nest2D_StrategyManager",
+	"l_Sort,Nest2D_Sort"
   ],
   "GlobalObjIns_LocalIns": [
 	],

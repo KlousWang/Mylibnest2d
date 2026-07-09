@@ -10,7 +10,8 @@
 using CetTNestItemVector = std::vector<libnest2d::Item>;
 using CetNestItem = CetTNestItemVector::value_type;
 using CetPackGround = libnest2d::_PackGroup<libnest2d::PolygonImpl>;
-
+using CetPath = ClipperLib::Path;
+using CetPolygonImpl = libnest2d::PolygonImpl;
 struct TetLib2DItemDataType
 {
 

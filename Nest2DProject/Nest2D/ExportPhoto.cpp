@@ -132,8 +132,8 @@ namespace ET {
                 else {testFile.close();}
                 std::cout << "[SVG] realSvgPath = " << realSvgPath << std::endl;
                 if (AOptions.Board.Enabled && AOptions.Board.Vertices.size() >= 3) {
-                    std::string boardPath = Nest2DUtils->MakeBoardSvgPath(AOptions.Board,AOptions.BinHeight);
-                   Nest2DUtils->InsertTextBeforeSvgEnd(realSvgPath, boardPath);
+                    std::string boardPath = Nest2DUtils->Nest2DSvgUtils->MakeBoardSvgPath(AOptions.Board,AOptions.BinHeight);
+                   Nest2DUtils->Nest2DSvgUtils->InsertTextBeforeSvgEnd(realSvgPath, boardPath);
                 }
             }
 
