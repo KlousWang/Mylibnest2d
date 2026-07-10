@@ -80,10 +80,10 @@ enum class MetClusterStrategy
 
 enum class MetENestOrderStrategy
 {
-	LargeFirst,
-	SmallFirst,
-	LongSideFirst,
-	ThinFirst
+	LargeFirst=0,
+	SmallFirst =1,
+	LongSideFirst=2,
+	ThinFirst=3
 };
 
 struct TetTNestEvalResult

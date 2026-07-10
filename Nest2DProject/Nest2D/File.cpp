@@ -551,7 +551,7 @@ namespace ET {
 
                     Out << "TRANSFORM "<< item->Out_x << " "<< item->Out_y << " "
                         << std::setprecision(6) << item->Out_angle << " "
-                        << std::setprecision(4) << Nest2DUtils->RadToDeg(item->Out_angle)
+                        << std::setprecision(4) << Nest2DUtils->Nest2DGeometryUtils->RadToDeg(item->Out_angle)
                         << "\n";
 
                     Out << "PROFILE\n";

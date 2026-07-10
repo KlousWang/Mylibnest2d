@@ -57,10 +57,28 @@ struct TetAutoPairGridConfig {
     double RotHA = 0.0;
     double RotWB = 0.0;
     double RotHB = 0.0;
+
+    double RotAMinX = 0.0;
+    double RotAMinY = 0.0;
+    double RotAMaxX = 0.0;
+    double RotAMaxY = 0.0;
+
+    double RotBMinX = 0.0;
+    double RotBMinY = 0.0;
+    double RotBMaxX = 0.0;
+    double RotBMaxY = 0.0;
     double MinOffsetX = 0.0;
     double MaxOffsetX = 0.0;
     double MinOffsetY = 0.0;
     double MaxOffsetY = 0.0;
     double Step = 0.0;
     int MaxCheckedCount = 0;
+};
+struct TetEdgeInfo
+{
+    ClipperLib::IntPoint Start;
+    ClipperLib::IntPoint End;
+
+    double Length = 0.0;
+    double Angle = 0.0;
 };

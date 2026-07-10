@@ -12,6 +12,7 @@
 #include<algorithm>
 #include<limits>
 #include<cmath>
+#include<numeric>
 
 //#include"libnest2d/optimizers/nlopt/subplex.hpp"
 
