@@ -84,32 +84,21 @@ namespace ET {
             if (APackedItems.size() != AMetaItems.size())
             {
                 std::cout << "[CLUSTER][ERROR] PackedItems size != MetaItems size. "
-                    << "PackedItems = " << APackedItems.size()
-                    << ", MetaItems = " << AMetaItems.size()
-                    << std::endl;
+                    << "PackedItems = " << APackedItems.size()<< ", MetaItems = " << AMetaItems.size()<< std::endl;
                 return;
             }
             for (std::size_t PackedIndex = 0; PackedIndex < APackedItems.size(); ++PackedIndex) {
                 const auto& PackedItem = APackedItems[PackedIndex];
                 const auto& Meta = AMetaItems[PackedIndex];
-
                 auto PackedTranslation = PackedItem.translation();
-
                 double PackedX = static_cast<double>(PackedTranslation.X);
                 double PackedY = static_cast<double>(PackedTranslation.Y);
                 double PackedRotation = PackedItem.rotation();
-
                 double CosR = std::cos(PackedRotation);
                 double SinR = std::sin(PackedRotation);
                 std::cout << "[CLUSTER][EXPAND PACKED] PackedIndex = "
-                    << PackedIndex
-                    << ", IsCluster = " << Meta.IsCluster
-                    << ", PackedBin = " << PackedItem.binId()
-                    << ", PackedX = " << PackedX
-                    << ", PackedY = " << PackedY
-                    << ", PackedRotation = " << PackedRotation
-                    << ", Children = " << Meta.TransformData.size()
-                    << std::endl;
+                    << PackedIndex<< ", IsCluster = " << Meta.IsCluster<< ", PackedBin = " << PackedItem.binId()
+                    << ", PackedX = " << PackedX<< ", PackedY = " << PackedY<< ", PackedRotation = " << PackedRotation<< ", Children = " << Meta.TransformData.size()<< std::endl;
 
                 _ExpandClusterChildren(PackedItem, Meta, AOutOriginalItems);
             }
@@ -319,8 +308,6 @@ namespace ET {
                 return 0.0;
             }
 
-            // Spacing 是希望两个三角形斜边之间保留的真实间隙
-            // AxisGap 是 X/Y 方向各自需要增加的距离
             double AxisGap = ASpacing * std::sqrt(AW * AW + AH * AH) / (AW + AH);
 
             // 因为后面会转成整数坐标，向上取整，避免实际间隙被截断变小
@@ -470,219 +457,32 @@ namespace ET {
 
         bool CetClusterManager::_TryFindBestEdgePairCandidate(const CetTNestItemVector& AOriginalItems,int AIndex,int BIndex,const TetNestOptions& AOptions,TetAutoPairCandidate& ABestCandidate)
         {
-            if (AIndex < 0 || BIndex < 0 ||
-                AIndex >= static_cast<int>(AOriginalItems.size()) ||
-                BIndex >= static_cast<int>(AOriginalItems.size()) ||
-                AIndex == BIndex)
-            {
+            if (AIndex < 0 || BIndex < 0 || AIndex >= static_cast<int>(AOriginalItems.size()) || BIndex >= static_cast<int>(AOriginalItems.size()) || AIndex == BIndex) {
                 return false;
             }
-
-            const CetNestItem& ItemA = AOriginalItems[AIndex];
-            const CetNestItem& ItemB = AOriginalItems[BIndex];
-
-            const ClipperLib::Path ContourA = _GetItemIdentityContour(ItemA);
-            const ClipperLib::Path ContourB = _GetItemIdentityContour(ItemB);
-
+            const ClipperLib::Path ContourA = _GetItemIdentityContour(AOriginalItems[AIndex]);
+            const ClipperLib::Path ContourB = _GetItemIdentityContour(AOriginalItems[BIndex]);
             const std::vector<TetEdgeInfo> EdgesA = _CollectEdges(ContourA);
             const std::vector<TetEdgeInfo> EdgesB = _CollectEdges(ContourB);
+            if (EdgesA.empty() || EdgesB.empty()) return false;
 
-            if (EdgesA.empty() || EdgesB.empty()) {
-                return false;
-            }
-
-            const bool SimilarTrianglePair =
-                _IsSimilarTriangleByEdges(EdgesA, EdgesB);
-
-            const double SpacingCoord =
-                static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing));
-
-            const double SafetyMargin =
-                std::max(2.0, SpacingCoord * 0.001);
-
-            const double RequiredGap =
-                std::max(0.0, SpacingCoord) + SafetyMargin;
-
-            constexpr double MIN_EDGE_MATCH_RATIO = 0.80;
-            constexpr double MAX_ANGLE_ERROR = 0.0523598775598299; // 3 degrees
-
-            auto NormalizeAngle = [](double AAngle) -> double {
-                const double FullTurn = 2.0 * CET_CLUSTER_PI;
-                AAngle = std::fmod(AAngle, FullTurn);
-                if (AAngle < 0.0) {
-                    AAngle += FullTurn;
-                }
-                return AAngle;
-                };
-
-            auto AngleDistance = [&](double ALeft, double ARight) -> double {
-                double Delta = std::abs(
-                    NormalizeAngle(ALeft) - NormalizeAngle(ARight));
-                return std::min(Delta, 2.0 * CET_CLUSTER_PI - Delta);
-                };
-
-            auto SnapToAllowedRotation = [&](double ATarget, double& AOutRotation) -> bool {
-                ATarget = NormalizeAngle(ATarget);
-
-                if (AOptions.Rotations <= 0) {
-                    AOutRotation = 0.0;
-                    return AngleDistance(ATarget, AOutRotation) <= MAX_ANGLE_ERROR;
-                }
-
-                const double Step =
-                    2.0 * CET_CLUSTER_PI /
-                    static_cast<double>(AOptions.Rotations);
-
-                const long long RotationIndex =
-                    std::llround(ATarget / Step);
-
-                AOutRotation = NormalizeAngle(
-                    static_cast<double>(RotationIndex) * Step);
-
-                const double AllowedError =
-                    std::min(MAX_ANGLE_ERROR, Step * 0.15);
-
-                return AngleDistance(ATarget, AOutRotation) <= AllowedError;
-                };
-
-            const double LongSideA =
-                std::max(_GetItemWidth(ItemA), _GetItemHeight(ItemA));
-            const double LongSideB =
-                std::max(_GetItemWidth(ItemB), _GetItemHeight(ItemB));
-            const double ReferenceLength =
-                std::max(1.0, std::min(LongSideA, LongSideB));
+            double SpacingCoord = static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing));
+            TetEdgePairContext ctx = {
+                AOriginalItems, AIndex, BIndex, AOptions,
+                std::max(0.0, SpacingCoord) + std::max(2.0, SpacingCoord * 0.001),
+                std::max(1.0, std::min(std::max(_GetItemWidth(AOriginalItems[AIndex]), _GetItemHeight(AOriginalItems[AIndex])),
+                                       std::max(_GetItemWidth(AOriginalItems[BIndex]), _GetItemHeight(AOriginalItems[BIndex])))),
+                _IsSimilarTriangleByEdges(EdgesA, EdgesB)
+            };
 
             bool Found = false;
-
             for (const TetEdgeInfo& EdgeA : EdgesA) {
                 for (const TetEdgeInfo& EdgeB : EdgesB) {
-                    const double MaxLength =
-                        std::max(EdgeA.Length, EdgeB.Length);
-                    const double MinLength =
-                        std::min(EdgeA.Length, EdgeB.Length);
-
-                    if (MaxLength <= 0.0) {
-                        continue;
-                    }
-
-                    const double LengthMatchRatio = MinLength / MaxLength;
-                    if (LengthMatchRatio < MIN_EDGE_MATCH_RATIO) {
-                        continue;
-                    }
-
-                    const double TargetBRotation =
-                        EdgeA.Angle + CET_CLUSTER_PI - EdgeB.Angle;
-
-                    double BRotation = 0.0;
-                    if (!SnapToAllowedRotation(TargetBRotation, BRotation)) {
-                        continue;
-                    }
-
-                    const double CosR = std::cos(BRotation);
-                    const double SinR = std::sin(BRotation);
-
-                    auto RotatePoint = [&](const ClipperLib::IntPoint& APoint,
-                        double& AOutX,
-                        double& AOutY) {
-                            const double X = static_cast<double>(APoint.X);
-                            const double Y = static_cast<double>(APoint.Y);
-                            AOutX = X * CosR - Y * SinR;
-                            AOutY = X * SinR + Y * CosR;
-                        };
-
-                    double RotatedBStartX = 0.0;
-                    double RotatedBStartY = 0.0;
-                    double RotatedBEndX = 0.0;
-                    double RotatedBEndY = 0.0;
-
-                    RotatePoint(EdgeB.Start, RotatedBStartX, RotatedBStartY);
-                    RotatePoint(EdgeB.End, RotatedBEndX, RotatedBEndY);
-
-                    const double AStartX = static_cast<double>(EdgeA.Start.X);
-                    const double AStartY = static_cast<double>(EdgeA.Start.Y);
-                    const double AEndX = static_cast<double>(EdgeA.End.X);
-                    const double AEndY = static_cast<double>(EdgeA.End.Y);
-
-                    const double AMidX = (AStartX + AEndX) * 0.5;
-                    const double AMidY = (AStartY + AEndY) * 0.5;
-                    const double BMidX = (RotatedBStartX + RotatedBEndX) * 0.5;
-                    const double BMidY = (RotatedBStartY + RotatedBEndY) * 0.5;
-
-                    std::vector<std::pair<double, double>> BaseOffsets;
-                    BaseOffsets.reserve(3);
-                    BaseOffsets.emplace_back(AMidX - BMidX, AMidY - BMidY);
-                    BaseOffsets.emplace_back(
-                        AStartX - RotatedBEndX,
-                        AStartY - RotatedBEndY);
-                    BaseOffsets.emplace_back(
-                        AEndX - RotatedBStartX,
-                        AEndY - RotatedBStartY);
-
-                    const double EdgeDX = AEndX - AStartX;
-                    const double EdgeDY = AEndY - AStartY;
-                    const double EdgeLength =
-                        std::sqrt(EdgeDX * EdgeDX + EdgeDY * EdgeDY);
-
-                    if (EdgeLength <= 0.0) {
-                        continue;
-                    }
-
-                    const double NormalX = -EdgeDY / EdgeLength;
-                    const double NormalY = EdgeDX / EdgeLength;
-
-                    for (double Direction : { -1.0, 1.0 }) {
-                        for (const auto& BaseOffset : BaseOffsets) {
-                            TetAutoPairBuildInput Input;
-                            Input.AIndex = AIndex;
-                            Input.BIndex = BIndex;
-                            Input.ARotation = 0.0;
-                            Input.BRotation = BRotation;
-                            Input.BOffsetX =
-                                BaseOffset.first +
-                                NormalX * RequiredGap * Direction;
-                            Input.BOffsetY =
-                                BaseOffset.second +
-                                NormalY * RequiredGap * Direction;
-
-                            TetAutoPairCandidate Candidate;
-                            if (!_TryBuildAutoPairAt(
-                                AOriginalItems,
-                                AOptions,
-                                Input,
-                                Candidate))
-                            {
-                                continue;
-                            }
-
-                            double EdgeCoverage = MinLength / ReferenceLength;
-                            EdgeCoverage = std::max(
-                                0.0, std::min(1.0, EdgeCoverage));
-
-                            Candidate.Score +=
-                                LengthMatchRatio * 60.0 +
-                                EdgeCoverage * 40.0 +
-                                (SimilarTrianglePair ? 50.0 : 0.0);
-
-                            if (!Found || Candidate.Score > ABestCandidate.Score) {
-                                ABestCandidate = Candidate;
-                                Found = true;
-
-                                std::cout
-                                    << "[AUTO_PAIR][EDGE BEST] "
-                                    << AIndex << " + " << BIndex
-                                    << ", EdgeA = " << EdgeA.Length
-                                    << ", EdgeB = " << EdgeB.Length
-                                    << ", Match = " << LengthMatchRatio
-                                    << ", Coverage = " << EdgeCoverage
-                                    << ", RotationB = " << BRotation
-                                    << ", Score = " << Candidate.Score
-                                    << std::endl;
-                            }
-                        }
+                    if (_EvaluateEdgePair(ctx, EdgeA, EdgeB, ABestCandidate)) {
+                        Found = true;
                     }
                 }
             }
-
             return Found;
         }
 
@@ -691,18 +491,11 @@ namespace ET {
             if (AIndex < 0 || BIndex < 0 || AIndex >= static_cast<int>(AOriginalItems.size()) || BIndex >= static_cast<int>(AOriginalItems.size())) {
                 return false;
             }
-            const auto& ItemA = AOriginalItems[AIndex];
-            const auto& ItemB = AOriginalItems[BIndex];
-            double OriginWA = _GetItemWidth(ItemA);
-            double OriginHA = _GetItemHeight(ItemA);
-            double OriginWB = _GetItemWidth(ItemB);
-            double OriginHB = _GetItemHeight(ItemB);
-            if (OriginWA <= 0.0 || OriginHA <= 0.0 || OriginWB <= 0.0 || OriginHB <= 0.0) {
+            if (_GetItemWidth(AOriginalItems[AIndex]) <= 0.0 || _GetItemHeight(AOriginalItems[AIndex]) <= 0.0 ||_GetItemWidth(AOriginalItems[BIndex]) <= 0.0 || _GetItemHeight(AOriginalItems[BIndex]) <= 0.0) {
                 return false;
             }
-            TetAutoPairCandidate EdgeCandidate;
-            if (_TryFindBestEdgePairCandidate(AOriginalItems,AIndex,BIndex,AOptions,EdgeCandidate)){
-                ABestCandidate = EdgeCandidate;
+            // 优先执行边缘对齐逻辑
+            if (_TryFindBestEdgePairCandidate(AOriginalItems, AIndex, BIndex, AOptions, ABestCandidate)) {
                 return true;
             }
             std::vector<double> Rotations;
@@ -715,102 +508,8 @@ namespace ET {
             else {
                 Rotations.push_back(0.0);
             }
-
-            double SpacingCoord = static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing));
-
-             auto GetRotatedBBox =[&](const CetNestItem& SrcItem,double Rotation,double& OutMinX,double& OutMinY,double& OutMaxX,double& OutMaxY,double& OutW,double& OutH){
-                    CetNestItem Tmp = SrcItem;
-                    Tmp.translation(libnest2d::Point(0, 0));
-                    Tmp.rotation(libnest2d::Radians(Rotation));
-                    Tmp.inflation(0);
-                    const auto BB = Tmp.boundingBox();
-                    OutMinX =static_cast<double>(getX(BB.minCorner()));
-                    OutMinY =static_cast<double>(getY(BB.minCorner()));
-                    OutMaxX =static_cast<double>(getX(BB.maxCorner()));
-                    OutMaxY =static_cast<double>(getY(BB.maxCorner()));
-                    OutW = OutMaxX - OutMinX;
-                    OutH = OutMaxY - OutMinY;
-                };
-
-            bool Found = false;
-
-            for (double ARot : Rotations) {
-                for (double BRot : Rotations) {
-                    double RotAMinX = 0.0;
-                    double RotAMinY = 0.0;
-                    double RotAMaxX = 0.0;
-                    double RotAMaxY = 0.0;
-
-                    double RotBMinX = 0.0;
-                    double RotBMinY = 0.0;
-                    double RotBMaxX = 0.0;
-                    double RotBMaxY = 0.0;
-
-                    double RotWA = 0.0;
-                    double RotHA = 0.0;
-                    double RotWB = 0.0;
-                    double RotHB = 0.0;
-                    GetRotatedBBox(ItemA,ARot,RotAMinX,RotAMinY,RotAMaxX,RotAMaxY,RotWA,RotHA);
-                    GetRotatedBBox(ItemB,BRot,RotBMinX,RotBMinY,RotBMaxX,RotBMaxY,RotWB,RotHB);
-
-                    if (RotWA <= 0.0 || RotHA <= 0.0 || RotWB <= 0.0 || RotHB <= 0.0) {
-                        continue;
-                    }
-
-                    double BaseSize = std::min(std::min(RotWA, RotHA), std::min(RotWB, RotHB));
-                    if (BaseSize <= 0.0) continue;
-
-                    double CoarseStep = std::max(SpacingCoord > 0.0 ? SpacingCoord : 1.0, BaseSize / 4.0);
-                    double FineStep = std::max(SpacingCoord > 0.0 ? SpacingCoord / 2.0 : 1.0, BaseSize / 16.0);
-
-                    // 构造粗搜配置
-                    TetAutoPairGridConfig CoarseConfig;
-                    CoarseConfig.ARot = ARot;
-                    CoarseConfig.BRot = BRot;
-                    CoarseConfig.RotWA = RotWA;
-                    CoarseConfig.RotHA = RotHA;
-                    CoarseConfig.RotWB = RotWB;
-                    CoarseConfig.RotHB = RotHB;
-                    CoarseConfig.RotAMinX = RotAMinX;
-                    CoarseConfig.RotAMinY = RotAMinY;
-                    CoarseConfig.RotAMaxX = RotAMaxX;
-                    CoarseConfig.RotAMaxY = RotAMaxY;
-                    CoarseConfig.RotBMinX = RotBMinX;
-                    CoarseConfig.RotBMinY = RotBMinY;
-                    CoarseConfig.RotBMaxX = RotBMaxX;
-                    CoarseConfig.RotBMaxY = RotBMaxY;
-                    CoarseConfig.MinOffsetX =RotAMinX -RotBMaxX -SpacingCoord;
-                    CoarseConfig.MaxOffsetX =RotAMaxX -RotBMinX +SpacingCoord;
-                    CoarseConfig.MinOffsetY =RotAMinY -RotBMaxY -SpacingCoord;
-                    CoarseConfig.MaxOffsetY =RotAMaxY -RotBMinY +SpacingCoord;
-                    CoarseConfig.Step = CoarseStep;
-                    CoarseConfig.MaxCheckedCount = 5000;
-
-                    TetAutoPairCandidate CoarseBest;
-                    bool CoarseFound = _RunAutoPairGridSearch(AOriginalItems, AIndex, BIndex, AOptions, CoarseConfig, CoarseBest);
-
-                    if (!CoarseFound) {
-                        continue;
-                    }
-                    // 复用粗搜配置，仅修改边界和步长进行精搜
-                    TetAutoPairGridConfig FineConfig = CoarseConfig;
-                    FineConfig.MinOffsetX = CoarseBest.RawBOffsetX - CoarseStep;
-                    FineConfig.MaxOffsetX = CoarseBest.RawBOffsetX + CoarseStep;
-                    FineConfig.MinOffsetY = CoarseBest.RawBOffsetY - CoarseStep;
-                    FineConfig.MaxOffsetY = CoarseBest.RawBOffsetY + CoarseStep;
-                    FineConfig.Step = FineStep;
-                    FineConfig.MaxCheckedCount = 3000;
-                    TetAutoPairCandidate FineBest;
-                    bool FineFound = _RunAutoPairGridSearch(AOriginalItems, AIndex, BIndex, AOptions, FineConfig, FineBest);
-                    const TetAutoPairCandidate& CurrentBest = FineFound ? FineBest : CoarseBest;
-                    if (!Found || CurrentBest.Score > ABestCandidate.Score) {
-                        ABestCandidate = CurrentBest;
-                        Found = true;
-                    }
-                }
-            }
-
-            return Found;
+            TetAutoPairContext ctx = { AOriginalItems, AIndex, BIndex, AOptions };
+            return _RunGridSearchAllAngles(ctx, Rotations, ABestCandidate);
         }
 
         bool CetClusterManager::_TryBuildAutoPairAt(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const TetAutoPairBuildInput& AInput, TetAutoPairCandidate& ACandidate)
@@ -1147,7 +846,6 @@ namespace ET {
         std::vector<TetEdgeInfo> CetClusterManager::_CollectEdges(const ClipperLib::Path& AContour)
         {
             std::vector<TetEdgeInfo> Result;
-
             if (AContour.size() < 3) {
                 return Result;
             }
@@ -1191,7 +889,6 @@ namespace ET {
             if (AEdges.size() != 3 || BEdges.size() != 3) {
                 return false;
             }
-
             auto LongerFirst = [](const TetEdgeInfo& A, const TetEdgeInfo& B) {
                 return A.Length > B.Length;
                 };
@@ -1216,5 +913,169 @@ namespace ET {
             return true;
         }
 
-    }
+        bool CetClusterManager::_SnapToAllowedRotation(double ATarget, int ARotations, double& AOutRotation)
+        {
+            constexpr double MAX_ANGLE_ERROR = 0.0523598775598299; // 3 degrees
+            auto NormalizeAngle = [](double AAngle) -> double {
+                const double FullTurn = 2.0 * CET_CLUSTER_PI;
+                AAngle = std::fmod(AAngle, FullTurn);
+                return AAngle < 0.0 ? AAngle + FullTurn : AAngle;
+                };
+            auto AngleDistance = [&](double ALeft, double ARight) -> double {
+                double Delta = std::abs(NormalizeAngle(ALeft) - NormalizeAngle(ARight));
+                return std::min(Delta, 2.0 * CET_CLUSTER_PI - Delta);
+                };
+
+            ATarget = NormalizeAngle(ATarget);
+            if (ARotations <= 0) {
+                AOutRotation = 0.0;
+                return AngleDistance(ATarget, AOutRotation) <= MAX_ANGLE_ERROR;
+            }
+
+            const double Step = 2.0 * CET_CLUSTER_PI / static_cast<double>(ARotations);
+            const long long RotationIndex = std::llround(ATarget / Step);
+            AOutRotation = NormalizeAngle(static_cast<double>(RotationIndex) * Step);
+            return AngleDistance(ATarget, AOutRotation) <= std::min(MAX_ANGLE_ERROR, Step * 0.15);
+        }
+
+        bool CetClusterManager::_EvaluateEdgePair(const TetEdgePairContext& ctx, const TetEdgeInfo& EdgeA, const TetEdgeInfo& EdgeB, TetAutoPairCandidate& ABestCandidate)
+        {
+            constexpr double MIN_EDGE_MATCH_RATIO = 0.80;
+            const double MaxLength = std::max(EdgeA.Length, EdgeB.Length);
+            const double MinLength = std::min(EdgeA.Length, EdgeB.Length);
+            if (MaxLength <= 0.0 || (MinLength / MaxLength) < MIN_EDGE_MATCH_RATIO) return false;
+
+            const double TargetBRotation = EdgeA.Angle + CET_CLUSTER_PI - EdgeB.Angle;
+            double BRotation = 0.0;
+            if (!_SnapToAllowedRotation(TargetBRotation, ctx.Options.Rotations, BRotation)) return false;
+
+            const double CosR = std::cos(BRotation), SinR = std::sin(BRotation);
+            auto RotatePt = [&](const ClipperLib::IntPoint& Pt, double& OutX, double& OutY) {
+                OutX = static_cast<double>(Pt.X) * CosR - static_cast<double>(Pt.Y) * SinR;
+                OutY = static_cast<double>(Pt.X) * SinR + static_cast<double>(Pt.Y) * CosR;
+                };
+
+            double RotBStartX = 0.0, RotBStartY = 0.0, RotBEndX = 0.0, RotBEndY = 0.0;
+            RotatePt(EdgeB.Start, RotBStartX, RotBStartY);
+            RotatePt(EdgeB.End, RotBEndX, RotBEndY);
+
+            const double AMidX = (static_cast<double>(EdgeA.Start.X) + static_cast<double>(EdgeA.End.X)) * 0.5;
+            const double AMidY = (static_cast<double>(EdgeA.Start.Y) + static_cast<double>(EdgeA.End.Y)) * 0.5;
+            const double BMidX = (RotBStartX + RotBEndX) * 0.5;
+            const double BMidY = (RotBStartY + RotBEndY) * 0.5;
+
+            TetEdgeMatchState state;
+            state.BRotation = BRotation;
+            state.LengthMatchRatio = MinLength / MaxLength;
+            state.MinLength = MinLength;
+            state.BaseOffsets = {
+                { AMidX - BMidX, AMidY - BMidY },
+                { static_cast<double>(EdgeA.Start.X) - RotBEndX, static_cast<double>(EdgeA.Start.Y) - RotBEndY },
+                { static_cast<double>(EdgeA.End.X) - RotBStartX, static_cast<double>(EdgeA.End.Y) - RotBStartY }
+            };
+
+            return _TestEdgeOffsets(ctx, state, EdgeA, ABestCandidate);
+        }
+
+        bool CetClusterManager::_TestEdgeOffsets(const TetEdgePairContext& ctx, const TetEdgeMatchState& state, const TetEdgeInfo& EdgeA, TetAutoPairCandidate& ABestCandidate)
+        {
+            const double EdgeDX = static_cast<double>(EdgeA.End.X - EdgeA.Start.X);
+            const double EdgeDY = static_cast<double>(EdgeA.End.Y - EdgeA.Start.Y);
+            const double EdgeLength = std::sqrt(EdgeDX * EdgeDX + EdgeDY * EdgeDY);
+            if (EdgeLength <= 0.0) return false;
+
+            const double NormalX = -EdgeDY / EdgeLength, NormalY = EdgeDX / EdgeLength;
+            bool Found = false;
+
+            for (double Direction : { -1.0, 1.0 }) {
+                for (const auto& BaseOffset : state.BaseOffsets) {
+                    TetAutoPairBuildInput Input;
+                    Input.AIndex = ctx.AIndex; Input.BIndex = ctx.BIndex;
+                    Input.ARotation = 0.0;     Input.BRotation = state.BRotation;
+                    Input.BOffsetX = BaseOffset.first + NormalX * ctx.RequiredGap * Direction;
+                    Input.BOffsetY = BaseOffset.second + NormalY * ctx.RequiredGap * Direction;
+
+                    TetAutoPairCandidate Candidate;
+                    if (!_TryBuildAutoPairAt(ctx.OriginalItems, ctx.Options, Input, Candidate)) continue;
+
+                    double EdgeCoverage = std::max(0.0, std::min(1.0, state.MinLength / ctx.RefLength));
+                    Candidate.Score += state.LengthMatchRatio * 60.0 + EdgeCoverage * 40.0 + (ctx.SimilarTrianglePair ? 50.0 : 0.0);
+
+                    if (!Found || Candidate.Score > ABestCandidate.Score) {
+                        ABestCandidate = Candidate;
+                        Found = true;
+                    }
+                }
+            }
+            return Found;
+        }
+
+        bool CetClusterManager::_RunGridSearchAllAngles(const TetAutoPairContext& ctx, const std::vector<double>& rotations, TetAutoPairCandidate& ABestCandidate)
+        {
+            bool Found = false;
+            for (double ARot : rotations) {
+                for (double BRot : rotations) {
+                    if (_EvaluateRotationPair(ctx, ARot, BRot, ABestCandidate)) {
+                        Found = true;
+                    }
+                }
+            }
+            return Found;
+        }
+
+        bool CetClusterManager::_EvaluateRotationPair(const TetAutoPairContext& ctx, double ARot, double BRot, TetAutoPairCandidate& ABestCandidate)
+        {
+            auto GetRotatedBBox = [&](const CetNestItem& SrcItem, double Rotation, double& OutMinX, double& OutMinY, double& OutMaxX, double& OutMaxY, double& OutW, double& OutH) {
+                CetNestItem Tmp = SrcItem;
+                Tmp.translation(libnest2d::Point(0, 0)); Tmp.rotation(libnest2d::Radians(Rotation)); Tmp.inflation(0);
+                const auto BB = Tmp.boundingBox();
+                OutMinX = static_cast<double>(getX(BB.minCorner())); OutMinY = static_cast<double>(getY(BB.minCorner()));
+                OutMaxX = static_cast<double>(getX(BB.maxCorner())); OutMaxY = static_cast<double>(getY(BB.maxCorner()));
+                OutW = OutMaxX - OutMinX; OutH = OutMaxY - OutMinY;
+                };
+
+            double RotAMinX = 0, RotAMinY = 0, RotAMaxX = 0, RotAMaxY = 0, RotWA = 0, RotHA = 0;
+            double RotBMinX = 0, RotBMinY = 0, RotBMaxX = 0, RotBMaxY = 0, RotWB = 0, RotHB = 0;
+            GetRotatedBBox(ctx.OriginalItems[ctx.AIndex], ARot, RotAMinX, RotAMinY, RotAMaxX, RotAMaxY, RotWA, RotHA);
+            GetRotatedBBox(ctx.OriginalItems[ctx.BIndex], BRot, RotBMinX, RotBMinY, RotBMaxX, RotBMaxY, RotWB, RotHB);
+
+            if (RotWA <= 0.0 || RotHA <= 0.0 || RotWB <= 0.0 || RotHB <= 0.0) return false;
+            double BaseSize = std::min(std::min(RotWA, RotHA), std::min(RotWB, RotHB));
+            if (BaseSize <= 0.0) return false;
+
+            double SpacingCoord = static_cast<double>(NestUtils::ToNestCoord(ctx.Options.Spacing));
+            double CoarseStep = std::max(SpacingCoord > 0.0 ? SpacingCoord : 1.0, BaseSize / 4.0);
+            double FineStep = std::max(SpacingCoord > 0.0 ? SpacingCoord / 2.0 : 1.0, BaseSize / 16.0);
+
+            TetAutoPairGridConfig CoarseConfig;
+            CoarseConfig.ARot = ARot; CoarseConfig.BRot = BRot;
+            CoarseConfig.RotWA = RotWA; CoarseConfig.RotHA = RotHA; CoarseConfig.RotWB = RotWB; CoarseConfig.RotHB = RotHB;
+            CoarseConfig.RotAMinX = RotAMinX; CoarseConfig.RotAMinY = RotAMinY; CoarseConfig.RotAMaxX = RotAMaxX; CoarseConfig.RotAMaxY = RotAMaxY;
+            CoarseConfig.RotBMinX = RotBMinX; CoarseConfig.RotBMinY = RotBMinY; CoarseConfig.RotBMaxX = RotBMaxX; CoarseConfig.RotBMaxY = RotBMaxY;
+            CoarseConfig.MinOffsetX = RotAMinX - RotBMaxX - SpacingCoord; CoarseConfig.MaxOffsetX = RotAMaxX - RotBMinX + SpacingCoord;
+            CoarseConfig.MinOffsetY = RotAMinY - RotBMaxY - SpacingCoord; CoarseConfig.MaxOffsetY = RotAMaxY - RotBMinY + SpacingCoord;
+            CoarseConfig.Step = CoarseStep; CoarseConfig.MaxCheckedCount = 5000;
+
+            TetAutoPairCandidate CoarseBest;
+            if (!_RunAutoPairGridSearch(ctx.OriginalItems, ctx.AIndex, ctx.BIndex, ctx.Options, CoarseConfig, CoarseBest)) return false;
+
+            TetAutoPairGridConfig FineConfig = CoarseConfig;
+            FineConfig.MinOffsetX = CoarseBest.RawBOffsetX - CoarseStep; FineConfig.MaxOffsetX = CoarseBest.RawBOffsetX + CoarseStep;
+            FineConfig.MinOffsetY = CoarseBest.RawBOffsetY - CoarseStep; FineConfig.MaxOffsetY = CoarseBest.RawBOffsetY + CoarseStep;
+            FineConfig.Step = FineStep; FineConfig.MaxCheckedCount = 3000;
+
+            TetAutoPairCandidate FineBest;
+            bool FineFound = _RunAutoPairGridSearch(ctx.OriginalItems, ctx.AIndex, ctx.BIndex, ctx.Options, FineConfig, FineBest);
+            const TetAutoPairCandidate& CurrentBest = FineFound ? FineBest : CoarseBest;
+
+            if (CurrentBest.Score > ABestCandidate.Score) {
+                ABestCandidate = CurrentBest;
+                return true;
+            }
+            return false;
+        }
+
+   
+
+}
 }

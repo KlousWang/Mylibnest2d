@@ -61,6 +61,12 @@ namespace ET {
 			double _CalcEdgeLength(const ClipperLib::IntPoint& A, const ClipperLib::IntPoint& B);
 			std::vector<TetEdgeInfo> _CollectEdges(const ClipperLib::Path& AContour);
 			bool _IsSimilarTriangleByEdges(std::vector<TetEdgeInfo> AEdges, std::vector<TetEdgeInfo> BEdges);
+
+			bool _SnapToAllowedRotation(double ATarget, int ARotations, double& AOutRotation);
+			bool _EvaluateEdgePair(const TetEdgePairContext& ctx, const TetEdgeInfo& EdgeA, const TetEdgeInfo& EdgeB, TetAutoPairCandidate& ABestCandidate);
+			bool _TestEdgeOffsets(const TetEdgePairContext& ctx, const TetEdgeMatchState& state, const TetEdgeInfo& EdgeA, TetAutoPairCandidate& ABestCandidate);
+			bool _RunGridSearchAllAngles(const TetAutoPairContext& ctx, const std::vector<double>& rotations, TetAutoPairCandidate& ABestCandidate);
+			bool _EvaluateRotationPair(const TetAutoPairContext& ctx, double ARot, double BRot, TetAutoPairCandidate& ABestCandidate);
 		};
 	}
 }

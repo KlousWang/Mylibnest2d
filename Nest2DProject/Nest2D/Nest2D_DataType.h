@@ -146,3 +146,30 @@ struct TetAutoPairCandidate
 
 	double Score = 0.0;
 };
+
+// 边缘匹配的全局不变上下文
+struct TetEdgePairContext {
+	const CetTNestItemVector& OriginalItems;
+	int AIndex;
+	int BIndex;
+	const TetNestOptions& Options;
+	double RequiredGap;
+	double RefLength;
+	bool SimilarTrianglePair;
+};
+
+// 某一对边缘匹配时的探测状态
+struct TetEdgeMatchState {
+	double BRotation;
+	double LengthMatchRatio;
+	double MinLength;
+	std::vector<std::pair<double, double>> BaseOffsets;
+};
+
+// 网格搜索角度时的上下文
+struct TetAutoPairContext {
+	const CetTNestItemVector& OriginalItems;
+	int AIndex;
+	int BIndex;
+	const TetNestOptions& Options;
+};
