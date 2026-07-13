@@ -26,7 +26,9 @@ namespace ET {
                 SHAPE_TRIANGLE = 1,
                 SHAPE_RECTANGLE = 2,
                 SHAPE_CIRCLE = 3,
-                SHAPE_WITH_HOLES = 4
+				SHAPE_CUSTOM_POLYGON = 4,
+				ShAPE_ARC = 5,
+                SHAPE_WITH_HOLES = 6
             };
         };
     }

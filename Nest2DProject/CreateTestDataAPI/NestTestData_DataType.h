@@ -33,3 +33,14 @@ struct TetNestDataOptions
     bool PlacerParallel = true;
     bool PlacerExploreHoles = false;
 };
+
+struct TetArcData
+{
+    double CenterX = 0.0;
+    double CenterY = 0.0;
+    double Radius = 0.0;
+	double Thickness = 0.0;
+	double StartAngle = 0.0; // 开始角度，单位为度
+	double EndAngle = 0.0;   // 结束角度，单位为度
+	int Segments = 16;       // 分段数，用于近似圆弧
+};

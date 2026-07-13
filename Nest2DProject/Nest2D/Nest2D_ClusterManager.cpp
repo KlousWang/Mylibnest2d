@@ -294,9 +294,7 @@ namespace ET {
                 std::reverse(outerPoints.begin(), outerPoints.end());
             }
             Paths holes;
-
             PolygonImpl poly(std::move(outerPoints), std::move(holes));
-
             return CetTNestItemVector::value_type(std::move(poly));
 
         }

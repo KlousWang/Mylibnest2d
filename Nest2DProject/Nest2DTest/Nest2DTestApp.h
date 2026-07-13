@@ -42,6 +42,8 @@ namespace ET {
             int _InputTriangle();
             int _InputRectangle();
             int _InputCircle();
+			int _InputCustomPolygon();
+			int _InputArc();
             int _InputShapeWithHoles();
 
             int _UseNormalBoard();

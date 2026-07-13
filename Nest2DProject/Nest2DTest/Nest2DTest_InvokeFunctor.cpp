@@ -24,6 +24,8 @@ namespace ET {
             CetNest2DTestInvokeFunctor::AddCustomTrigle.Reload(m_pCreateTestData, "AddTriangleBySides");
             CetNest2DTestInvokeFunctor::AddRectangle.Reload(m_pCreateTestData, "AddRectangle");
             CetNest2DTestInvokeFunctor::AddCircle.Reload(m_pCreateTestData, "AddCircle");
+            CetNest2DTestInvokeFunctor::AddCustomPolygon.Reload(m_pCreateTestData, "AddCustomPolygon");
+            CetNest2DTestInvokeFunctor::AddArc.Reload(m_pCreateTestData, "AddArc");
             CetNest2DTestInvokeFunctor::ClearData.Reload(m_pCreateTestData, "ClearPolygons");
             CetNest2DTestInvokeFunctor::AddCustomShapeWithHolesByInput.Reload(m_pCreateTestData, "AddCustomShapeWithHolesByInput");
             CetNest2DTestInvokeFunctor::AddBoardWithHoles.Reload(m_pCreateTestData, "AddBoardWithHoles");

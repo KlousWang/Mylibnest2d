@@ -238,3 +238,31 @@ int CetNestGeometryUtils::CalcCircleSegmentsAuto(double ARadius,bool AHasOtherIt
 
     return CalcCircleSegmentsByTolerance(ARadius,tolerance,4,32);
 }
+
+CetVertices CetNestGeometryUtils::MakeArcVertices(const TetArcData& AArcData)
+{
+     CetVertices Verts;
+    if (AArcData.Radius <= 0.0) {
+        return Verts;
+    }
+    int Segments = AArcData.Segments;
+    if (Segments < 1) {
+        Segments = 1;
+    }
+    constexpr double PI = 3.14159265358979323846;
+    double StartRad = AArcData.StartAngle * PI / 180.0;
+    double EndRad = AArcData.EndAngle * PI / 180.0;
+    double Delta = EndRad - StartRad;
+    Verts.reserve(Segments + 1);
+    for (int i = 0; i <= Segments; ++i) {
+        double T = static_cast<double>(i) / static_cast<double>(Segments);
+        double Angle = StartRad + Delta * T;
+
+        double X = AArcData.CenterX + AArcData.Radius * std::cos(Angle);
+        double Y = AArcData.CenterY + AArcData.Radius * std::sin(Angle);
+
+        Verts.emplace_back(X, Y);
+    }
+
+    return Verts;
+}

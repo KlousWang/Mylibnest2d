@@ -184,6 +184,82 @@ namespace ET {
             AddPolygon(AId, "Circle", std::move(Verts));
         }
 
+        void CetNestTestDataAPI::AddCustomPolygon(int AId, CetVertices AVertices)
+        {
+            std::cout << "[DLL] AddCustomPolygon called. Id = "<< AId<< ", point count = "<< AVertices.size()<< std::endl;
+            if (AVertices.size() < 3) {
+                std::cout << "[DLL] Invalid custom polygon. point count must be >= 3."<< std::endl;
+                return;
+            }
+            double Area = m_GeometryUtils.CalcSignedArea(AVertices);
+            if (std::abs(Area) < 1e-9) {
+                std::cout << "[DLL] Invalid custom polygon. polygon area is zero."<< std::endl;
+                return;
+            }
+            // 外轮廓按正常多边形处理，不是孔洞，所以 AIsHole = false
+            m_GeometryUtils.NormalizeContourDirection(AVertices, false);
+            /*std::string UseName ="CustomPolygon";*/
+            AddPolygon(AId, "Polygon", std::move(AVertices));
+        }
+
+		void CetNestTestDataAPI::AddArc(int AId, const TetArcData& AArcData)
+		{
+			std::cout << "[DLL] AddArc called. Id = "<< AId<< ", center = ("<< AArcData.CenterX<< ", "<< AArcData.CenterY<< "), radius = "
+				<< AArcData.Radius<< ", thickness = "<< AArcData.Thickness<< ", start angle = "<< AArcData.StartAngle<< ", end angle = "
+                << AArcData.EndAngle<< ", segments = "<< AArcData.Segments<< std::endl;
+
+			if (AArcData.Radius <= 0.0) {
+				std::cout << "[DLL] Invalid arc. radius must be > 0." << std::endl;
+				return;
+			}
+			if (AArcData.Thickness <= 0.0) {
+				std::cout << "[DLL] Invalid arc. thickness must be > 0." << std::endl;
+				return;
+			}
+			double OuterRadius = AArcData.Radius + AArcData.Thickness * 0.5;
+			double InnerRadius = AArcData.Radius - AArcData.Thickness * 0.5;
+			if (InnerRadius <= 0.0) {
+				std::cout << "[DLL] Invalid arc. inner radius must be > 0." << std::endl;
+				return;
+			}
+			TetArcData OuterArcData = AArcData;
+			OuterArcData.Radius = OuterRadius;
+
+			TetArcData InnerArcData = AArcData;
+			InnerArcData.Radius = InnerRadius;
+
+			CetVertices OuterArc = m_GeometryUtils.MakeArcVertices(OuterArcData);
+			CetVertices InnerArc = m_GeometryUtils.MakeArcVertices(InnerArcData);
+
+			if (OuterArc.size() < 2 || InnerArc.size() < 2) {
+				std::cout << "[DLL] Invalid arc vertices." << std::endl;
+				return;
+			}
+
+			CetVertices Verts;
+			Verts.reserve(OuterArc.size() + InnerArc.size());
+
+			// 1. 外圆弧：StartAngle -> EndAngle
+			for (const auto& P : OuterArc) {
+				Verts.emplace_back(P);
+			}
+
+			// 2. 内圆弧：EndAngle -> StartAngle
+			// 这里反向加入，才能形成闭合的弧形区域
+			for (auto It = InnerArc.rbegin(); It != InnerArc.rend(); ++It) {
+				Verts.emplace_back(*It);
+			}
+
+			if (Verts.size() < 3) {
+				std::cout << "[DLL] Invalid arc polygon." << std::endl;
+				return;
+			}
+
+			m_GeometryUtils.NormalizeContourDirection(Verts, false);
+
+			AddPolygon(AId, "Arc", std::move(Verts));
+		}
+
         void CetNestTestDataAPI::AddLShape( int AId,double AW,double AH, double ACutW,double ACutH )
         {
             std::cout << "[DLL] AddLShape called. Id = "
@@ -213,13 +289,10 @@ namespace ET {
             Poly.Name = AName;
             Poly.Vertices = std::move(AOuter);
             Poly.Holes = std::move(AHoles);
-     
-
+ 
             m_Polygons.emplace_back(std::move(Poly));
 
-            std::cout << "[DLL] AddPolygonWithHoles called. Current polygon count = "
-                << m_Polygons.size()
-                << std::endl;
+            std::cout << "[DLL] AddPolygonWithHoles called. Current polygon count = "<< m_Polygons.size()<< std::endl;
         }
 
         void CetNestTestDataAPI::AddCustomShapeWithHolesByInput(int AId)

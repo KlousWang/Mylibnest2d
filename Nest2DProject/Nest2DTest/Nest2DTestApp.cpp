@@ -377,6 +377,121 @@ namespace ET {
 
             return 0;
         }
+		int CetTestApp::_InputCustomPolygon()
+		{
+			int count = 0;
+			std::cout << "Please enter shape count: ";
+			std::cin >> count;
+			if (!std::cin || count <= 0) {
+				std::cout << "Invalid shape count." << std::endl;
+				return -1;
+			}
+			int pointCount = 0;
+			std::cout << "Please enter polygon point count: ";
+			std::cin >> pointCount;
+			if (!std::cin || pointCount < 3) {
+				std::cout << "Invalid polygon. point count must be >= 3." << std::endl;
+				return -1;
+			}
+			CetVertices baseVerts;
+			baseVerts.reserve(pointCount);
+			for (int i = 0; i < pointCount; ++i) {
+				double x = 0.0;
+				double y = 0.0;
+				std::cout << "Point " << i + 1 << " X: ";
+				std::cin >> x;
+				std::cout << "Point " << i + 1 << " Y: ";
+				std::cin >> y;
+				if (!std::cin) {
+					std::cout << "Invalid point input." << std::endl;
+					return -1;
+				}
+				baseVerts.emplace_back(x, y);
+			}
+			// 检查面积，防止所有点在一条线上，或者输入了无效多边形
+			double area = 0.0;
+			for (size_t i = 0; i < baseVerts.size(); ++i) {
+				const auto& p1 = baseVerts[i];
+				const auto& p2 = baseVerts[(i + 1) % baseVerts.size()];
+
+				area += p1.first * p2.second - p2.first * p1.second;
+			}
+			area *= 0.5;
+
+			if (std::abs(area) < 1e-9) {
+				std::cout << "Invalid polygon. polygon area is zero." << std::endl;
+				return -1;
+			}
+
+			// 保证外轮廓是逆时针方向
+			// 如果面积小于 0，说明当前点序是顺时针，反转一下
+			if (area < 0.0) {
+				std::reverse(baseVerts.begin(), baseVerts.end());
+			}
+
+			for (int i = 0; i < count; ++i) {
+				CetVertices verts = baseVerts;
+				Nest2DUtils->AddCustomPolygon(i + 1,std::move(verts));
+			}
+			return 0;
+        }
+		int CetTestApp::_InputArc()
+		{
+			int count = 0;
+			std::cout << "Please enter shape count: ";
+			std::cin >> count;
+
+			if (!std::cin || count <= 0) {
+				std::cout << "Invalid shape count." << std::endl;
+				return -1;
+			}
+
+			TetArcData arcData;
+
+			std::cout << "Please enter arc center X: ";
+			std::cin >> arcData.CenterX;
+			std::cout << "Please enter arc center Y: ";
+			std::cin >> arcData.CenterY;
+			std::cout << "Please enter arc radius: ";
+			std::cin >> arcData.Radius;
+			std::cout << "Please enter arc thickness: ";
+			std::cin >> arcData.Thickness;
+			std::cout << "Please enter arc start angle: ";
+			std::cin >> arcData.StartAngle;
+			std::cout << "Please enter arc end angle: ";
+			std::cin >> arcData.EndAngle;
+			std::cout << "Please enter arc segments: ";
+			std::cin >> arcData.Segments;
+			if (!std::cin) {
+				std::cout << "Invalid arc input." << std::endl;
+				return -1;
+			}
+			if (arcData.Radius <= 0.0) {
+				std::cout << "Invalid arc. radius must be > 0." << std::endl;
+				return -1;
+			}
+			if (arcData.Thickness <= 0.0) {
+				std::cout << "Invalid arc. thickness must be > 0." << std::endl;
+				return -1;
+			}
+			if (arcData.Radius - arcData.Thickness * 0.5 <= 0.0) {
+				std::cout << "Invalid arc. inner radius must be > 0." << std::endl;
+				return -1;
+			}
+			if (arcData.Segments < 1) {
+				std::cout << "Invalid arc. segments must be >= 1." << std::endl;
+				return -1;
+			}
+			if (std::abs(arcData.EndAngle - arcData.StartAngle) < 1e-9) {
+				std::cout << "Invalid arc. start angle and end angle cannot be the same." << std::endl;
+				return -1;
+			}
+			for (int i = 0; i < count; ++i) {
+				Nest2DUtils->AddArc(i + 1, arcData);
+			}
+
+			return 0;
+		}
         int CetTestApp::_InputShapeWithHoles()
         {
             int count = 0;

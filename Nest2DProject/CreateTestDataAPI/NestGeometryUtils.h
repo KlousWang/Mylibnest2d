@@ -15,5 +15,6 @@ public:
 	CetVertices MakeRegularPolygonVertices(double ACX,double ACY,int ASideCount,double ASideLength,bool AIsHole);
 	int CalcCircleSegmentsByTolerance(double ARadius,double ATolerance,int AMinSegments = 4,int AMaxSegments = 32);
 	int CalcCircleSegmentsAuto(double ARadius,bool AHasOtherItems,double AMinOtherItemSize,double AToleranceRatio);
+	CetVertices MakeArcVertices(const TetArcData& AArcData);
 };
 

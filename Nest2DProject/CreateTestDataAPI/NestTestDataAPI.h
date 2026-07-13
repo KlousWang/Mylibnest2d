@@ -33,6 +33,8 @@ namespace ET {
                 _WrapFunc("Init", Type_Class_Func(Init));          
                 _WrapFunc("AddRectangle", Type_Class_Func(AddRectangle));
                 _WrapFunc("AddCircle", Type_Class_Func(AddCircle));
+                _WrapFunc("AddCustomPolygon", Type_Class_Func(AddCustomPolygon));
+                _WrapFunc("AddArc", Type_Class_Func(AddArc));
                 _WrapFunc("AddLShape", Type_Class_Func(AddLShape));
                 _WrapFunc("GenerateRandomConvexPolygons", Type_Class_Func(GenerateRandomConvexPolygons));
                 _WrapFunc("AddCustomShapeWithHolesByInput", Type_Class_Func(AddCustomShapeWithHolesByInput));
@@ -58,6 +60,9 @@ namespace ET {
             void AddTriangle(int AId,double ABase,double AHeight, bool ARightAngle = true );
             void AddTriangleBySides(int AId, double ASideA, double ASideB, double ASideC);
 			void AddCircle(int AId, double ARadius, bool AHasOtherItems, double AMinOtherItemSize, double AToleranceRatio = 0.1);
+            void AddCustomPolygon(int AId,  CetVertices AVertices);
+            void AddArc(int AId, const TetArcData& AArcData);
+
             void AddLShape(int AId,double AW,double AH,double ACutW, double ACutH);
             void AddPolygonWithHoles( int AId,const std::string& AName,CetVertices&& AOuter, std::vector<CetVertices>&& AHoles);
             void AddCustomShapeWithHolesByInput(int AId);
@@ -70,9 +75,7 @@ namespace ET {
             std::string ToString() const;
             size_t PolygonCount() const;
             void ClearPolygons();
-            bool SaveToFile(
-                const std::string& AFilePath
-            ) const;
+            bool SaveToFile(const std::string& AFilePath) const;
 
         public:
             // 给 EtTechCore Functor 调用的非 const 包装函数

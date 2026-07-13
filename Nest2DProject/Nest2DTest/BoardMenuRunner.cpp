@@ -28,22 +28,9 @@ namespace ET {
         {
             m_MenuItems.clear();
 
-            _AddMenuItem(
-                BOARD_NORMAL,
-                "Normal rectangle board",
-                std::bind(&CetTestApp::_UseNormalBoard, m_pTestApp)
-            );
-
-            _AddMenuItem(
-                BOARD_L_SHAPE,
-                "L shape board",
-                std::bind(&CetTestApp::_InputLShapeBoard, m_pTestApp)
-            );
-
-            _AddMenuItem(
-                BOARD_CUSTOM_POLYGON,
-                "Custom polygon board",
-                std::bind(&CetTestApp::_InputCustomPolygonBoard, m_pTestApp)
+            _AddMenuItem(BOARD_NORMAL,"Normal rectangle board",std::bind(&CetTestApp::_UseNormalBoard, m_pTestApp));
+            _AddMenuItem(BOARD_L_SHAPE,"L shape board",std::bind(&CetTestApp::_InputLShapeBoard, m_pTestApp));
+            _AddMenuItem(BOARD_CUSTOM_POLYGON,"Custom polygon board",std::bind(&CetTestApp::_InputCustomPolygonBoard, m_pTestApp)
             );
         }
 
