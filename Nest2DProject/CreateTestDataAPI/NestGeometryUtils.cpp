@@ -266,3 +266,52 @@ CetVertices CetNestGeometryUtils::MakeArcVertices(const TetArcData& AArcData)
 
     return Verts;
 }
+
+CetVertices CetNestGeometryUtils::MakeEllipseVertices(double ACX, double ACY, double ARadiusX, double ARadiusY, int ASegments, bool AIsHole, double ARotationAngle)
+{
+	CetVertices Verts;
+
+	if (ARadiusX <= 0.0 || ARadiusY <= 0.0) {
+		return Verts;
+	}
+
+	if (ASegments < 4) {
+		ASegments = 4;
+	}
+	Verts.reserve(ASegments);
+	// 外轮廓使用外切多边形，避免近似后的多边形侵入真实椭圆
+	double UseRadiusX = ARadiusX;
+	double UseRadiusY = ARadiusY;
+	if (!AIsHole) {
+		double Scale = 1.0 / std::cos(PI / ASegments);
+		UseRadiusX *= Scale;
+		UseRadiusY *= Scale;
+	}
+	double RotationRad = ARotationAngle * PI / 180.0;
+	double CosRotation = std::cos(RotationRad);
+	double SinRotation = std::sin(RotationRad);
+	auto AddVertex = [&](int AIndex) {
+		double Angle = 2.0 * PI * static_cast<double>(AIndex) / static_cast<double>(ASegments);
+		// 未旋转椭圆上的局部坐标
+		double LocalX = UseRadiusX * std::cos(Angle);
+		double LocalY = UseRadiusY * std::sin(Angle);
+		// 绕椭圆中心旋转
+		double X =ACX +LocalX * CosRotation -LocalY * SinRotation;
+		double Y =ACY +LocalX * SinRotation +LocalY * CosRotation;
+		Verts.emplace_back(X, Y);
+		};
+	if (!AIsHole) {
+		// 外轮廓逆时针
+		for (int i = 0; i < ASegments; ++i) {
+			AddVertex(i);
+		}
+	}
+	else {
+		// 孔洞顺时针
+		for (int i = ASegments - 1; i >= 0; --i) {
+			AddVertex(i);
+		}
+	}
+
+	return Verts;
+}

@@ -31,7 +31,8 @@ namespace ET {
 			_AddMenuItem(SHAPE_RECTANGLE, "Rectangle", std::bind(&CetTestApp::_InputRectangle, m_pTestApp));
 			_AddMenuItem(SHAPE_CIRCLE, "Circle", std::bind(&CetTestApp::_InputCircle, m_pTestApp));
 			_AddMenuItem(SHAPE_CUSTOM_POLYGON, "Custom_Polygon", std::bind(&CetTestApp::_InputCustomPolygon, m_pTestApp));
-			_AddMenuItem(ShAPE_ARC, "Arc", std::bind(&CetTestApp::_InputArc, m_pTestApp));
+			_AddMenuItem(SHAPE_ARC, "Arc", std::bind(&CetTestApp::_InputArc, m_pTestApp));
+			_AddMenuItem(SHAPE_ELLIPSE, "Ellipse", std::bind(&CetTestApp::_InputEllipse, m_pTestApp));
 			_AddMenuItem(SHAPE_WITH_HOLES,"With Holes",std::bind(&CetTestApp::_InputShapeWithHoles, m_pTestApp));
         }
 

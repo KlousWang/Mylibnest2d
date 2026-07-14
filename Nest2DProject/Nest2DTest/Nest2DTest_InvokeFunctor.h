@@ -35,6 +35,7 @@ namespace ET {
             ET::CORE::CetCoreObjFunctor<void(int, double, bool, double, double) > AddCircle;
             ET::CORE::CetCoreObjFunctor<void(int,CetVertices) > AddCustomPolygon;
             ET::CORE::CetCoreObjFunctor<void(int,const TetArcData&) > AddArc;
+            ET::CORE::CetCoreObjFunctor<void(int, double , double , int , double ) > AddEllipse;
             ET::CORE::CetCoreObjFunctor<void() > ClearData;
             ET::CORE::CetCoreObjFunctor<void(int) > AddCustomShapeWithHolesByInput;
             ET::CORE::CetCoreObjFunctor<void(CetVertices&&, std::vector<CetVertices>&&) > AddBoardWithHoles;

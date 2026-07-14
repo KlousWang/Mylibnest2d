@@ -33,8 +33,8 @@ namespace ET {
         int CetNestTestDataAPI::Init(const TetNestDataOptions&opt )
         {
             
-            m_BinWidth = opt.BinHeight;
-            m_BinHeight = opt.BinWidth;
+            m_BinWidth = opt.BinWidth;
+            m_BinHeight = opt.BinHeight;
             m_Bpacing = opt.Spacing;
             m_Rotations = opt.Rotations;
             m_PlacerAccuracy = opt.PlacerAccuracy;
@@ -259,6 +259,29 @@ namespace ET {
 
 			AddPolygon(AId, "Arc", std::move(Verts));
 		}
+
+        void CetNestTestDataAPI::AddEllipse(int AId, double ARadiusX, double ARadiusY, int ASegments, double ARotationAngle)
+        {
+            if (ARadiusX <= 0.0 || ARadiusY <= 0.0) {
+                std::cout
+                    << "[DLL] Invalid ellipse. RadiusX and RadiusY must be > 0."
+                    << std::endl;
+                return;
+            }
+            if (ASegments < 4) {
+                ASegments = 4;
+            }
+            std::cout<< "[DLL] AddEllipse called. Id = "<< AId<< ", radiusX = "<< ARadiusX<< ", radiusY = "<< ARadiusY
+                << ", segments = "<< ASegments<< ", rotation = "<< ARotationAngle<< std::endl;
+           CetVertices Verts =m_GeometryUtils.MakeEllipseVertices(0.0,0.0,ARadiusX,ARadiusY,ASegments,false,ARotationAngle);
+            if (Verts.size() < 3) {
+                std::cout<< "[DLL] Failed to create ellipse vertices."<< std::endl;
+                return;
+            }
+            m_GeometryUtils.NormalizeContourDirection(Verts, false);
+
+            AddPolygon(AId, "Ellipse", std::move(Verts));
+        }
 
         void CetNestTestDataAPI::AddLShape( int AId,double AW,double AH, double ACutW,double ACutH )
         {

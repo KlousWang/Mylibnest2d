@@ -35,6 +35,7 @@ namespace ET {
                 _WrapFunc("AddCircle", Type_Class_Func(AddCircle));
                 _WrapFunc("AddCustomPolygon", Type_Class_Func(AddCustomPolygon));
                 _WrapFunc("AddArc", Type_Class_Func(AddArc));
+                _WrapFunc("AddEllipse", Type_Class_Func(AddEllipse));
                 _WrapFunc("AddLShape", Type_Class_Func(AddLShape));
                 _WrapFunc("GenerateRandomConvexPolygons", Type_Class_Func(GenerateRandomConvexPolygons));
                 _WrapFunc("AddCustomShapeWithHolesByInput", Type_Class_Func(AddCustomShapeWithHolesByInput));
@@ -62,6 +63,7 @@ namespace ET {
 			void AddCircle(int AId, double ARadius, bool AHasOtherItems, double AMinOtherItemSize, double AToleranceRatio = 0.1);
             void AddCustomPolygon(int AId,  CetVertices AVertices);
             void AddArc(int AId, const TetArcData& AArcData);
+            void AddEllipse(int AId,double ARadiusX,double ARadiusY,int ASegments,double ARotationAngle);
 
             void AddLShape(int AId,double AW,double AH,double ACutW, double ACutH);
             void AddPolygonWithHoles( int AId,const std::string& AName,CetVertices&& AOuter, std::vector<CetVertices>&& AHoles);

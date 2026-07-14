@@ -16,5 +16,6 @@ public:
 	int CalcCircleSegmentsByTolerance(double ARadius,double ATolerance,int AMinSegments = 4,int AMaxSegments = 32);
 	int CalcCircleSegmentsAuto(double ARadius,bool AHasOtherItems,double AMinOtherItemSize,double AToleranceRatio);
 	CetVertices MakeArcVertices(const TetArcData& AArcData);
+	CetVertices MakeEllipseVertices(double ACX,double ACY,double ARadiusX,double ARadiusY,int ASegments,bool AIsHole,double ARotationAngle = 0.0);
 };
 
