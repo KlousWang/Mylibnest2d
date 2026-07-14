@@ -236,7 +236,7 @@ int CetNestGeometryUtils::CalcCircleSegmentsAuto(double ARadius,bool AHasOtherIt
         tolerance = 3.0;
     }
 
-    return CalcCircleSegmentsByTolerance(ARadius,tolerance,4,32);
+    return CalcCircleSegmentsByTolerance(ARadius,tolerance,32,32);
 }
 
 CetVertices CetNestGeometryUtils::MakeArcVertices(const TetArcData& AArcData)
