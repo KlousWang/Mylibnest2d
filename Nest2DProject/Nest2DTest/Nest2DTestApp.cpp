@@ -39,10 +39,7 @@ namespace ET {
 			m_HasOtherItems = false;
 			m_RandomPosition = true;
 
-			auto* ShapeRunner =
-				static_cast<CetShapeMenuRunner*>(
-					ET::CORE::CetCoreObject::CreateIns("ShapeMenuRunner")
-					);
+			auto* ShapeRunner =static_cast<CetShapeMenuRunner*>(ET::CORE::CetCoreObject::CreateIns("ShapeMenuRunner"));
 
 			if (!ShapeRunner) {
 				std::cout << "Create ShapeMenuRunner failed." << std::endl;

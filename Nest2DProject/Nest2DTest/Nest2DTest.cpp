@@ -29,6 +29,7 @@ int main() {
         std::cout << "Create MainMenuRunner failed." << std::endl;
         return -1;
     }
+   // ET::NEST2DTESTAPP::Nest2DLibConfig->GetClassFuncName("","");
     if (MenuRunner->SetTestApp(TestApp) != 0) {
         return -1;
     }

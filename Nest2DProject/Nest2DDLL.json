@@ -14,7 +14,7 @@
 	],
   "ComponentClassType": [],
   "LocalObjIns_LocalType": [ 
-   "l_Nest2DEngine, Nest2D_Engine",
+   "l_Nest2DEngine,Nest2D_Engine",
    "l_NestDataMapper, Nest2D_DataMapper",
    "l_ExportPhoto, Nest2D_ExportPhoto",
     "l_BoardUtils, Nest2D_BoardUtils",
@@ -28,5 +28,7 @@
   "GlobalObjIns_LocalIns": [
 	],
   "LocalComponentIns_LocalType": [],
-  "GlobalComponentIns_LocalIns": []
+  "Nest2D_Engine::FunctionName": [
+  //"localNest2D_Engine,RunNesting"
+  ]
 }
