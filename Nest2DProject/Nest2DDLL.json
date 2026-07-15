@@ -29,6 +29,6 @@
 	],
   "LocalComponentIns_LocalType": [],
   "Nest2D_Engine::FunctionName": [
-  //"localNest2D_Engine,RunNesting"
+  "localNest2D_Engine,RunNesting"
   ]
 }

@@ -506,7 +506,7 @@ namespace ET {
             if (_Items == nullptr || ALayers <= 1) {
                 return;
             }
-			auto Items = *_Items;
+			auto& Items = *_Items;
 
 			bool Changed = true;
 
@@ -537,7 +537,7 @@ namespace ET {
 
         bool CetPolygonBoardRepairer::_FindBestCandidateForTargetBin(int ATargetBin, TetHoleFillCandidate& ABestCandidate)
         {
-            if (_Items = nullptr) {
+            if (_Items == nullptr) {
                 return false;
             }
 
@@ -576,9 +576,25 @@ namespace ET {
             }
             int OldBin = static_cast<int>(Items[AItemIndex].binId());
             bool Found = false;
+            long long CheckedCount = 0;
+            const long long TotalChecks =static_cast<long long>(m_Rotations.size()) *static_cast<long long>(std::ceil(m_BoardBinWidth / m_StepMm)) *static_cast<long long>(std::ceil(m_BoardBinHeight / m_StepMm));
+           
             for (auto Angle : m_Rotations) {
                 for (double Y = 0.0; Y < m_BoardBinHeight; Y += m_StepMm) {
                     for (double X = 0.0; X < m_BoardBinWidth; X += m_StepMm) {
+                        ++CheckedCount;
+                        if (CheckedCount == 1 ||CheckedCount % 5000 == 0 ||CheckedCount == TotalChecks){
+                            const double Percent =TotalChecks > 0? 100.0 * CheckedCount / TotalChecks: 100.0;
+                            std::cout<< "[HOLE_FILL][GRID] item = "<< AItemIndex
+                                << ", oldBin = " << OldBin
+                                << ", targetBin = " << ATargetBin
+                                << ", progress = "
+                                << CheckedCount << " / "
+                                << TotalChecks
+                                << " (" << Percent << "%)"
+                                << std::endl;
+                        }
+
                         TetPlacementCandidate Placement;
                         Placement.ItemIndex = AItemIndex;
                         Placement.TargetBin = ATargetBin;

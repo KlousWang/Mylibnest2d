@@ -83,3 +83,11 @@ struct TetEdgeInfo
     double Angle = 0.0;
 };
 
+struct TetAutoPairItemCache
+{
+    double W = 0.0;
+    double H = 0.0;
+    double Area = 0.0;
+    double FillRatio = 0.0;
+    bool Worth = false;
+};

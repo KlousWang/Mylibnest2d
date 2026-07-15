@@ -43,7 +43,7 @@ namespace ET {
             CetClusterManager* Nest2DCluster = nullptr;
         protected:
             // »º´æµ×²ãÒýÇæµÄÖ¸Õë
-			//ET::CORE::CetCoreObject* m_Engine = nullptr;
+			ET::CORE::CetCoreObject* m_Engine = nullptr;
           //  ET::CORE::CetCoreObject* m_SvgUtils = nullptr;
            // ET::CORE::CetCoreObject* m_PolygonBoardRepairer = nullptr;
 
@@ -51,7 +51,7 @@ namespace ET {
            // ET::CORE::CetCoreObject* m_ClusterManager = nullptr;
             //CetSort* Nest2DSortIns = nullptr;
         public:   
-			//ET::CORE::CetCoreObjFunctor<int(CetTNestItemVector& , const TetNestOptions& , size_t*)> PerformNestingEx;
+			ET::CORE::CetCoreObjFunctor<int(CetTNestItemVector& , const TetNestOptions& , size_t*)> PerformNestingEx;
            /* ET::CORE::CetCoreObjFunctor<std::string(const TetNestBoard&,double)> MakeBoardSvgPath;
             ET::CORE::CetCoreObjFunctor<void(const std::string&,const std::string&)> InsertTextBeforeSvgEnd;*/
 

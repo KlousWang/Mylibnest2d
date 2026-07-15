@@ -19,7 +19,7 @@ namespace ET {
             // 2. 通过框架基类自带的 m_LibConfig，根据变量名抓取到底层的 Object 实例 [cite: 128, 149]
             // 注意：这里的 "g_Nest2DEngine" 是你在 JSON 中配置的 GlobalObjIns 变量名
 			Nest2DEngineIns = (decltype(Nest2DEngineIns))m_LibConfig->GetLocalCoreObjIns("l_Nest2DEngine");
-            //m_Engine =m_LibConfig->GetLocalCoreObjIns("Nest2D_Engine");
+            m_Engine =m_LibConfig->CreateCoreObj("Nest2D_Engine");
            // if (!Nest2DEngineIns) return -1;
 
             Nest2DBord =(decltype(Nest2DBord)) m_LibConfig->GetLocalCoreObjIns("l_BoardUtils");
@@ -41,9 +41,10 @@ namespace ET {
 		    
             Nest2DSortIns = (decltype(Nest2DSortIns))m_LibConfig->GetLocalCoreObjIns("l_Sort");
 
-          /* const char* FuncName = m_LibConfig->GetClassFuncName("Nest2D_Engine", "localNest2D_Engine");
 
-			PerformNestingEx.Reload(m_Engine, FuncName);*/
+            const char* FuncName = m_LibConfig->GetClassFuncName("Nest2D_Engine", "localNest2D_Engine");
+      
+			PerformNestingEx.Reload(m_Engine, FuncName);
            /* CetNest2DInvokeFunctor::MakeBoardSvgPath.Reload(m_SvgUtils, "MakeBoardSvgPath");
             CetNest2DInvokeFunctor::InsertTextBeforeSvgEnd.Reload(m_SvgUtils, "InsertTextBeforeSvgEnd");*/
 

@@ -64,7 +64,7 @@ namespace ET {
 			double m_BoardBinWidth = 0.0;
 			double m_BoardBinHeight = 0.0;
 
-			double m_StepMm = 1.0;
+			double m_StepMm = 3.0;
 			long long m_SpacingCoord = 0;
 
 			std::vector<libnest2d::Radians> m_Rotations;

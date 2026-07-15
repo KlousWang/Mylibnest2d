@@ -62,7 +62,7 @@ namespace ET {
 			if (!_InitNestSystem(InitInput)) {
 				return false;
 			}
-			Nest2DUtils->ClearData();
+			Nest2DTestUtils->ClearData();
 			InputBoardIfNeeded();
 			InputShapes();
 			std::string SaveFile;
@@ -85,7 +85,7 @@ namespace ET {
 			std::vector<TetNestPolygon> Items;
 			std::string ErrorMessage;
 
-			int loadCode = Nest2DUtils->LoadFile(AInputFile, Options, Items, &ErrorMessage);
+			int loadCode = Nest2DTestUtils->LoadFile(AInputFile, Options, Items, &ErrorMessage);
 			std::cout << "LoadFile result = " << loadCode << std::endl;
 
 			if (loadCode != 0) {
@@ -104,7 +104,7 @@ namespace ET {
 				return -1;
 			}
 
-			int nestCode = Nest2DUtils->PerformNest(Items, Options, &result);
+			int nestCode = Nest2DTestUtils->PerformNest(Items, Options, &result);
 
 			std::cout << "PerformNest result = " << nestCode << std::endl;
 			std::cout << "UsedBins = " << result.UsedBins << std::endl;
@@ -147,7 +147,7 @@ namespace ET {
 				{0.0, H}
 			};
 
-			Nest2DUtils->AddBoard(std::move(Board));
+			Nest2DTestUtils->AddBoard(std::move(Board));
 
 			return 0;
 		}
@@ -179,7 +179,7 @@ namespace ET {
 				Board.emplace_back(X, Y);
 			}
 
-			Nest2DUtils->AddBoard(std::move(Board));
+			Nest2DTestUtils->AddBoard(std::move(Board));
 
 			return 0;
 		}
@@ -244,7 +244,7 @@ namespace ET {
 		}
 		bool CetTestApp::_InitNestSystem(const TetNestDataOptions& AInput) const
 		{
-			int initCode = Nest2DUtils->Init(AInput);
+			int initCode = Nest2DTestUtils->Init(AInput);
 			std::cout << "init result = " << initCode << std::endl;
 
 			return initCode == 0;
@@ -263,7 +263,7 @@ namespace ET {
 		}
 		bool CetTestApp::_SaveNestFile(const std::string& ASaveFile, std::string& AInputFile) const
 		{
-			bool saveResult = Nest2DUtils->SaveToFile(ASaveFile);
+			bool saveResult = Nest2DTestUtils->SaveToFile(ASaveFile);
 
 			std::cout << "SaveToFile result = " << saveResult << std::endl;
 
@@ -294,7 +294,7 @@ namespace ET {
 					m_MinOtherItemSize = curMin;
 				}
 				for (int i = 0; i < count; ++i) {
-					Nest2DUtils->AddTrigle(i + 1, width, height, m_RandomPosition);
+					Nest2DTestUtils->AddTrigle(i + 1, width, height, m_RandomPosition);
 				}
 				std::cout << "Added triangle count = " << count << std::endl;
 				return 0;
@@ -314,7 +314,7 @@ namespace ET {
 			}
 
 			for (int i = 0; i < count; ++i) {
-				Nest2DUtils->AddCustomTrigle(i + 1, line1, line2, line3);
+				Nest2DTestUtils->AddCustomTrigle(i + 1, line1, line2, line3);
 			}
 			std::cout << "Added triangle count = " << count << std::endl;
 
@@ -342,7 +342,7 @@ namespace ET {
 			}
 
 			for (int i = 0; i < count; ++i) {
-				Nest2DUtils->AddRectangle(i + 1, width, height);
+				Nest2DTestUtils->AddRectangle(i + 1, width, height);
 			}
 
 			std::cout << "Added rectangle count = "
@@ -369,7 +369,7 @@ namespace ET {
 			m_HasOtherItems = m_MinOtherItemSize != 0.0;
 
 			for (int i = 0; i < count; ++i) {
-				Nest2DUtils->AddCircle(i + 1, radius, m_HasOtherItems, m_MinOtherItemSize, ratio);
+				Nest2DTestUtils->AddCircle(i + 1, radius, m_HasOtherItems, m_MinOtherItemSize, ratio);
 			}
 
 			return 0;
@@ -428,7 +428,7 @@ namespace ET {
 
 			for (int i = 0; i < count; ++i) {
 				CetVertices verts = baseVerts;
-				Nest2DUtils->AddCustomPolygon(i + 1, std::move(verts));
+				Nest2DTestUtils->AddCustomPolygon(i + 1, std::move(verts));
 			}
 			return 0;
 		}
@@ -484,7 +484,7 @@ namespace ET {
 				return -1;
 			}
 			for (int i = 0; i < count; ++i) {
-				Nest2DUtils->AddArc(i + 1, arcData);
+				Nest2DTestUtils->AddArc(i + 1, arcData);
 			}
 
 			return 0;
@@ -533,7 +533,7 @@ namespace ET {
 				return -1;
 			}
 			for (int i = 0; i < count; ++i) {
-				Nest2DUtils->AddEllipse(i + 1,RadiusX,RadiusY,Segments,RotationAngle);
+				Nest2DTestUtils->AddEllipse(i + 1,RadiusX,RadiusY,Segments,RotationAngle);
 			}
 
 			return 0;
@@ -545,7 +545,7 @@ namespace ET {
 			std::cin >> count;
 
 			for (int i = 0; i < count; ++i) {
-				Nest2DUtils->AddCustomShapeWithHolesByInput(i + 1);
+				Nest2DTestUtils->AddCustomShapeWithHolesByInput(i + 1);
 			}
 			std::cout << "Added Shape count = " << count << std::endl;
 			return 0;

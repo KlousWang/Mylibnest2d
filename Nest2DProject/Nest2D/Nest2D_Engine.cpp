@@ -310,6 +310,12 @@ namespace ET {
 					Nest2DUtils->Nest2DCluster->ExpandClusterResultToOriginalItems(OriginalItems, BestItems, BestMetaItems, ANestItems);
 				}
 			}
+			if(BestLayers > 0) {
+				PolygonImpl RectBinPoly = Nest2DUtils->Nest2DBord->BuildRectangleBinPolygon(AOptions.BinWidth, AOptions.BinHeight);
+				// 最终展开后，必须再做一次合法性修复。
+				Nest2DUtils->Nest2DPolygonBord->SetContext(ANestItems, AOptions, RectBinPoly, AOptions.BinWidth, AOptions.BinHeight);
+				Nest2DUtils->Nest2DPolygonBord->Repair(BestLayers);
+			}
 			std::cout << "================ BEST NEST RESULT ================" << std::endl;
 			std::cout << "[NEST BEST] bin0 count = " << BestEval.FirstBinCount
 				<< ", bin0 area = " << BestEval.FirstBinArea
@@ -381,6 +387,12 @@ namespace ET {
 			);
 
 			std::cout << "[NEST] Layers = " << Layers << std::endl;
+		/*	if (Layers > 0) {
+				PolygonImpl RectBinPoly = Nest2DUtils->Nest2DBord->BuildRectangleBinPolygon(BinWidth, BinHeight);
+
+				Nest2DUtils->Nest2DPolygonBord->SetContext(ATestItems, AOptions, RectBinPoly, BinWidth, BinHeight);
+				Nest2DUtils->Nest2DPolygonBord->Repair(Layers);
+			}*/
 
 			Nest2DUtils->Nest2DStrategy->PrintBinCount(ATestItems);
 

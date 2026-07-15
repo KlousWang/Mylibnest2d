@@ -112,3 +112,26 @@ CetPolygonImpl ET::NEST2DMANAGERLIB::CetNest2DBoardUtils::BuildBinPolygonFromOpt
 
 	return CetPolygonImpl(std::move(Outer), std::move(Holes));
 }
+
+CetPolygonImpl ET::NEST2DMANAGERLIB::CetNest2DBoardUtils::BuildRectangleBinPolygon(double ABinWidth, double ABinHeight)
+{
+	const auto Width = NestUtils::ToNestCoord(ABinWidth);
+	const auto Height = NestUtils::ToNestCoord(ABinHeight);
+
+	ClipperLib::Path Contour;
+	Contour.reserve(4);
+
+	Contour.push_back(ClipperLib::IntPoint(0, 0));
+	Contour.push_back(ClipperLib::IntPoint(Width, 0));
+	Contour.push_back(ClipperLib::IntPoint(Width, Height));
+	Contour.push_back(ClipperLib::IntPoint(0, Height));
+
+	// 保持外轮廓方向符合 Clipper 要求
+	if (!ClipperLib::Orientation(Contour)) {
+		std::reverse(Contour.begin(), Contour.end());
+	}
+
+	ClipperLib::Paths Holes;
+
+	return CetPolygonImpl(std::move(Contour),std::move(Holes));
+}

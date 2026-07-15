@@ -5,6 +5,12 @@
 #include <algorithm>
 #include <cmath>
 #include <set>
+#include<atomic>
+#include<iterator>
+#ifdef _OPENMP
+#include<omp.h>
+#endif // _OPENMP
+
 using namespace ClipperLib;
 using namespace libnest2d;
 namespace ET {
@@ -392,32 +398,148 @@ namespace ET {
                 double FillRatio = RealArea / BoxArea;
                 return FillRatio < 0.92;
                 };
-            // 1. 先收集所有可行组合候选
+            //// 1. 先收集所有可行组合候选
+            //for (int i = 0; i < Count; ++i) {
+            //    for (int j = i + 1; j < Count; ++j) {
+            //        // 两个都是接近矩形的零件，先跳过
+            //        if (!IsWorthAutoPair(AOriginalItems[i]) && !IsWorthAutoPair(AOriginalItems[j])) {
+            //            continue;
+            //        }
+            //        TetAutoPairCandidate Candidate;
+            //        if (_TryFindBestAutoPairCandidate(AOriginalItems, i, j, AOptions, Candidate)) {
+            //            if (Candidate.Valid) {
+            //                AllCandidates.push_back(Candidate);
+            //            }
+            //        }
+			//    }
+			//}
+			// 
+			const long long TotalPairs =static_cast<long long>(Count) * (Count - 1) / 2;
+
+            std::atomic<long long> CheckedPairsAtomic{ 0 };
+
+			std::cout<< "[AUTO_PAIR][START] ItemCount = " << Count<< ", TotalPairs = " << TotalPairs<< ", Rotations = " << AOptions.Rotations<< std::endl;
+
+            std::vector<TetAutoPairItemCache> ItemCache(Count);
             for (int i = 0; i < Count; ++i) {
-                for (int j = i + 1; j < Count; ++j) {
-                    // 两个都是接近矩形的零件，先跳过
-                    if (!IsWorthAutoPair(AOriginalItems[i]) && !IsWorthAutoPair(AOriginalItems[j])) {
-                        continue;
-                    }
-                    TetAutoPairCandidate Candidate;
-                    if (_TryFindBestAutoPairCandidate(AOriginalItems, i, j, AOptions, Candidate)) {
-                        if (Candidate.Valid) {
-                            AllCandidates.push_back(Candidate);
+				auto& Cache = ItemCache[i];
+                Cache.W = _GetItemWidth(AOriginalItems[i]);
+                Cache.H = _GetItemHeight(AOriginalItems[i]);
+                Cache.Area =std::abs(static_cast<double>(AOriginalItems[i].area()));
+                const double BoxArea =Cache.W * Cache.H;
+                if (Cache.W > 0.0 &&Cache.H > 0.0 &&BoxArea > 0.0 &&Cache.Area > 0.0){
+                    Cache.FillRatio =Cache.Area / BoxArea;
+                    Cache.Worth =Cache.FillRatio < 0.92;
+                }
+            }
+            int ThreadCount = 1;
+#ifdef _OPENMP
+            ThreadCount =std::max(1,omp_get_max_threads());
+#endif // _OPENMP
+            std::vector<std::vector<TetAutoPairCandidate>>ThreadCandidates(ThreadCount);
+#ifdef _OPENMP
+
+#pragma omp parallel
+            {
+                const int ThreadId =omp_get_thread_num();
+                auto& LocalCandidates =ThreadCandidates[ThreadId];
+#pragma omp for schedule(dynamic, 1)
+                for (int i = 0; i < Count; ++i) {
+                    for (int j = i + 1; j < Count; ++j) {
+                        const long long Checked =++CheckedPairsAtomic;
+                        /*
+                         * 原来的过滤条件：
+                         * 两个都是接近矩形的零件，跳过。
+                         */
+                        if (!ItemCache[i].Worth &&!ItemCache[j].Worth){
+                            continue;
+                        }
+
+                        TetAutoPairCandidate Candidate;
+                        if (_TryFindBestAutoPairCandidate(AOriginalItems,i,j,AOptions,Candidate)){
+                            if (Candidate.Valid) {
+                                LocalCandidates.push_back(std::move(Candidate));
+                            }
+                        }
+
+                        /*
+                         * 多线程里不要频繁 cout。
+                         * 如果一定要看进度，只建议低频输出。
+                         */
+                        
+
+                        if (Checked == 1 ||Checked % 20 == 0 ||Checked == TotalPairs){
+#pragma omp critical
+                            {
+                                const double Percent =TotalPairs > 0? 100.0 * Checked / TotalPairs: 100.0;
+                                std::cout<< "[AUTO_PAIR][PROGRESS] "<< Checked<< " / "<< TotalPairs<< " ("<< Percent<< "%)"<< ", pair = "<< i<< " + "<< j<< std::endl;
+                            }
                         }
                     }
                 }
             }
-            // 2. 按分数从高到低排序
-            std::sort(AllCandidates.begin(), AllCandidates.end(), [](const TetAutoPairCandidate& A, const TetAutoPairCandidate& B) {
-                return A.Score > B.Score;
+
+#else
+
+            /*
+             * 没有开启 OpenMP 时，自动退回单线程版本。
+             */
+            {
+                auto& LocalCandidates =ThreadCandidates[0];
+                for (int i = 0; i < Count; ++i) {
+                    for (int j = i + 1; j < Count; ++j) {
+                        ++CheckedPairsAtomic;
+                        if (!ItemCache[i].Worth &&!ItemCache[j].Worth){
+                           continue;
+                        }
+                        TetAutoPairCandidate Candidate;
+                        if (_TryFindBestAutoPairCandidate(AOriginalItems,i,j,AOptions,Candidate)){
+                            if (Candidate.Valid) {
+                                LocalCandidates.push_back(std::move(Candidate)
+                                );
+                            }
+                        }
+                    }
                 }
-            );
-            std::cout << "[AUTO_PAIR][GLOBAL] CandidateCount = "
+            }
+
+#endif
+
+            /*
+             * 合并所有线程的候选结果。
+             */
+            std::size_t CandidateTotal = 0;
+
+            for (const auto& Local : ThreadCandidates) {
+                CandidateTotal += Local.size();
+            }
+
+            AllCandidates.clear();
+            AllCandidates.reserve(CandidateTotal);
+
+            for (auto& Local : ThreadCandidates) {
+                AllCandidates.insert(AllCandidates.end(),std::make_move_iterator(Local.begin()),std::make_move_iterator(Local.end()));
+            }
+
+            const long long CheckedPairs =CheckedPairsAtomic.load();
+
+            std::cout
+                << "[AUTO_PAIR][SEARCH DONE] CheckedPairs = "
+                << CheckedPairs
+                << ", CandidateCount = "
                 << AllCandidates.size()
                 << std::endl;
+			// 2. 按分数从高到低排序
+			std::sort(AllCandidates.begin(), AllCandidates.end(), [](const TetAutoPairCandidate& A, const TetAutoPairCandidate& B) {
+				return A.Score > B.Score;
+				}
+			);
+			std::cout << "[AUTO_PAIR][GLOBAL] CandidateCount = "
+				<< AllCandidates.size()
+				<< std::endl;
 
-            // 3. 全局选择：谁分数高谁先用，但一个零件只能被用一次
-            for (const auto& Candidate : AllCandidates) {
+			// 3. 全局选择：谁分数高谁先用，但一个零件只能被用一次
+			for (const auto& Candidate : AllCandidates) {
                 if (!Candidate.Valid) {
                     continue;
                 }

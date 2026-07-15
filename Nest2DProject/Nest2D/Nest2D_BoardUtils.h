@@ -20,6 +20,7 @@ namespace ET {
 				_WrapFunc("CalcBoardBoundsLocal", Type_Class_Func(CalcBoardBoundsLocal));
 				_WrapFunc("BuildPathFromPoints", Type_Class_Func(BuildPathFromPoints));
 				_WrapFunc("BuildBinPolygonFromOptions", Type_Class_Func(BuildBinPolygonFromOptions));
+				_WrapFunc("BuildRectangleBinPolygon", Type_Class_Func(BuildRectangleBinPolygon));
 			}
 
 		public:
@@ -30,6 +31,7 @@ namespace ET {
 			TetBoardBounds CalcBoardBoundsLocal(const TetNestBoard& ABoard);
 			CetPath BuildPathFromPoints(const std::vector<TetNestPoint>& APoints, double AOffsetX, double AOffsetY, bool AWantOuter);
             CetPolygonImpl BuildBinPolygonFromOptions(const TetNestOptions& AOptions, double& AOutBinWidth, double& AOutBinHeight);
+			CetPolygonImpl BuildRectangleBinPolygon(double ABinWidth, double ABinHeight);
         };
     }
 }

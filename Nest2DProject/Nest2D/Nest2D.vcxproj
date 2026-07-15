@@ -95,6 +95,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir)Third_party\clipper;$(SolutionDir)Third_party\libnest2d\include;$(SolutionDir)Third_party\boost_1_83_0;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4251;4819;4038;4244</DisableSpecificWarnings>
+      <OpenMPSupport>true</OpenMPSupport>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -116,6 +117,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir)Third_party\clipper;$(SolutionDir)Third_party\libnest2d\include;$(SolutionDir)Third_party\boost_1_83_0;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <DisableSpecificWarnings>4251;4819;4038</DisableSpecificWarnings>
+      <OpenMPSupport>false</OpenMPSupport>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -133,6 +135,7 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>$(SolutionDir)Third_party\clipper;$(SolutionDir)Third_party\libnest2d\include;$(SolutionDir)Third_party\boost_1_83_0;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OpenMPSupport>false</OpenMPSupport>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -151,6 +154,7 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>$(SolutionDir)Third_party\clipper;$(SolutionDir)Third_party\libnest2d\include;$(SolutionDir)Third_party\boost_1_83_0;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <OpenMPSupport>false</OpenMPSupport>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>

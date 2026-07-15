@@ -26,7 +26,7 @@ namespace ET {
                 }
 
                 int SaveCode =
-                    Nest2DUtils->SaveCoordinatesFile(
+                    Nest2DTestUtils->SaveCoordinatesFile(
                         FilePath,
                         AOptions,
                         AItems,

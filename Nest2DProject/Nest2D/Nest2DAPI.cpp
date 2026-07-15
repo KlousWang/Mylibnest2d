@@ -106,8 +106,8 @@ namespace ET {
 			 //int i  =Nest2DUtils->BuildNestms.GetResult();
 			 //std::cout << i << std::endl;
 			std::size_t UsedBins = 0;
-			int NestCode = Nest2DUtils->Nest2DEngineIns->RunNesting_Impl(NestItems, AOptions, &UsedBins);
-			//int NestCode = Nest2DUtils->PerformNestingEx(NestItems, AOptions, &UsedBins);
+			//int NestCode = Nest2DUtils->Nest2DEngineIns->RunNesting_Impl(NestItems, AOptions, &UsedBins);
+			int NestCode = Nest2DUtils->PerformNestingEx(NestItems, AOptions, &UsedBins);
 			
 			//int NestCode = Nest2DUtils->RunNestingFunctor(NestItems, AOptions, &UsedBins);
 

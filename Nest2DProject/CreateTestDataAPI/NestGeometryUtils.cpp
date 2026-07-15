@@ -214,9 +214,9 @@ int CetNestGeometryUtils::CalcCircleSegmentsByTolerance(double ARadius,double AT
 
 int CetNestGeometryUtils::CalcCircleSegmentsAuto(double ARadius,bool AHasOtherItems,double AMinOtherItemSize,double AToleranceRatio)
 {
-    if (!AHasOtherItems) {
+   /* if (!AHasOtherItems) {
         return 4;
-    }
+    }*/
 
     if (AMinOtherItemSize <= 0.0) {
         return 16;
@@ -225,9 +225,7 @@ int CetNestGeometryUtils::CalcCircleSegmentsAuto(double ARadius,bool AHasOtherIt
     if (AToleranceRatio <= 0.0) {
         AToleranceRatio = 0.1;
     }
-
     double tolerance = AMinOtherItemSize * AToleranceRatio;
-
     if (tolerance < 0.2) {
         tolerance = 0.2;
     }
