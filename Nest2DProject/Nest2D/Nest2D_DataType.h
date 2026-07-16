@@ -75,7 +75,9 @@ enum class MetClusterStrategy
 {
 	None = 0,
 	RightTrianglePair =1,
-	AutoPairCluster =2
+	AutoPairCluster =2,
+
+	TemplateCluster = 3
 };
 
 enum class MetENestOrderStrategy

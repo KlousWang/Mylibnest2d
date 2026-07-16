@@ -7,6 +7,7 @@
 #include "NestUtils.h"
 #include "Nest2D_SelfFunction.h"
 #include"Nest2D_ClusterManager.h"
+#include"Nest2D_ShapeAnalyzer.h"
 #include <map>
 #include<vector>
 #include<algorithm>
@@ -249,6 +250,9 @@ namespace ET {
 		{
 			std::cout << "[NEST] use original rectangle BIN" << std::endl;
 			CetTNestItemVector OriginalItems = ANestItems;
+			CetShapeAnalyzer ShapeAnalyzer;
+			const std::vector<TetShapeFeature> Features =ShapeAnalyzer.AnalyzeALL(OriginalItems);
+			std::cout<< "[SHAPE ANALYZER][DONE]"<< " ItemCount = " << OriginalItems.size()<< ", FeatureCount = " << Features.size()<< std::endl;
 			// 全局最优解的状态记录
 			bool HasBest = false;
 			CetTNestItemVector BestItems;
@@ -260,11 +264,13 @@ namespace ET {
 			std::vector<MetClusterStrategy> ClusterStrategies = {
 				 MetClusterStrategy::None,
 				 //MetClusterStrategy::RightTrianglePair,
-				 MetClusterStrategy::AutoPairCluster//速度巨慢
+				// MetClusterStrategy::AutoPairCluster,//速度巨慢
+				 MetClusterStrategy::TemplateCluster
 			};
 			for (auto ClusterStrategy : ClusterStrategies) {
 				//  构建当前策略下的 Cluster 数据
-				TetClusterBuildResult ClusterResult = Nest2DUtils->Nest2DCluster->BuildClusterItems(OriginalItems, AOptions, ClusterStrategy);
+			//	TetClusterBuildResult ClusterResult = Nest2DUtils->Nest2DCluster->BuildClusterItems(OriginalItems, AOptions, ClusterStrategy);
+				TetClusterBuildResult ClusterResult = Nest2DUtils->Nest2DCluster->BuildClusterItemsWithFeatures(OriginalItems,Features, AOptions, ClusterStrategy);
 				// 打印调试信息
 				int ClusterCount = 0;
 				for (const auto& Meta : ClusterResult.MetaItems) {
@@ -310,12 +316,12 @@ namespace ET {
 					Nest2DUtils->Nest2DCluster->ExpandClusterResultToOriginalItems(OriginalItems, BestItems, BestMetaItems, ANestItems);
 				}
 			}
-			if(BestLayers > 0) {
-				PolygonImpl RectBinPoly = Nest2DUtils->Nest2DBord->BuildRectangleBinPolygon(AOptions.BinWidth, AOptions.BinHeight);
-				// 最终展开后，必须再做一次合法性修复。
-				Nest2DUtils->Nest2DPolygonBord->SetContext(ANestItems, AOptions, RectBinPoly, AOptions.BinWidth, AOptions.BinHeight);
-				Nest2DUtils->Nest2DPolygonBord->Repair(BestLayers);
-			}
+			//if(BestLayers > 0) {
+			//	PolygonImpl RectBinPoly = Nest2DUtils->Nest2DBord->BuildRectangleBinPolygon(AOptions.BinWidth, AOptions.BinHeight);
+			//	// 最终展开后，必须再做一次合法性修复。
+			//	Nest2DUtils->Nest2DPolygonBord->SetContext(ANestItems, AOptions, RectBinPoly, AOptions.BinWidth, AOptions.BinHeight);
+			//	Nest2DUtils->Nest2DPolygonBord->Repair(BestLayers);
+			//}
 			std::cout << "================ BEST NEST RESULT ================" << std::endl;
 			std::cout << "[NEST BEST] bin0 count = " << BestEval.FirstBinCount
 				<< ", bin0 area = " << BestEval.FirstBinArea

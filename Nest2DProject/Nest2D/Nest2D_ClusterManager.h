@@ -23,7 +23,7 @@ namespace ET {
 				CetCoreObject::_WrapFuncs();
 				_WrapFunc("BuildClusterItems", Type_Class_Func(BuildClusterItems));
 				_WrapFunc("ExpandClusterResultToOriginalItems", Type_Class_Func(ExpandClusterResultToOriginalItems));
-
+				_WrapFunc("BuildClusterItemsWithFeatures", Type_Class_Func(BuildClusterItemsWithFeatures));
 			}
 
 		public:
@@ -31,10 +31,12 @@ namespace ET {
 			~CetClusterManager();
 
 		public:
-			TetClusterBuildResult BuildClusterItems(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, MetClusterStrategy AStrategy);
+			TetClusterBuildResult BuildClusterItems(const CetTNestItemVector& AOriginalItems,  const TetNestOptions& AOptions,  MetClusterStrategy AStrategy);
+			TetClusterBuildResult BuildClusterItemsWithFeatures(const CetTNestItemVector& AOriginalItems,const std::vector<TetShapeFeature>& AFeatures,const TetNestOptions& AOptions,MetClusterStrategy AStrategy);
 			void ExpandClusterResultToOriginalItems(const CetTNestItemVector& AOriginalItems, const CetTNestItemVector& APackedItems, const std::vector<TetMetaItem>& AMetaItems, CetTNestItemVector& AOutOriginalItems);
 
 		protected:
+			TetClusterBuildResult _BuildTemplateClusters(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions);
 			void _AddSingleItem(const CetTNestItemVector& AOriginalItems, int AOriginalIndex, TetClusterBuildResult& AResult);
 			bool _TryMakeRightTrianglePair(const CetTNestItemVector& AOriginalItems, int AIndex, int BIndex, const TetNestOptions& AOptions, TetClusterBuildResult& AResult);
 			bool _NearlyEqual(double A, double B, double RelTol);
@@ -48,6 +50,7 @@ namespace ET {
 			void _ExpandClusterChildren(const CetNestItem& PackedItem, const TetMetaItem& Meta, CetTNestItemVector& AOutOriginalItems);
 
 			//
+			//TetClusterBuildResult _BuildTemplateClusters(const CetTNestItemVector& AOriginalItems,const std::vector<TetShapeFeature>& AFeatures,const TetNestOptions& AOptions);
 			TetClusterBuildResult _BuildAutoPairClusters(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions);
 			CetPath _GetItemIdentityContour(const CetNestItem& AItem);
 			bool _TryFindBestEdgePairCandidate(const CetTNestItemVector& AOriginalItems, int AIndex, int BIndex, const TetNestOptions& AOptions, TetAutoPairCandidate& ABestCandidate);

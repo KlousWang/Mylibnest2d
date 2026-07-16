@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="头文件\Cluster">
+      <UniqueIdentifier>{10daaa41-02c2-45c2-b28b-a4b749e80d38}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="framework.h">
@@ -78,6 +81,9 @@
     <ClInclude Include="Nest2D_Sort.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="Nest2D_ShapeAnalyzer.h">
+      <Filter>头文件\Cluster</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
@@ -132,6 +138,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Nest2d_Sort.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Nest2D_ShapeAnalyzer.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

@@ -91,3 +91,35 @@ struct TetAutoPairItemCache
     double FillRatio = 0.0;
     bool Worth = false;
 };
+
+//cluster π”√
+enum class MetShapeType 
+{
+    Unknown,
+    CircleLike,
+    EllipseLike,
+    TriangleLike,
+    RectangleLike,
+    QuadrilateralLike,
+    ConvexPolygon,
+    ConcavePolygon
+};
+
+struct TetShapeFeature
+{
+    int OriginalIndex = -1;
+    MetShapeType ShapeType = MetShapeType::Unknown;
+    double Width = 0.0;
+    double Height = 0.0;
+    double Area = 0.0;
+    double BoxArea = 0.0;
+
+    double FillRatio = 0.0;
+    double AspectRatio = 0.0;
+    double Circularity = 0.0;
+
+    int VertexCount = 0;
+    bool IsConvex = false;
+
+    std::size_t ShapeHash = 0;
+};

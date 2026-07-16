@@ -7,15 +7,53 @@
 #include <set>
 #include<atomic>
 #include<iterator>
-#ifdef _OPENMP
-#include<omp.h>
-#endif // _OPENMP
 
 using namespace ClipperLib;
 using namespace libnest2d;
 namespace ET {
     namespace NEST2DMANAGERLIB {
         constexpr double CET_CLUSTER_PI = 3.14159265358979323846;
+
+        namespace
+        {
+            /*
+             * 一个桶由三部分决定：
+             * 1. 图形类型
+             * 2. 短边尺寸桶
+             * 3. 长边尺寸桶
+             *
+             * 使用短边和长边而非直接使用 Width/Height，
+             * 是为了让旋转90度后的相同零件仍进入同一个桶。
+             */
+            struct TetShapeBucketKey{
+                MetShapeType Type = MetShapeType::Unknown;
+                long long ShortSideBucket = 0;
+                long long LongSideBucket = 0;
+                bool operator<(const TetShapeBucketKey& Other) const{
+                    const int LeftType = static_cast<int>(Type);
+                    const int RightType = static_cast<int>(Other.Type);
+                    if (LeftType != RightType) return LeftType < RightType;
+                    if (ShortSideBucket != Other.ShortSideBucket) return ShortSideBucket < Other.ShortSideBucket;
+                    return LongSideBucket < Other.LongSideBucket;
+                }
+            };
+
+            /*
+             * 按大约1%的相对尺寸建立桶编号。
+             * 完全相同的尺寸肯定会进入同一个桶；
+             * 尺寸非常接近的零件大概率也会进入同一个桶。
+             *
+             * 注意：分桶只是快速筛选，最终是否真能组合，
+             * 仍由 _TryMakeRightTrianglePair 做精确判断。
+             */
+            long long MakeRelativeSizeBucket(double Value){
+                constexpr double SizeTolerance = 0.01;
+                Value = std::max(Value, 1.0);
+                const double BucketBase = std::log1p(SizeTolerance);
+                if (BucketBase <= 0.0) return static_cast<long long>(std::llround(Value));
+                return static_cast<long long>(std::llround(std::log(Value) / BucketBase));
+            }
+        }
 
         CetClusterManager::CetClusterManager() :CetCoreObject()
         {
@@ -81,6 +119,19 @@ namespace ET {
                 _AddSingleItem(AOriginalItems, i, Result);
             }
             return Result;
+        }
+
+        TetClusterBuildResult CetClusterManager::BuildClusterItemsWithFeatures(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions, MetClusterStrategy AStrategy)
+        {
+            // TemplateCluster 真正使用外部传入的 Features
+            if (AStrategy == MetClusterStrategy::TemplateCluster)
+                return _BuildTemplateClusters(AOriginalItems, AFeatures, AOptions);
+
+            /*
+             * 旧策略暂时继续走旧接口：
+             * None / RightTrianglePair / AutoPairCluster
+             */
+            return BuildClusterItems(AOriginalItems, AOptions, AStrategy);
         }
 
         void CetClusterManager::ExpandClusterResultToOriginalItems(const CetTNestItemVector& AOriginalItems, const CetTNestItemVector& APackedItems, const std::vector<TetMetaItem>& AMetaItems, CetTNestItemVector& AOutOriginalItems)
@@ -374,6 +425,113 @@ namespace ET {
             }
         }
 
+        TetClusterBuildResult CetClusterManager::_BuildTemplateClusters(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions)
+        {
+            TetClusterBuildResult Result;
+            Result.NestItems.reserve(AOriginalItems.size());
+            Result.MetaItems.reserve(AOriginalItems.size());
+            const int Count = static_cast<int>(AOriginalItems.size());
+            if (Count <= 0) return Result;
+            // Features 必须与原始零件一一对应
+            if (AFeatures.size() != AOriginalItems.size()) {
+                std::cout << "[TEMPLATE][ERROR] Feature count mismatch. OriginalItems = "
+                    << AOriginalItems.size() << ", Features = " << AFeatures.size() << std::endl;
+                // 安全回退：所有零件按单件加入
+                for (int i = 0; i < Count; ++i) _AddSingleItem(AOriginalItems, i, Result);
+                return Result;
+            }
+            std::cout << "[TEMPLATE][START] ItemCount = " << Count<< ", FeatureCount = " << AFeatures.size() << std::endl;
+            // Used 用于保证每个原始零件最多只能进入一个 Cluster
+            std::vector<bool> Used(Count, false);
+            // 桶内保存原始零件索引
+            std::map<TetShapeBucketKey, std::vector<int>> Buckets;
+            /*
+             * 第一版只把三角形放入模板桶。
+             * 圆形、椭圆、矩形和未知图形现在全部保留为单件。
+             */
+            for (int i = 0; i < Count; ++i) {
+                const TetShapeFeature& Feature = AFeatures[i];
+                if (Feature.ShapeType != MetShapeType::TriangleLike) continue;
+                if (Feature.Width <= 0.0 || Feature.Height <= 0.0) {
+                    std::cout << "[TEMPLATE][SKIP] Invalid triangle size. Index = " << i
+                        << ", Width = " << Feature.Width << ", Height = " << Feature.Height << std::endl;
+                    continue;
+                }
+                // 归一化宽高：短边永远在前，长边永远在后
+                const double ShortSide = std::min(Feature.Width, Feature.Height);
+                const double LongSide = std::max(Feature.Width, Feature.Height);
+                TetShapeBucketKey Key;
+                Key.Type = Feature.ShapeType;
+                Key.ShortSideBucket = MakeRelativeSizeBucket(ShortSide);
+                Key.LongSideBucket = MakeRelativeSizeBucket(LongSide);
+                // 桶中保存原始零件索引 i
+                Buckets[Key].push_back(i);
+                std::cout << "[TEMPLATE][BUCKET ADD] Index = " << i
+                    << ", Type = " << static_cast<int>(Feature.ShapeType)
+                    << ", Width = " << Feature.Width << ", Height = " << Feature.Height
+                    << ", ShortBucket = " << Key.ShortSideBucket
+                    << ", LongBucket = " << Key.LongSideBucket << std::endl;
+            }
+            int CreatedClusterCount = 0;
+            // 遍历每一个尺寸桶
+            for (auto& BucketEntry : Buckets) {
+                const TetShapeBucketKey& Key = BucketEntry.first;
+                std::vector<int>& Indices = BucketEntry.second;
+                std::cout << "[TEMPLATE][BUCKET] Type = " << static_cast<int>(Key.Type)<< ", ShortBucket = " << Key.ShortSideBucket
+                    << ", LongBucket = " << Key.LongSideBucket<< ", ItemCount = " << Indices.size() << std::endl;
+                /*
+                 * 同一个尺寸桶内两个两个取出：
+                 * 0和1, 2和3, 4和5 ...
+                 */
+                for (std::size_t k = 0; k + 1 < Indices.size(); k += 2) {
+                    const int AIndex = Indices[k];
+                    const int BIndex = Indices[k + 1];
+                    // 防御检查
+                    if (AIndex < 0 || BIndex < 0 || AIndex >= Count || BIndex >= Count) {
+                        std::cout << "[TEMPLATE][PAIR SKIP] Invalid index. A = " << AIndex<< ", B = " << BIndex << std::endl;
+                        continue;
+                    }
+                    if (Used[AIndex] || Used[BIndex]) continue;
+                    /*
+                     * 使用现有的三角形组合函数，该函数会再次精确判断：
+                     * 1. 是否像直角三角形
+                     * 2. 两个三角形尺寸是否相同
+                     * 3. Cluster 是否超过板材
+                     * 4. 创建矩形代理
+                     * 5. 写入 Meta 和子零件变换
+                     */
+                    const bool Created = _TryMakeRightTrianglePair(AOriginalItems, AIndex, BIndex, AOptions, Result);
+                    if (Created) {
+                        Used[AIndex] = true;
+                        Used[BIndex] = true;
+                        ++CreatedClusterCount;
+                        std::cout << "[TEMPLATE][TRIANGLE ACCEPT] A = " << AIndex << ", B = " << BIndex<< ", PackedCount = " << Result.NestItems.size() << std::endl;
+                    }
+                    else {
+                        // 创建失败时不标记 Used，最后会作为单件加入
+                        std::cout << "[TEMPLATE][TRIANGLE REJECT] A = " << AIndex << ", B = " << BIndex << std::endl;
+                    }
+                }
+            }
+
+            int SingleCount = 0;
+            // 所有没有成功进入 Cluster 的零件，都作为普通单件加入
+            for (int i = 0; i < Count; ++i) {
+                if (Used[i]) continue;
+                _AddSingleItem(AOriginalItems, i, Result);
+                Used[i] = true;
+                ++SingleCount;
+            }
+
+            std::cout << "[TEMPLATE][DONE] OriginalCount = " << Count
+                << ", ClusterCount = " << CreatedClusterCount
+                << ", SingleCount = " << SingleCount
+                << ", PackedItemCount = " << Result.NestItems.size()
+                << ", MetaItemCount = " << Result.MetaItems.size() << std::endl;
+
+            return Result;
+        }
+
         TetClusterBuildResult CetClusterManager::_BuildAutoPairClusters(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions)
         {
             TetClusterBuildResult Result;
@@ -383,152 +541,29 @@ namespace ET {
             const int Count = static_cast<int>(AOriginalItems.size());
             std::vector<bool> Used(Count, false);
             std::vector<TetAutoPairCandidate> AllCandidates;
-
-            auto IsWorthAutoPair = [&](const CetNestItem& Item) -> bool {
-                double W = _GetItemWidth(Item);
-                double H = _GetItemHeight(Item);
-                if (W <= 0.0 || H <= 0.0) {
-                    return false;
-                }
-                double BoxArea = W * H;
-                double RealArea = std::abs(static_cast<double>(Item.area()));
-                if (BoxArea <= 0.0 || RealArea <= 0.0) {
-                    return false;
-                }
-                double FillRatio = RealArea / BoxArea;
-                return FillRatio < 0.92;
-                };
-            //// 1. 先收集所有可行组合候选
-            //for (int i = 0; i < Count; ++i) {
-            //    for (int j = i + 1; j < Count; ++j) {
-            //        // 两个都是接近矩形的零件，先跳过
-            //        if (!IsWorthAutoPair(AOriginalItems[i]) && !IsWorthAutoPair(AOriginalItems[j])) {
-            //            continue;
-            //        }
-            //        TetAutoPairCandidate Candidate;
-            //        if (_TryFindBestAutoPairCandidate(AOriginalItems, i, j, AOptions, Candidate)) {
-            //            if (Candidate.Valid) {
-            //                AllCandidates.push_back(Candidate);
-            //            }
-            //        }
-			//    }
-			//}
-			// 
-			const long long TotalPairs =static_cast<long long>(Count) * (Count - 1) / 2;
-
-            std::atomic<long long> CheckedPairsAtomic{ 0 };
-
-			std::cout<< "[AUTO_PAIR][START] ItemCount = " << Count<< ", TotalPairs = " << TotalPairs<< ", Rotations = " << AOptions.Rotations<< std::endl;
-
-            std::vector<TetAutoPairItemCache> ItemCache(Count);
+            std::vector<bool> WorthAutoPair(Count, false);
+            const long long TotalPairs =static_cast<long long>(Count) *static_cast<long long>(Count - 1) / 2;
+            long long CheckedPairs = 0;
+            // 1. 先收集所有可行组合候选
             for (int i = 0; i < Count; ++i) {
-				auto& Cache = ItemCache[i];
-                Cache.W = _GetItemWidth(AOriginalItems[i]);
-                Cache.H = _GetItemHeight(AOriginalItems[i]);
-                Cache.Area =std::abs(static_cast<double>(AOriginalItems[i].area()));
-                const double BoxArea =Cache.W * Cache.H;
-                if (Cache.W > 0.0 &&Cache.H > 0.0 &&BoxArea > 0.0 &&Cache.Area > 0.0){
-                    Cache.FillRatio =Cache.Area / BoxArea;
-                    Cache.Worth =Cache.FillRatio < 0.92;
-                }
-            }
-            int ThreadCount = 1;
-#ifdef _OPENMP
-            ThreadCount =std::max(1,omp_get_max_threads());
-#endif // _OPENMP
-            std::vector<std::vector<TetAutoPairCandidate>>ThreadCandidates(ThreadCount);
-#ifdef _OPENMP
-
-#pragma omp parallel
-            {
-                const int ThreadId =omp_get_thread_num();
-                auto& LocalCandidates =ThreadCandidates[ThreadId];
-#pragma omp for schedule(dynamic, 1)
-                for (int i = 0; i < Count; ++i) {
-                    for (int j = i + 1; j < Count; ++j) {
-                        const long long Checked =++CheckedPairsAtomic;
-                        /*
-                         * 原来的过滤条件：
-                         * 两个都是接近矩形的零件，跳过。
-                         */
-                        if (!ItemCache[i].Worth &&!ItemCache[j].Worth){
-                            continue;
+                for (int j = i + 1; j < Count; ++j) {
+                    // 两个都是接近矩形的零件，先跳过
+                    if (!WorthAutoPair[i] && !WorthAutoPair[j]) {
+                        continue;
+                    }
+                    TetAutoPairCandidate Candidate;
+                    if (_TryFindBestAutoPairCandidate(AOriginalItems, i, j, AOptions, Candidate)) {
+                        if (Candidate.Valid) {
+                            AllCandidates.push_back(std::move(Candidate));
                         }
-
-                        TetAutoPairCandidate Candidate;
-                        if (_TryFindBestAutoPairCandidate(AOriginalItems,i,j,AOptions,Candidate)){
-                            if (Candidate.Valid) {
-                                LocalCandidates.push_back(std::move(Candidate));
-                            }
-                        }
-
-                        /*
-                         * 多线程里不要频繁 cout。
-                         * 如果一定要看进度，只建议低频输出。
-                         */
-                        
-
-                        if (Checked == 1 ||Checked % 20 == 0 ||Checked == TotalPairs){
-#pragma omp critical
-                            {
-                                const double Percent =TotalPairs > 0? 100.0 * Checked / TotalPairs: 100.0;
-                                std::cout<< "[AUTO_PAIR][PROGRESS] "<< Checked<< " / "<< TotalPairs<< " ("<< Percent<< "%)"<< ", pair = "<< i<< " + "<< j<< std::endl;
-                            }
+                        if (CheckedPairs == 1 ||CheckedPairs % 100 == 0 ||CheckedPairs == TotalPairs){
+                            const double Percent =TotalPairs > 0? 100.0 *static_cast<double>(CheckedPairs) /static_cast<double>(TotalPairs): 100.0;
+                            std::cout<< "[AUTO_PAIR][PROGRESS] "<< CheckedPairs<< " / "<< TotalPairs<< " ("<< Percent<< "%)"<< std::endl;
                         }
                     }
-                }
-            }
-
-#else
-
-            /*
-             * 没有开启 OpenMP 时，自动退回单线程版本。
-             */
-            {
-                auto& LocalCandidates =ThreadCandidates[0];
-                for (int i = 0; i < Count; ++i) {
-                    for (int j = i + 1; j < Count; ++j) {
-                        ++CheckedPairsAtomic;
-                        if (!ItemCache[i].Worth &&!ItemCache[j].Worth){
-                           continue;
-                        }
-                        TetAutoPairCandidate Candidate;
-                        if (_TryFindBestAutoPairCandidate(AOriginalItems,i,j,AOptions,Candidate)){
-                            if (Candidate.Valid) {
-                                LocalCandidates.push_back(std::move(Candidate)
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-
-#endif
-
-            /*
-             * 合并所有线程的候选结果。
-             */
-            std::size_t CandidateTotal = 0;
-
-            for (const auto& Local : ThreadCandidates) {
-                CandidateTotal += Local.size();
-            }
-
-            AllCandidates.clear();
-            AllCandidates.reserve(CandidateTotal);
-
-            for (auto& Local : ThreadCandidates) {
-                AllCandidates.insert(AllCandidates.end(),std::make_move_iterator(Local.begin()),std::make_move_iterator(Local.end()));
-            }
-
-            const long long CheckedPairs =CheckedPairsAtomic.load();
-
-            std::cout
-                << "[AUTO_PAIR][SEARCH DONE] CheckedPairs = "
-                << CheckedPairs
-                << ", CandidateCount = "
-                << AllCandidates.size()
-                << std::endl;
+			    }
+			}
+            std::cout<< "[AUTO_PAIR][SEARCH DONE] CheckedPairs = "<< CheckedPairs<< ", CandidateCount = "<< AllCandidates.size()<< std::endl;
 			// 2. 按分数从高到低排序
 			std::sort(AllCandidates.begin(), AllCandidates.end(), [](const TetAutoPairCandidate& A, const TetAutoPairCandidate& B) {
 				return A.Score > B.Score;
