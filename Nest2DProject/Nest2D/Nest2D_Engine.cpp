@@ -250,8 +250,8 @@ namespace ET {
 		{
 			std::cout << "[NEST] use original rectangle BIN" << std::endl;
 			CetTNestItemVector OriginalItems = ANestItems;
-			CetShapeAnalyzer ShapeAnalyzer;
-			const std::vector<TetShapeFeature> Features =ShapeAnalyzer.AnalyzeALL(OriginalItems);
+			//CetShapeAnalyzer ShapeAnalyzer;
+			const std::vector<TetShapeFeature> Features =Nest2DUtils->Nest2DShape->AnalyzeALL(OriginalItems);
 			std::cout<< "[SHAPE ANALYZER][DONE]"<< " ItemCount = " << OriginalItems.size()<< ", FeatureCount = " << Features.size()<< std::endl;
 			// 全局最优解的状态记录
 			bool HasBest = false;

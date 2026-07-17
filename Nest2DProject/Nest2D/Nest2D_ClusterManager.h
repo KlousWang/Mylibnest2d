@@ -10,6 +10,7 @@
 
 namespace ET {
 	namespace NEST2DMANAGERLIB {
+		//class CetTriangleClusterBuilder;
 		class CetClusterManager :public ET::CORE::CetCoreObject
 		{
 			Inherit_Invoke_Hook(CetClusterManager)
@@ -29,7 +30,7 @@ namespace ET {
 		public:
 			CetClusterManager();
 			~CetClusterManager();
-
+			//void SetTriangleClusterBuilder(CetTriangleClusterBuilder* ATriangleBuilder);
 		public:
 			TetClusterBuildResult BuildClusterItems(const CetTNestItemVector& AOriginalItems,  const TetNestOptions& AOptions,  MetClusterStrategy AStrategy);
 			TetClusterBuildResult BuildClusterItemsWithFeatures(const CetTNestItemVector& AOriginalItems,const std::vector<TetShapeFeature>& AFeatures,const TetNestOptions& AOptions,MetClusterStrategy AStrategy);
@@ -38,14 +39,14 @@ namespace ET {
 		protected:
 			TetClusterBuildResult _BuildTemplateClusters(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions);
 			void _AddSingleItem(const CetTNestItemVector& AOriginalItems, int AOriginalIndex, TetClusterBuildResult& AResult);
-			bool _TryMakeRightTrianglePair(const CetTNestItemVector& AOriginalItems, int AIndex, int BIndex, const TetNestOptions& AOptions, TetClusterBuildResult& AResult);
+			//bool _TryMakeRightTrianglePair(const CetTNestItemVector& AOriginalItems, int AIndex, int BIndex, const TetNestOptions& AOptions, TetClusterBuildResult& AResult);
 			bool _NearlyEqual(double A, double B, double RelTol);
 			double _GetItemWidth(const CetNestItem& AItem);
 			double _GetItemHeight(const CetNestItem& AItem);
-			bool _IsRightTriangleLike(const CetNestItem& AItem);
-			bool _IsSameSizeTrianglePair(const CetNestItem& AItem, const CetNestItem& BItem);
+			//bool _IsRightTriangleLike(const CetNestItem& AItem);
+			//bool _IsSameSizeTrianglePair(const CetNestItem& AItem, const CetNestItem& BItem);
 			CetNestItem _MakeRectangleNestItemByNestCoord(double AW, double AH);
-			double _CalcTrianglePairAxisGap(double AW, double AH, double ASpacing);
+			//double _CalcTrianglePairAxisGap(double AW, double AH, double ASpacing);
 			//void ExpandOnePackedItemToOriginalItems(std::size_t APackedIndex,const CetNestItem& APackedItem,const TetMetaItem& AMeta,CetTNestItemVector& AOutOriginalItems);
 			void _ExpandClusterChildren(const CetNestItem& PackedItem, const TetMetaItem& Meta, CetTNestItemVector& AOutOriginalItems);
 
@@ -70,6 +71,8 @@ namespace ET {
 			bool _TestEdgeOffsets(const TetEdgePairContext& ctx, const TetEdgeMatchState& state, const TetEdgeInfo& EdgeA, TetAutoPairCandidate& ABestCandidate);
 			bool _RunGridSearchAllAngles(const TetAutoPairContext& ctx, const std::vector<double>& rotations, TetAutoPairCandidate& ABestCandidate);
 			bool _EvaluateRotationPair(const TetAutoPairContext& ctx, double ARot, double BRot, TetAutoPairCandidate& ABestCandidate);
+		private:
+			//CetTriangleClusterBuilder* m_TriangleClusterBuilder = nullptr;
 		};
 	}
 }

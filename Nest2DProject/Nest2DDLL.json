@@ -10,7 +10,10 @@
     "Nest2D_PolygonBoardRepairer, Nest2D_PolygonBoardRepairer",
 	"Nest2D_ClusterManager,Nest2D_ClusterManager",
 	"Nest2D_StrategyManager,Nest2D_StrategyManager",
-	"Nest2D_Sort,Nest2D_Sort"
+	"Nest2D_Sort,Nest2D_Sort",
+	"Nest2D_ShapeAnalyzer,Nest2D_ShapeAnalyzer",
+	"Nest2D_TriangleClusterBuilder,Nest2D_TriangleClusterBuilder",
+	"Nest2D_ClusterInvokeFunctor,Nest2D_ClusterInvokeFunctor"
 	],
   "ComponentClassType": [],
   "LocalObjIns_LocalType": [ 
@@ -23,7 +26,9 @@
     "l_PolygonBoardRepairer, Nest2D_PolygonBoardRepairer",
 	"l_ClusterManager,Nest2D_ClusterManager",
 	"l_StrategyManager,Nest2D_StrategyManager",
-	"l_Sort,Nest2D_Sort"
+	"l_Sort,Nest2D_Sort",
+	"l_ShapeAnalyzer,Nest2D_ShapeAnalyzer",
+	"l_TriangleClusterBuilder,Nest2D_TriangleClusterBuilder"
   ],
   "GlobalObjIns_LocalIns": [
 	],

@@ -2,6 +2,8 @@
 #include "Nest2D_ClusterManager.h"
 #include"Nest2D_DataType.h"
 #include"NestUtils.h"
+//#include"Nest2D_TriangleClusterBuilder.h"
+#include"Nest2D_SelfFunction.h"
 #include <algorithm>
 #include <cmath>
 #include <set>
@@ -54,14 +56,19 @@ namespace ET {
                 return static_cast<long long>(std::llround(std::log(Value) / BucketBase));
             }
         }
-
+       
         CetClusterManager::CetClusterManager() :CetCoreObject()
         {
+            
         }
 
         CetClusterManager::~CetClusterManager()
         {
         }
+       /* void CetClusterManager::SetTriangleClusterBuilder(CetTriangleClusterBuilder* ATriangleBuilder)
+        {
+            m_TriangleClusterBuilder = ATriangleBuilder;
+        }*/
         TetClusterBuildResult CetClusterManager::BuildClusterItems(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, MetClusterStrategy AStrategy)
         {
             TetClusterBuildResult Result;
@@ -92,7 +99,8 @@ namespace ET {
                         if (Used[j]) {
                             continue;
                         }
-                        if (_TryMakeRightTrianglePair(AOriginalItems, i, j, AOptions, Result)) {
+                       // if (_TryMakeRightTrianglePair(AOriginalItems, i, j, AOptions, Result)) 
+                       if (Nest2DUtils->Nest2dClusterTri->TryMakeRightTrianglePair(AOriginalItems, i, j, AOptions, Result)) {
                             Used[i] = true;
                             Used[j] = true;
                             Paired = true;
@@ -183,7 +191,7 @@ namespace ET {
             AResult.MetaItems.push_back(Meta);
         }
 
-        bool CetClusterManager::_TryMakeRightTrianglePair(const CetTNestItemVector& AOriginalItems, int AIndex, int BIndex, const TetNestOptions& AOptions, TetClusterBuildResult& AResult)
+      /*  bool CetClusterManager::_TryMakeRightTrianglePair(const CetTNestItemVector& AOriginalItems, int AIndex, int BIndex, const TetNestOptions& AOptions, TetClusterBuildResult& AResult)
         {
             const auto& ItemA = AOriginalItems[AIndex];
             const auto& ItemB = AOriginalItems[BIndex];
@@ -285,7 +293,7 @@ namespace ET {
                 << std::endl;
 
             return true;
-        }
+        }*/
 
         bool CetClusterManager::_NearlyEqual(double A, double B, double RelTol)
         {
@@ -303,40 +311,40 @@ namespace ET {
             return static_cast<double>(AItem.boundingBox().height());
         }
 
-        bool CetClusterManager::_IsRightTriangleLike(const CetNestItem& AItem)
-        {
-            double W = _GetItemWidth(AItem);
-            double H = _GetItemHeight(AItem);
+        //bool CetClusterManager::_IsRightTriangleLike(const CetNestItem& AItem)
+        //{
+        //    double W = _GetItemWidth(AItem);
+        //    double H = _GetItemHeight(AItem);
 
-            if (W <= 0.0 || H <= 0.0) {
-                return false;
-            }
+        //    if (W <= 0.0 || H <= 0.0) {
+        //        return false;
+        //    }
 
-            double BoxArea = std::abs(W * H);
-            double ItemArea = std::abs(static_cast<double>(AItem.area()));
+        //    double BoxArea = std::abs(W * H);
+        //    double ItemArea = std::abs(static_cast<double>(AItem.area()));
 
-            if (ItemArea <= 0.0 || BoxArea <= 0.0) {
-                return false;
-            }
+        //    if (ItemArea <= 0.0 || BoxArea <= 0.0) {
+        //        return false;
+        //    }
 
-            double Ratio = ItemArea * 2.0 / BoxArea;
+        //    double Ratio = ItemArea * 2.0 / BoxArea;
 
-            // 直角三角形：Area ≈ W * H / 2，所以 Ratio ≈ 1
-            return std::abs(Ratio - 1.0) <= 0.08;
-        }
+        //    // 直角三角形：Area ≈ W * H / 2，所以 Ratio ≈ 1
+        //    return std::abs(Ratio - 1.0) <= 0.08;
+        //}
 
-        bool CetClusterManager::_IsSameSizeTrianglePair(const CetNestItem& AItem, const CetNestItem& BItem)
-        {
-            double WA = _GetItemWidth(AItem);
-            double HA = _GetItemHeight(AItem);
-            double WB = _GetItemWidth(BItem);
-            double HB = _GetItemHeight(BItem);
+        //bool CetClusterManager::_IsSameSizeTrianglePair(const CetNestItem& AItem, const CetNestItem& BItem)
+        //{
+        //    double WA = _GetItemWidth(AItem);
+        //    double HA = _GetItemHeight(AItem);
+        //    double WB = _GetItemWidth(BItem);
+        //    double HB = _GetItemHeight(BItem);
 
-            bool SameDirection = _NearlyEqual(WA, WB, 0.05) && _NearlyEqual(HA, HB, 0.05);
-            bool SwappedDirection = _NearlyEqual(WA, HB, 0.05) && _NearlyEqual(HA, WB, 0.05);
+        //    bool SameDirection = _NearlyEqual(WA, WB, 0.05) && _NearlyEqual(HA, HB, 0.05);
+        //    bool SwappedDirection = _NearlyEqual(WA, HB, 0.05) && _NearlyEqual(HA, WB, 0.05);
 
-            return SameDirection || SwappedDirection;
-        }
+        //    return SameDirection || SwappedDirection;
+        //}
 
         CetNestItem CetClusterManager::_MakeRectangleNestItemByNestCoord(double AW, double AH)
         {
@@ -356,18 +364,18 @@ namespace ET {
 
         }
 
-        double CetClusterManager::_CalcTrianglePairAxisGap(double AW, double AH, double ASpacing)
-        {
-            if (AW <= 0.0 || AH <= 0.0 || ASpacing <= 0.0)
-            {
-                return 0.0;
-            }
+        //double CetClusterManager::_CalcTrianglePairAxisGap(double AW, double AH, double ASpacing)
+        //{
+        //    if (AW <= 0.0 || AH <= 0.0 || ASpacing <= 0.0)
+        //    {
+        //        return 0.0;
+        //    }
 
-            double AxisGap = ASpacing * std::sqrt(AW * AW + AH * AH) / (AW + AH);
+        //    double AxisGap = ASpacing * std::sqrt(AW * AW + AH * AH) / (AW + AH);
 
-            // 因为后面会转成整数坐标，向上取整，避免实际间隙被截断变小
-            return std::ceil(AxisGap);
-        }
+        //    // 因为后面会转成整数坐标，向上取整，避免实际间隙被截断变小
+        //    return std::ceil(AxisGap);
+        //}
 
         void CetClusterManager::_ExpandClusterChildren(const CetNestItem& APackedItem, const TetMetaItem& AMeta, CetTNestItemVector& AOutOriginalItems)
         {
@@ -427,6 +435,7 @@ namespace ET {
 
         TetClusterBuildResult CetClusterManager::_BuildTemplateClusters(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions)
         {
+            CetTriangleClusterBuilder TriangleBuilder;
             TetClusterBuildResult Result;
             Result.NestItems.reserve(AOriginalItems.size());
             Result.MetaItems.reserve(AOriginalItems.size());
@@ -500,7 +509,8 @@ namespace ET {
                      * 4. 创建矩形代理
                      * 5. 写入 Meta 和子零件变换
                      */
-                    const bool Created = _TryMakeRightTrianglePair(AOriginalItems, AIndex, BIndex, AOptions, Result);
+                    const bool Created =Nest2DUtils->Nest2dClusterTri-> TryMakeRightTrianglePair(AOriginalItems, AIndex, BIndex, AOptions, Result);
+                   // const bool Created = _TryMakeRightTrianglePair(AOriginalItems, AIndex, BIndex, AOptions, Result);
                     if (Created) {
                         Used[AIndex] = true;
                         Used[BIndex] = true;

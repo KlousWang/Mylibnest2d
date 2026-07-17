@@ -15,6 +15,7 @@ namespace ET {
 			}
 			void _WrapFuncs() override {
 				CetCoreObject::_WrapFuncs();
+				_WrapFunc("AnalyzeALL", Type_Class_Func(AnalyzeALL));
 			/*	_WrapFunc("ExportSvg", Type_Class_Func(ExportSvgItems));
 				_WrapFunc("ExportSvgbd", Type_Class_Func(ExportSvg));
 				_WrapFunc("ExportSvgPackGroup", Type_Class_Func(ExportSvgPackGroup));*/

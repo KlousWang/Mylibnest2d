@@ -14,6 +14,8 @@
 #include"Nest2D_PolygonBoardRepairer.h"
 #include"Nest2D_StrategyManager.h"
 #include"Nest2D_ClusterManager.h"
+#include"Nest2D_ShapeAnalyzer.h"
+#include"Nest2D_TriangleClusterBuilder.h"
 namespace ET {
     namespace NEST2DMANAGERLIB {
 
@@ -41,6 +43,8 @@ namespace ET {
             CetPolygonBoardRepairer* Nest2DPolygonBord = nullptr;
             CetStrategyManager* Nest2DStrategy = nullptr;
             CetClusterManager* Nest2DCluster = nullptr;
+            CetShapeAnalyzer* Nest2DShape = nullptr;
+            CetTriangleClusterBuilder* Nest2dClusterTri = nullptr;
         protected:
             // »º´æµ×²ãÒýÇæµÄÖ¸Õë
 			ET::CORE::CetCoreObject* m_Engine = nullptr;
