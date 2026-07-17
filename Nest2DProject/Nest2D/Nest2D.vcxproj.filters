@@ -90,6 +90,21 @@
     <ClInclude Include="Nest2D_ClusterInvokeFunctor.h">
       <Filter>头文件\Cluster</Filter>
     </ClInclude>
+    <ClInclude Include="Nest2D_CircleClusterBuilder.h">
+      <Filter>头文件\Cluster</Filter>
+    </ClInclude>
+    <ClInclude Include="Nest2D_ClusterGeometryHelper.h">
+      <Filter>头文件\Cluster</Filter>
+    </ClInclude>
+    <ClInclude Include="Nest2D_EllipseClusterBuilder.h">
+      <Filter>头文件\Cluster</Filter>
+    </ClInclude>
+    <ClInclude Include="Nest2D_RectangleClusterBuilder.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Nest2D_ArcClusterBuilder.h">
+      <Filter>头文件\Cluster</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
@@ -153,6 +168,21 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Nest2D_ClusterInvokeFunctor.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Nest2D_CircleClusterBuilder.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Nest2D_ClusterGeometryHelper.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Nest2D_EllipseClusterBuilder.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Nest2D_RectangleClusterBuilder.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Nest2D_ArcClusterBuilder.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

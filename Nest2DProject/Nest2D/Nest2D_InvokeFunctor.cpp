@@ -41,9 +41,10 @@ namespace ET {
 		    
             Nest2DSortIns = (decltype(Nest2DSortIns))m_LibConfig->GetLocalCoreObjIns("l_Sort");
 
-            Nest2DShape = (decltype(Nest2DShape))m_LibConfig->GetLocalCoreObjIns("l_ShapeAnalyzer");
 
+            Nest2DShape = (decltype(Nest2DShape))m_LibConfig->GetLocalCoreObjIns("l_ShapeAnalyzer");
             Nest2dClusterTri = (decltype(Nest2dClusterTri))m_LibConfig->GetLocalCoreObjIns("l_TriangleClusterBuilder");
+            Nest2dClusterCircle = (decltype(Nest2dClusterCircle))m_LibConfig->GetLocalCoreObjIns("l_CircleClusterBuilder");
 
             const char* FuncName = m_LibConfig->GetClassFuncName("Nest2D_Engine", "localNest2D_Engine");
       

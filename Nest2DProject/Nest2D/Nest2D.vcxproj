@@ -164,7 +164,10 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\Third_party\clipper\clipper.hpp" />
+    <ClInclude Include="Nest2D_ArcClusterBuilder.h" />
     <ClInclude Include="Nest2D_BoardUtils.h" />
+    <ClInclude Include="Nest2D_CircleClusterBuilder.h" />
+    <ClInclude Include="Nest2D_ClusterGeometryHelper.h" />
     <ClInclude Include="Nest2D_ClusterInvokeFunctor.h" />
     <ClInclude Include="Nest2D_ClusterManager.h" />
     <ClInclude Include="Nest2D_DataType.h" />
@@ -173,10 +176,12 @@
     <ClInclude Include="framework.h" />
     <ClInclude Include="Nest2DAPI.h" />
     <ClInclude Include="Nest2D_Def.h" />
+    <ClInclude Include="Nest2D_EllipseClusterBuilder.h" />
     <ClInclude Include="Nest2D_Engine.h" />
     <ClInclude Include="Nest2D_GeometryUtils.h" />
     <ClInclude Include="Nest2D_InvokeFunctor.h" />
     <ClInclude Include="Nest2D_PolygonBoardRepairer.h" />
+    <ClInclude Include="Nest2D_RectangleClusterBuilder.h" />
     <ClInclude Include="Nest2D_SelfFunction.h" />
     <ClInclude Include="Nest2D_DataConst.h" />
     <ClInclude Include="Nest2D_Sort.h" />
@@ -199,14 +204,19 @@
     <ClCompile Include="ExportPhoto.cpp" />
     <ClCompile Include="File.cpp" />
     <ClCompile Include="Nest2DAPI.cpp" />
+    <ClCompile Include="Nest2D_ArcClusterBuilder.cpp" />
     <ClCompile Include="Nest2D_BoardUtils.cpp" />
+    <ClCompile Include="Nest2D_CircleClusterBuilder.cpp" />
+    <ClCompile Include="Nest2D_ClusterGeometryHelper.cpp" />
     <ClCompile Include="Nest2D_ClusterInvokeFunctor.cpp" />
     <ClCompile Include="Nest2D_ClusterManager.cpp" />
+    <ClCompile Include="Nest2D_EllipseClusterBuilder.cpp" />
     <ClCompile Include="Nest2D_Engine.cpp" />
     <ClCompile Include="Nest2D_GeometryUtils.cpp" />
     <ClCompile Include="Nest2D_InvokeFunctor.cpp" />
     <ClCompile Include="Nest2D_PolygonBoardRepairer.cpp" />
     <ClCompile Include="Nest2D_PrivateDataType.h" />
+    <ClCompile Include="Nest2D_RectangleClusterBuilder.cpp" />
     <ClCompile Include="Nest2D_Reg.cpp" />
     <ClCompile Include="Nest2d_Sort.cpp" />
     <ClCompile Include="Nest2D_StrategyManager.cpp" />

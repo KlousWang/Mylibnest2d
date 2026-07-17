@@ -8,8 +8,8 @@
 typedef void(*NestProgressCallback)(int current_finished, int total);
 struct TetNestPoint
 {
-	double X =0.0;
-	double Y =0.0;
+	double X = 0.0;
+	double Y = 0.0;
 };
 enum class MetNestAlignment {
 	DontAlign = 0,
@@ -68,24 +68,24 @@ struct TetNestResult
 {
 	int Code = 0;
 	std::size_t UsedBins = 0;
-	std::string Message ="";
+	std::string Message = "";
 };
 
 enum class MetClusterStrategy
 {
 	None = 0,
-	RightTrianglePair =1,
-	AutoPairCluster =2,
+	RightTrianglePair = 1,
+	AutoPairCluster = 2,
 
 	TemplateCluster = 3
 };
 
 enum class MetENestOrderStrategy
 {
-	LargeFirst=0,
-	SmallFirst =1,
-	LongSideFirst=2,
-	ThinFirst=3
+	LargeFirst = 0,
+	SmallFirst = 1,
+	LongSideFirst = 2,
+	ThinFirst = 3
 };
 
 struct TetTNestEvalResult
@@ -123,6 +123,8 @@ struct TetLocalBestResult {
 	std::size_t Layers = 0;
 	TetTNestEvalResult Eval{};
 	CetTNestItemVector Items;
+	std::vector<TetMetaItem> MetaItems;
+
 	bool HasCluster = false;
 };
 struct TetAutoPairCandidate
@@ -174,4 +176,37 @@ struct TetAutoPairContext {
 	int AIndex;
 	int BIndex;
 	const TetNestOptions& Options;
+};
+
+struct TetClusterCandidate
+{
+	bool Valid = false;
+
+	std::string ClusterType;
+	std::string BuilderName;
+
+	std::vector<int> OriginalIndices;
+	std::vector<TetItemTransform> Transforms;
+
+	// 新增：组合件实际用于排样的代理轮廓
+	CetPath ProxyContour;
+
+	// ProxyContour 是否已经平移到左下角为 0,0
+	bool ProxyContourNormalized = false;
+
+	double ClusterWidth = 0.0;
+	double ClusterHeight = 0.0;
+
+	double RealArea = 0.0;
+	double ProxyArea = 0.0;
+	double FillRatio = 0.0;
+
+	// 各子件单独包围盒面积之和
+	double BaselineArea = 0.0;
+
+	// 组合前后代理占用面积改善率
+	double AreaSavingRatio = 0.0;
+
+	double Confidence = 1.0;
+	double Score = 0.0;
 };

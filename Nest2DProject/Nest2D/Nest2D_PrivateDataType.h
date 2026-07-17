@@ -2,6 +2,7 @@
 #include "pch.h"
 #include <vector>
 #include <string>
+#include<array>
 #include <libnest2d/backends/clipper/geometries.hpp>
 #include <libnest2d/libnest2d.hpp>
 
@@ -93,24 +94,63 @@ struct TetAutoPairItemCache
 };
 
 //cluster使用
-enum class MetShapeType 
+enum class MetShapeType
 {
-    Unknown,
+    Unknown = 0,
+
     CircleLike,
     EllipseLike,
     TriangleLike,
     RectangleLike,
+    ArcLike,
+
     QuadrilateralLike,
     ConvexPolygon,
     ConcavePolygon
+};
+enum class MetTriangleSideType
+{
+    Unknown = 0,
+    Equilateral,
+    Isosceles,
+    Scalene
+};
+
+enum class MetTriangleAngleType
+{
+    Unknown = 0,
+    Acute,
+    Right,
+    Obtuse
+};
+
+enum class MetArcType
+{
+    None = 0,
+    SemiCircleLike,
+    GeneralArcLike
 };
 
 struct TetShapeFeature
 {
     int OriginalIndex = -1;
     MetShapeType ShapeType = MetShapeType::Unknown;
+
+    // 归一化后的原始轮廓。
+    // 后面的三角形、旋转矩形和弧形 Builder 都会使用。
+    CetPath NormalizedContour;
+
+    bool HasHoles = false;
+    int HoleCount = 0;
+
+    double MinX = 0.0;
+    double MinY = 0.0;
+    double MaxX = 0.0;
+    double MaxY = 0.0;
+
     double Width = 0.0;
     double Height = 0.0;
+
     double Area = 0.0;
     double BoxArea = 0.0;
 
@@ -120,6 +160,52 @@ struct TetShapeFeature
 
     int VertexCount = 0;
     bool IsConvex = false;
+
+    // ---------- 旋转矩形 ----------
+    bool IsRotatedRectangle = false;
+
+    double OrientedWidth = 0.0;
+    double OrientedHeight = 0.0;
+    double OrientedAngle = 0.0;
+    double OrientedBoxArea = 0.0;
+    double OrientedFillRatio = 0.0;
+
+    // ---------- 三角形 ----------
+    MetTriangleSideType TriangleSideType =
+        MetTriangleSideType::Unknown;
+
+    MetTriangleAngleType TriangleAngleType =
+        MetTriangleAngleType::Unknown;
+
+    // 由小到大排序后的三条边
+    std::array<double, 3> TriangleSides{};
+
+    // 对应三个顶点的角度，单位弧度
+    std::array<double, 3> TriangleAngles{};
+
+    int LongestSideIndex = -1;
+
+    // ---------- 椭圆 ----------
+    double EllipseMajorAxis = 0.0;
+    double EllipseMinorAxis = 0.0;
+    double EllipseAngle = 0.0;
+    double EllipseFitError = 1.0;
+
+    // ---------- 弧形 ----------
+    MetArcType ArcType = MetArcType::None;
+
+    ClipperLib::IntPoint ArcChordStart{};
+    ClipperLib::IntPoint ArcChordEnd{};
+    ClipperLib::IntPoint ArcCenter{};
+
+    double ArcChordLength = 0.0;
+    double ArcRadius = 0.0;
+    double ArcChordAngle = 0.0;
+    double ArcSweepAngle = 0.0;
+    double ArcFitError = 1.0;
+
+    // 弧线位于有向弦的哪一侧
+    int ArcBulgeSign = 0;
 
     std::size_t ShapeHash = 0;
 };
