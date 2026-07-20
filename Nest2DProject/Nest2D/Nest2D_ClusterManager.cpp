@@ -1,6 +1,6 @@
 #include "pch.h"
 #include "Nest2D_SelfFunction.h"
-
+#include"Nest2D_PrivateDataType.h"
 #include "Nest2D_TriangleClusterBuilder.h"
 #include "Nest2D_CircleClusterBuilder.h"
 #include "Nest2D_EllipseClusterBuilder.h"
@@ -17,50 +17,10 @@
 
 using namespace ClipperLib;
 using namespace libnest2d;
+
 namespace ET {
 	namespace NEST2DMANAGERLIB {
 		constexpr double CET_CLUSTER_PI = 3.14159265358979323846;
-
-		namespace
-		{
-			/*
-			 * 一个桶由三部分决定：
-			 * 1. 图形类型
-			 * 2. 短边尺寸桶
-			 * 3. 长边尺寸桶
-			 *
-			 * 使用短边和长边而非直接使用 Width/Height，
-			 * 是为了让旋转90度后的相同零件仍进入同一个桶。
-			 */
-			struct TetShapeBucketKey {
-				MetShapeType Type = MetShapeType::Unknown;
-				long long ShortSideBucket = 0;
-				long long LongSideBucket = 0;
-				bool operator<(const TetShapeBucketKey& Other) const {
-					const int LeftType = static_cast<int>(Type);
-					const int RightType = static_cast<int>(Other.Type);
-					if (LeftType != RightType) return LeftType < RightType;
-					if (ShortSideBucket != Other.ShortSideBucket) return ShortSideBucket < Other.ShortSideBucket;
-					return LongSideBucket < Other.LongSideBucket;
-				}
-			};
-
-			/*
-			 * 按大约1%的相对尺寸建立桶编号。
-			 * 完全相同的尺寸肯定会进入同一个桶；
-			 * 尺寸非常接近的零件大概率也会进入同一个桶。
-			 *
-			 * 注意：分桶只是快速筛选，最终是否真能组合，
-			 * 仍由 _TryMakeRightTrianglePair 做精确判断。
-			 */
-			long long MakeRelativeSizeBucket(double Value) {
-				constexpr double SizeTolerance = 0.01;
-				Value = std::max(Value, 1.0);
-				const double BucketBase = std::log1p(SizeTolerance);
-				if (BucketBase <= 0.0) return static_cast<long long>(std::llround(Value));
-				return static_cast<long long>(std::llround(std::log(Value) / BucketBase));
-			}
-		}
 
 		CetClusterManager::CetClusterManager() :CetCoreObject()
 		{
@@ -589,11 +549,10 @@ namespace ET {
 			if (EdgesA.empty() || EdgesB.empty()) return false;
 
 			double SpacingCoord = static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing));
-			TetEdgePairContext ctx = {
-				AOriginalItems, AIndex, BIndex, AOptions,
+			TetEdgePairContext ctx = {AOriginalItems, AIndex, BIndex, AOptions,
 				std::max(0.0, SpacingCoord) + std::max(2.0, SpacingCoord * 0.001),
 				std::max(1.0, std::min(std::max(_GetItemWidth(AOriginalItems[AIndex]), _GetItemHeight(AOriginalItems[AIndex])),
-									   std::max(_GetItemWidth(AOriginalItems[BIndex]), _GetItemHeight(AOriginalItems[BIndex])))),
+					std::max(_GetItemWidth(AOriginalItems[BIndex]), _GetItemHeight(AOriginalItems[BIndex])))),
 				_IsSimilarTriangleByEdges(EdgesA, EdgesB)
 			};
 
@@ -1295,65 +1254,36 @@ namespace ET {
 			);
 		}
 
-		bool CetClusterManager::_AddClusterCandidate(
-			const TetClusterCandidate& ACandidate,
-			TetClusterBuildResult& AResult)
+		bool CetClusterManager::_AddClusterCandidate(const TetClusterCandidate& ACandidate, TetClusterBuildResult& AResult)
 		{
-			if (!ACandidate.Valid) {
-				return false;
-			}
+			if (!ACandidate.Valid) { return false; }
+			if (ACandidate.OriginalIndices.empty() || ACandidate.Transforms.empty()) { return false; }
 
-			if (ACandidate.OriginalIndices.empty() ||
-				ACandidate.Transforms.empty())
-			{
-				return false;
-			}
-
-			CetNestItem ClusterItem =
-				_MakeClusterProxyItem(ACandidate);
-
-			const int PackedIndex =
-				static_cast<int>(AResult.NestItems.size());
+			CetNestItem ClusterItem = _MakeClusterProxyItem(ACandidate);
+			const int PackedIndex = static_cast<int>(AResult.NestItems.size());
 
 			AResult.NestItems.push_back(std::move(ClusterItem));
 
 			TetMetaItem Meta;
 			Meta.PackedItemIndex = PackedIndex;
 			Meta.IsCluster = true;
-			Meta.ClusterType =
-				ACandidate.ClusterType.empty()
-				? "UnknownTemplateCluster"
-				: ACandidate.ClusterType;
-
+			Meta.ClusterType = ACandidate.ClusterType.empty() ? "UnknownTemplateCluster" : ACandidate.ClusterType;
 			Meta.TransformData = ACandidate.Transforms;
 
 			AResult.MetaItems.push_back(std::move(Meta));
 
-			std::cout << "[TEMPLATE][CANDIDATE ADD] Builder="
-				<< ACandidate.BuilderName
-				<< " Type=" << ACandidate.ClusterType
-				<< " ChildCount=" << ACandidate.OriginalIndices.size()
-				<< " Width=" << ACandidate.ClusterWidth
-				<< " Height=" << ACandidate.ClusterHeight
-				<< " FillRatio=" << ACandidate.FillRatio
-				<< " Score=" << ACandidate.Score
-				<< " PackedIndex=" << PackedIndex
-				<< std::endl;
+			std::cout << "[TEMPLATE][CANDIDATE ADD] Builder=" << ACandidate.BuilderName << " Type=" << ACandidate.ClusterType << " ChildCount=" << ACandidate.OriginalIndices.size() << " Width=" << ACandidate.ClusterWidth << " Height=" << ACandidate.ClusterHeight << " FillRatio=" << ACandidate.FillRatio << " Score=" << ACandidate.Score << " PackedIndex=" << PackedIndex << std::endl;
 
 			return true;
 		}
 
-		TetClusterBuildResult CetClusterManager::_BuildAllSingles(
-			const CetTNestItemVector& AOriginalItems)
+		TetClusterBuildResult CetClusterManager::_BuildAllSingles(const CetTNestItemVector& AOriginalItems)
 		{
 			TetClusterBuildResult Result;
 			Result.NestItems.reserve(AOriginalItems.size());
 			Result.MetaItems.reserve(AOriginalItems.size());
 
-			for (int i = 0;
-				i < static_cast<int>(AOriginalItems.size());
-				++i)
-			{
+			for (int i = 0; i < static_cast<int>(AOriginalItems.size()); ++i) {
 				_AddSingleItem(AOriginalItems, i, Result);
 			}
 
@@ -1363,46 +1293,27 @@ namespace ET {
 		bool CetClusterManager::_ValidateBuildResultCoverage(const TetClusterBuildResult& AResult, int AOriginalCount)
 		{
 			if (AOriginalCount < 0) {
-				std::cout << "[TEMPLATE][COVERAGE ERROR] OriginalCount < 0."
-					<< std::endl;
+				std::cout << "[TEMPLATE][COVERAGE ERROR] OriginalCount < 0." << std::endl;
 				return false;
 			}
 
 			if (AResult.NestItems.size() != AResult.MetaItems.size()) {
-				std::cout << "[TEMPLATE][COVERAGE ERROR] NestItems.size != MetaItems.size. "
-					<< "NestItems=" << AResult.NestItems.size()
-					<< ", MetaItems=" << AResult.MetaItems.size()
-					<< std::endl;
+				std::cout << "[TEMPLATE][COVERAGE ERROR] NestItems.size != MetaItems.size. " << "NestItems=" << AResult.NestItems.size() << ", MetaItems=" << AResult.MetaItems.size() << std::endl;
 				return false;
 			}
 
-			std::vector<int> HitCount(
-				static_cast<std::size_t>(AOriginalCount),
-				0
-			);
+			std::vector<int> HitCount(static_cast<std::size_t>(AOriginalCount), 0);
 
-			for (std::size_t MetaIndex = 0;
-				MetaIndex < AResult.MetaItems.size();
-				++MetaIndex)
-			{
+			for (std::size_t MetaIndex = 0; MetaIndex < AResult.MetaItems.size(); ++MetaIndex) {
 				const TetMetaItem& Meta = AResult.MetaItems[MetaIndex];
 
-				if (Meta.PackedItemIndex < 0 ||
-					Meta.PackedItemIndex >= static_cast<int>(AResult.NestItems.size()))
-				{
-					std::cout << "[TEMPLATE][COVERAGE ERROR] Invalid PackedItemIndex. "
-						<< "MetaIndex=" << MetaIndex
-						<< ", PackedItemIndex=" << Meta.PackedItemIndex
-						<< ", NestItems.size=" << AResult.NestItems.size()
-						<< std::endl;
+				if (Meta.PackedItemIndex < 0 || Meta.PackedItemIndex >= static_cast<int>(AResult.NestItems.size())) {
+					std::cout << "[TEMPLATE][COVERAGE ERROR] Invalid PackedItemIndex. " << "MetaIndex=" << MetaIndex << ", PackedItemIndex=" << Meta.PackedItemIndex << ", NestItems.size=" << AResult.NestItems.size() << std::endl;
 					return false;
 				}
 
 				if (Meta.TransformData.empty()) {
-					std::cout << "[TEMPLATE][COVERAGE ERROR] Empty TransformData. "
-						<< "MetaIndex=" << MetaIndex
-						<< ", ClusterType=" << Meta.ClusterType
-						<< std::endl;
+					std::cout << "[TEMPLATE][COVERAGE ERROR] Empty TransformData. " << "MetaIndex=" << MetaIndex << ", ClusterType=" << Meta.ClusterType << std::endl;
 					return false;
 				}
 
@@ -1410,11 +1321,7 @@ namespace ET {
 					const int OriginalId = Transform.OriginalId;
 
 					if (OriginalId < 0 || OriginalId >= AOriginalCount) {
-						std::cout << "[TEMPLATE][COVERAGE ERROR] Invalid OriginalId. "
-							<< "MetaIndex=" << MetaIndex
-							<< ", OriginalId=" << OriginalId
-							<< ", OriginalCount=" << AOriginalCount
-							<< std::endl;
+						std::cout << "[TEMPLATE][COVERAGE ERROR] Invalid OriginalId. " << "MetaIndex=" << MetaIndex << ", OriginalId=" << OriginalId << ", OriginalCount=" << AOriginalCount << std::endl;
 						return false;
 					}
 
@@ -1424,16 +1331,14 @@ namespace ET {
 
 			for (int OriginalId = 0; OriginalId < AOriginalCount; ++OriginalId) {
 				if (HitCount[OriginalId] != 1) {
-					std::cout << "[TEMPLATE][COVERAGE ERROR] Original item coverage invalid. "
-						<< "OriginalId=" << OriginalId
-						<< ", HitCount=" << HitCount[OriginalId]
-						<< std::endl;
+					std::cout << "[TEMPLATE][COVERAGE ERROR] Original item coverage invalid. " << "OriginalId=" << OriginalId << ", HitCount=" << HitCount[OriginalId] << std::endl;
 					return false;
 				}
 			}
 
 			return true;
 		}
+
 
 	}
 }

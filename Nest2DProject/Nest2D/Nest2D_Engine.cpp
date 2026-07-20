@@ -411,14 +411,6 @@ namespace ET {
 			TetLocalBestResult LocalBest;
 
 			const bool UsePolygonBoard = AOptions.Board.Enabled && AOptions.Board.Vertices.size() >= 3;
-			// 定义要测试的所有排序策略
-			std::vector<MetENestOrderStrategy> Strategies = {
-				MetENestOrderStrategy::LargeFirst,
-				MetENestOrderStrategy::SmallFirst,
-				MetENestOrderStrategy::LongSideFirst,
-				MetENestOrderStrategy::ThinFirst
-			};
-
 			// 检查当前的 Cluster 结果中是否真的包含组合件
 			bool CurrentHasCluster = false;
 			for (const auto& Meta : AClusterResult.MetaItems) {
@@ -427,11 +419,27 @@ namespace ET {
 					break;
 				}
 			}
+			// 有组合件时，不能随便排序 NestItems。
+	        // 因为 NestItems 和 MetaItems 是一一对应关系，
+	        // 如果只排序 NestItems，不同步排序 MetaItems，后面展开会错位。
+			std::vector<MetENestOrderStrategy> Strategies;
+
+			if (CurrentHasCluster) {
+				Strategies = { MetENestOrderStrategy::LargeFirst };
+			}
+			else {
+				Strategies = {
+					MetENestOrderStrategy::LargeFirst,
+					MetENestOrderStrategy::SmallFirst,
+					MetENestOrderStrategy::LongSideFirst,
+					MetENestOrderStrategy::ThinFirst
+				};
+			}
+		
 			// 遍历所有排序策略打擂台
 			for (MetENestOrderStrategy Strategy : Strategies) {
 				// 准备测试数据（拷贝一份，避免相互污染）
 				CetTNestItemVector TestItems = AClusterResult.NestItems;
-
 				//  应用排序策略
 				Nest2DUtils->Nest2DStrategy->ApplyNestPriorityStrategy(TestItems, Strategy);
 				// 执行单次排版（调用底层引擎）

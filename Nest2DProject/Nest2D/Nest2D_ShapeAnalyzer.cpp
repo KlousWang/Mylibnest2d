@@ -203,173 +203,22 @@ namespace ET {
                 return;
             }
 
-            if (!AFeature.IsConvex) {
-                return;
-            }
-
-            // 半圆通常由一条直径边 + 多段圆弧边组成。
-            // 顶点太少时不要强行识别，否则容易把普通多边形误判为半圆。
             if (AContour.size() < 5) {
                 return;
             }
-
-            const std::size_t Count = AContour.size();
-
-            // 1. 找最长边，作为半圆的直径弦候选。
-            std::size_t ChordStartIndex = 0;
-            std::size_t ChordEndIndex = 1;
-            double MaxEdgeLength = 0.0;
-
-            for (std::size_t i = 0; i < Count; ++i) {
-                const std::size_t NextIndex = (i + 1) % Count;
-                const double Length = _Distance(AContour[i], AContour[NextIndex]);
-
-                if (Length > MaxEdgeLength) {
-                    MaxEdgeLength = Length;
-                    ChordStartIndex = i;
-                    ChordEndIndex = NextIndex;
-                }
-            }
-
-            if (MaxEdgeLength <= CET_SHAPE_EPSILON) {
+            /*
+             * 厚度半圆弧通常是凹多边形。
+             * 例如 radius=20, thickness=4, start=0, end=180。
+             */
+            if (!AFeature.IsConvex) {
+                _AnalyzeThickArcFeature(AContour, AFeature);
                 return;
             }
 
-            const ClipperLib::IntPoint& ChordStart = AContour[ChordStartIndex];
-            const ClipperLib::IntPoint& ChordEnd = AContour[ChordEndIndex];
-
-            const double ChordDX = static_cast<double>(ChordEnd.X - ChordStart.X);
-            const double ChordDY = static_cast<double>(ChordEnd.Y - ChordStart.Y);
-            const double ChordLength = std::hypot(ChordDX, ChordDY);
-
-            if (ChordLength <= CET_SHAPE_EPSILON) {
-                return;
-            }
-
-            const double Radius = ChordLength * 0.5;
-
-            if (Radius <= CET_SHAPE_EPSILON) {
-                return;
-            }
-
-            // 2. 半圆的直径边应该是轮廓里非常明显的最长边。
-            // 如果最长边并不明显，说明它更可能是普通多边形或椭圆离散边。
-            double SecondMaxEdgeLength = 0.0;
-
-            for (std::size_t i = 0; i < Count; ++i) {
-                const std::size_t NextIndex = (i + 1) % Count;
-
-                if (i == ChordStartIndex) {
-                    continue;
-                }
-
-                const double Length = _Distance(AContour[i], AContour[NextIndex]);
-                SecondMaxEdgeLength = std::max(SecondMaxEdgeLength, Length);
-            }
-
-            if (SecondMaxEdgeLength > 0.0 &&
-                ChordLength < SecondMaxEdgeLength * 1.8) {
-                return;
-            }
-
-            // 3. 半圆中心近似为直径中点。
-            const double CenterX = (static_cast<double>(ChordStart.X) + static_cast<double>(ChordEnd.X)) * 0.5;
-            const double CenterY = (static_cast<double>(ChordStart.Y) + static_cast<double>(ChordEnd.Y)) * 0.5;
-
-            int PositiveSideCount = 0;
-            int NegativeSideCount = 0;
-
-            double MaxRadiusError = 0.0;
-            double SumRadiusError = 0.0;
-            int ArcPointCount = 0;
-
-            for (std::size_t i = 0; i < Count; ++i) {
-                if (i == ChordStartIndex || i == ChordEndIndex) {
-                    continue;
-                }
-
-                const ClipperLib::IntPoint& Point = AContour[i];
-
-                const double PX = static_cast<double>(Point.X);
-                const double PY = static_cast<double>(Point.Y);
-
-                const double CrossValue =
-                    ChordDX * (PY - static_cast<double>(ChordStart.Y)) -
-                    ChordDY * (PX - static_cast<double>(ChordStart.X));
-
-                const double CrossTolerance =
-                    std::max(1.0, ChordLength) * 0.001;
-
-                if (CrossValue > CrossTolerance) {
-                    ++PositiveSideCount;
-                }
-                else if (CrossValue < -CrossTolerance) {
-                    ++NegativeSideCount;
-                }
-
-                const double DistanceToCenter =std::hypot(PX - CenterX, PY - CenterY);
-
-                const double RadiusError =std::abs(DistanceToCenter - Radius) /std::max(1.0, Radius);
-
-                MaxRadiusError = std::max(MaxRadiusError, RadiusError);
-                SumRadiusError += RadiusError;
-                ++ArcPointCount;
-            }
-
-            if (ArcPointCount <= 0) {
-                return;
-            }
-
-            // 圆弧点必须基本在直径边同一侧。
-            if (PositiveSideCount > 0 && NegativeSideCount > 0) {
-                return;
-            }
-            const int BulgeSign =PositiveSideCount >= NegativeSideCount ? 1 : -1;
-            const double AverageRadiusError =SumRadiusError / static_cast<double>(ArcPointCount);
-
-            // 第一阶段容差可以稍微宽一些，避免 CAD 离散误差导致识别失败。
-            if (AverageRadiusError > 0.12 || MaxRadiusError > 0.25) {
-                return;
-            }
-
-            // 4. 面积接近半圆面积。
-            const double ExpectedArea =0.5 * CET_SHAPE_PI * Radius * Radius;
-
-            if (ExpectedArea <= CET_SHAPE_EPSILON) {
-                return;
-            }
-
-            const double AreaError =
-                std::abs(AFeature.Area - ExpectedArea) /
-                std::max(1.0, ExpectedArea);
-
-            if (AreaError > 0.25) {
-                return;
-            }
-
-            AFeature.ArcType = MetArcType::SemiCircleLike;
-            AFeature.ArcChordStart = ChordStart;
-            AFeature.ArcChordEnd = ChordEnd;
-
-            AFeature.ArcCenter = ClipperLib::IntPoint(
-                static_cast<ClipperLib::cInt>(std::llround(CenterX)),
-                static_cast<ClipperLib::cInt>(std::llround(CenterY))
-            );
-
-            AFeature.ArcChordLength = ChordLength;
-            AFeature.ArcRadius = Radius;
-            AFeature.ArcChordAngle = std::atan2(ChordDY, ChordDX);
-            AFeature.ArcSweepAngle = CET_SHAPE_PI;
-            AFeature.ArcBulgeSign = BulgeSign;
-
-            AFeature.ArcFitError =std::max(AverageRadiusError, AreaError);
-
-            std::cout << "[SHAPE][ARC] Index=" << AFeature.OriginalIndex
-                << " Radius=" << AFeature.ArcRadius
-                << " Chord=" << AFeature.ArcChordLength
-                << " FitError=" << AFeature.ArcFitError
-                << " BulgeSign=" << AFeature.ArcBulgeSign
-                << std::endl;
+            /*
+             * 凸图形继续走原来的实心半圆识别逻辑。
+             */
+            _AnalyzeSolidArcFeature(AContour, AFeature);
         }
 
         void CetShapeAnalyzer::_AnalyzeEllipseFeature(const CetPath& AContour, TetShapeFeature& AFeature)
@@ -587,6 +436,312 @@ namespace ET {
                 Clean = std::move(Result);
             }
             APath = std::move(Clean);
+        }
+        bool CetShapeAnalyzer::_AnalyzeThickArcFeature(const CetPath& AContour, TetShapeFeature& AFeature)
+        {
+            if (AFeature.HasHoles) { return false; }
+            if (AFeature.IsConvex) { return false; }
+            if (AContour.size() < 5) { return false; }
+
+            if (AFeature.Width <= CET_SHAPE_EPSILON || AFeature.Height <= CET_SHAPE_EPSILON || AFeature.Area <= CET_SHAPE_EPSILON) { return false; }
+ 
+            if (AFeature.AspectRatio < 1.40 || AFeature.AspectRatio > 2.60) { return false; }
+            if (AFeature.FillRatio < 0.10 || AFeature.FillRatio > 0.55) { return false; }
+            const std::size_t Count = AContour.size();
+
+            TetArcCandidateLocal BestCandidate;
+
+            auto TryCandidate = [&](double ACenterX, double ACenterY, double AOuterRadius, bool AHorizontal, int ASideSign, double AChordAngle, ClipperLib::IntPoint AChordStart, ClipperLib::IntPoint AChordEnd) {
+                if (AOuterRadius <= CET_SHAPE_EPSILON) { return; }
+
+                /*
+                 * 半圆环面积：
+                 * Area = 0.5 * pi * (OuterR^2 - InnerR^2)
+                 * 这里通过当前轮廓面积反推出 InnerRadius。
+                 */
+                const double InnerRadiusSquared = AOuterRadius * AOuterRadius - 2.0 * AFeature.Area / CET_SHAPE_PI;
+
+                if (InnerRadiusSquared <= CET_SHAPE_EPSILON || InnerRadiusSquared >= AOuterRadius * AOuterRadius) { return; }
+
+                const double InnerRadius = std::sqrt(InnerRadiusSquared);
+                const double Thickness = AOuterRadius - InnerRadius;
+
+                if (Thickness <= CET_SHAPE_EPSILON) { return; }
+
+                /*
+                 * 厚度不能太薄，也不能太厚。
+                 * 太薄可能是离散误差；
+                 * 太厚可能不是半圆弧，而是普通凹多边形。
+                 */
+                if (Thickness < AOuterRadius * 0.02 || Thickness > AOuterRadius * 0.80) { return; }
+
+                int OuterPointCount = 0;
+                int InnerPointCount = 0;
+                int BadSideCount = 0;
+
+                double SumError = 0.0;
+                double MaxError = 0.0;
+
+                const double SideTolerance = std::max(1.0, AOuterRadius) * 0.02;
+
+                for (const auto& Point : AContour) {
+                    const double PX = static_cast<double>(Point.X);
+                    const double PY = static_cast<double>(Point.Y);
+
+                    /*
+                     * 半圆弧点应该基本位于圆心的一侧。
+                     *
+                     * 水平半圆：
+                     *   上半圆：PY >= CenterY
+                     *   下半圆：PY <= CenterY
+                     *
+                     * 垂直半圆：
+                     *   右半圆：PX >= CenterX
+                     *   左半圆：PX <= CenterX
+                     */
+                    double SideValue = 0.0;
+
+                    if (AHorizontal) {
+                        SideValue = ASideSign * (PY - ACenterY);
+                    }
+                    else {
+                        SideValue = ASideSign * (PX - ACenterX);
+                    }
+
+                    if (SideValue < -SideTolerance) { ++BadSideCount; }
+
+                    const double DistanceToCenter = std::hypot(PX - ACenterX, PY - ACenterY);
+                    const double OuterError = std::abs(DistanceToCenter - AOuterRadius);
+                    const double InnerError = std::abs(DistanceToCenter - InnerRadius);
+                    const double CurrentError = std::min(OuterError, InnerError) / std::max(1.0, AOuterRadius);
+
+                    if (OuterError <= InnerError) {
+                        ++OuterPointCount;
+                    }
+                    else {
+                        ++InnerPointCount;
+                    }
+
+                    SumError += CurrentError;
+                    MaxError = std::max(MaxError, CurrentError);
+                }
+
+                if (OuterPointCount < 3 || InnerPointCount < 3) { return; }
+
+                const int MaxBadSideCount = static_cast<int>(std::ceil(static_cast<double>(Count) * 0.10));
+
+                if (BadSideCount > MaxBadSideCount) { return; }
+
+                const double AverageError = SumError / static_cast<double>(Count);
+
+                /*
+                 * 当前测试数据 FitError 大概是 0.00016，
+                 * 所以这里 0.05 已经比较宽松。
+                 */
+                if (AverageError > 0.05 || MaxError > 0.15) { return; }
+
+                if (!BestCandidate.Valid || AverageError < BestCandidate.FitError) {
+                    BestCandidate.Valid = true;
+                    BestCandidate.CenterX = ACenterX;
+                    BestCandidate.CenterY = ACenterY;
+                    BestCandidate.OuterRadius = AOuterRadius;
+                    BestCandidate.InnerRadius = InnerRadius;
+                    BestCandidate.FitError = AverageError;
+                    BestCandidate.ChordAngle = AChordAngle;
+                    BestCandidate.BulgeSign = ASideSign;
+                    BestCandidate.ChordStart = AChordStart;
+                    BestCandidate.ChordEnd = AChordEnd;
+                }
+                };
+
+            const double MinX = AFeature.MinX;
+            const double MaxX = AFeature.MaxX;
+            const double MinY = AFeature.MinY;
+            const double MaxY = AFeature.MaxY;
+            const double Width = AFeature.Width;
+            const double Height = AFeature.Height;
+            const double CenterX = (MinX + MaxX) * 0.5;
+            const double CenterY = (MinY + MaxY) * 0.5;
+
+            /*
+             * 水平方向半圆弧：
+             * Width 约等于 2 * OuterRadius
+             * Height 约等于 OuterRadius
+             */
+            if (Width >= Height * 1.40) {
+                const double OuterRadius = Width * 0.5;
+                // 上半圆：圆心在下边界附近。
+                TryCandidate(CenterX, MinY, OuterRadius, true, 1, 0.0,
+                    ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(CenterX - OuterRadius)), static_cast<ClipperLib::cInt>(std::llround(MinY))),
+                    ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(CenterX + OuterRadius)), static_cast<ClipperLib::cInt>(std::llround(MinY)))
+                );
+                // 下半圆：圆心在上边界附近。
+                TryCandidate(CenterX, MaxY, OuterRadius, true, -1, 0.0,
+                    ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(CenterX - OuterRadius)), static_cast<ClipperLib::cInt>(std::llround(MaxY))),
+                    ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(CenterX + OuterRadius)), static_cast<ClipperLib::cInt>(std::llround(MaxY)))
+                );
+            }
+
+            /*
+             * 垂直方向半圆弧：
+             * Height 约等于 2 * OuterRadius
+             * Width 约等于 OuterRadius
+             */
+            if (Height >= Width * 1.40) {
+                const double OuterRadius = Height * 0.5;
+
+                // 右半圆：圆心在左边界附近。
+                TryCandidate(MinX, CenterY, OuterRadius, false, 1, CET_SHAPE_PI * 0.5,
+                    ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(MinX)), static_cast<ClipperLib::cInt>(std::llround(CenterY - OuterRadius))),
+                    ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(MinX)), static_cast<ClipperLib::cInt>(std::llround(CenterY + OuterRadius)))
+                );
+                // 左半圆：圆心在右边界附近。
+                TryCandidate(MaxX, CenterY, OuterRadius, false, -1, CET_SHAPE_PI * 0.5,
+                    ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(MaxX)), static_cast<ClipperLib::cInt>(std::llround(CenterY - OuterRadius))),
+                    ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(MaxX)), static_cast<ClipperLib::cInt>(std::llround(CenterY + OuterRadius)))
+                );
+            }
+            if (!BestCandidate.Valid) { return false; }
+            AFeature.ArcType = MetArcType::SemiCircleLike;
+            AFeature.ArcCenter = ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(BestCandidate.CenterX)), static_cast<ClipperLib::cInt>(std::llround(BestCandidate.CenterY)));
+            AFeature.ArcRadius = BestCandidate.OuterRadius;
+            AFeature.ArcChordLength = BestCandidate.OuterRadius * 2.0;
+            AFeature.ArcChordAngle = BestCandidate.ChordAngle;
+            AFeature.ArcSweepAngle = CET_SHAPE_PI;
+            AFeature.ArcBulgeSign = BestCandidate.BulgeSign;
+            AFeature.ArcFitError = BestCandidate.FitError;
+            AFeature.ArcChordStart = BestCandidate.ChordStart;
+            AFeature.ArcChordEnd = BestCandidate.ChordEnd;
+
+            std::cout << "[SHAPE][ARC][THICK] Index=" << AFeature.OriginalIndex << " OuterRadius=" << AFeature.ArcRadius << " InnerRadius=" << BestCandidate.InnerRadius << " Chord=" << AFeature.ArcChordLength << " FitError=" << AFeature.ArcFitError << " BulgeSign=" << AFeature.ArcBulgeSign << std::endl;
+
+            return true;
+        }
+
+        bool CetShapeAnalyzer::_AnalyzeSolidArcFeature(const CetPath& AContour, TetShapeFeature& AFeature)
+        {
+            if (AFeature.HasHoles) { return false; }
+            if (!AFeature.IsConvex) { return false; }
+            if (AContour.size() < 5) { return false; }
+
+            const std::size_t Count = AContour.size();
+
+            // 1. 找最长边，作为半圆的直径弦候选。
+            std::size_t ChordStartIndex = 0;
+            std::size_t ChordEndIndex = 1;
+            double MaxEdgeLength = 0.0;
+
+            for (std::size_t i = 0; i < Count; ++i) {
+                const std::size_t NextIndex = (i + 1) % Count;
+                const double Length = _Distance(AContour[i], AContour[NextIndex]);
+                if (Length > MaxEdgeLength) {
+                    MaxEdgeLength = Length;
+                    ChordStartIndex = i;
+                    ChordEndIndex = NextIndex;
+                }
+            }
+
+            if (MaxEdgeLength <= CET_SHAPE_EPSILON) { return false; }
+
+            const ClipperLib::IntPoint& ChordStart = AContour[ChordStartIndex];
+            const ClipperLib::IntPoint& ChordEnd = AContour[ChordEndIndex];
+
+            const double ChordDX = static_cast<double>(ChordEnd.X - ChordStart.X);
+            const double ChordDY = static_cast<double>(ChordEnd.Y - ChordStart.Y);
+            const double ChordLength = std::hypot(ChordDX, ChordDY);
+
+            if (ChordLength <= CET_SHAPE_EPSILON) { return false; }
+
+            const double Radius = ChordLength * 0.5;
+
+            if (Radius <= CET_SHAPE_EPSILON) { return false; }
+
+            // 2. 半圆的直径边应该是轮廓里非常明显的最长边。
+            // 如果最长边并不明显，说明它更可能是普通多边形或椭圆离散边。
+            double SecondMaxEdgeLength = 0.0;
+
+            for (std::size_t i = 0; i < Count; ++i) {
+                const std::size_t NextIndex = (i + 1) % Count;
+                if (i == ChordStartIndex) { continue; }
+                const double Length = _Distance(AContour[i], AContour[NextIndex]);
+                SecondMaxEdgeLength = std::max(SecondMaxEdgeLength, Length);
+            }
+
+            if (SecondMaxEdgeLength > 0.0 && ChordLength < SecondMaxEdgeLength * 1.8) { return false; }
+
+            // 3. 半圆中心近似为直径中点。
+            const double CenterX = (static_cast<double>(ChordStart.X) + static_cast<double>(ChordEnd.X)) * 0.5;
+            const double CenterY = (static_cast<double>(ChordStart.Y) + static_cast<double>(ChordEnd.Y)) * 0.5;
+
+            int PositiveSideCount = 0;
+            int NegativeSideCount = 0;
+
+            double MaxRadiusError = 0.0;
+            double SumRadiusError = 0.0;
+            int ArcPointCount = 0;
+
+            for (std::size_t i = 0; i < Count; ++i) {
+                if (i == ChordStartIndex || i == ChordEndIndex) { continue; }
+
+                const ClipperLib::IntPoint& Point = AContour[i];
+                const double PX = static_cast<double>(Point.X);
+                const double PY = static_cast<double>(Point.Y);
+
+                const double CrossValue = ChordDX * (PY - static_cast<double>(ChordStart.Y)) - ChordDY * (PX - static_cast<double>(ChordStart.X));
+                const double CrossTolerance = std::max(1.0, ChordLength) * 0.001;
+
+                if (CrossValue > CrossTolerance) {
+                    ++PositiveSideCount;
+                }
+                else if (CrossValue < -CrossTolerance) {
+                    ++NegativeSideCount;
+                }
+
+                const double DistanceToCenter = std::hypot(PX - CenterX, PY - CenterY);
+                const double RadiusError = std::abs(DistanceToCenter - Radius) / std::max(1.0, Radius);
+
+                MaxRadiusError = std::max(MaxRadiusError, RadiusError);
+                SumRadiusError += RadiusError;
+                ++ArcPointCount;
+            }
+
+            if (ArcPointCount <= 0) { return false; }
+
+            // 圆弧点必须基本在直径边同一侧。
+            if (PositiveSideCount > 0 && NegativeSideCount > 0) { return false; }
+
+            const int BulgeSign = PositiveSideCount >= NegativeSideCount ? 1 : -1;
+            const double AverageRadiusError = SumRadiusError / static_cast<double>(ArcPointCount);
+
+            // 第一阶段容差可以稍微宽一些，避免 CAD 离散误差导致识别失败。
+            if (AverageRadiusError > 0.12 || MaxRadiusError > 0.25) { return false; }
+
+            // 4. 面积接近半圆面积。
+            const double ExpectedArea = 0.5 * CET_SHAPE_PI * Radius * Radius;
+
+            if (ExpectedArea <= CET_SHAPE_EPSILON) { return false; }
+
+            const double AreaError = std::abs(AFeature.Area - ExpectedArea) / std::max(1.0, ExpectedArea);
+
+            if (AreaError > 0.25) { return false; }
+
+            AFeature.ArcType = MetArcType::SemiCircleLike;
+            AFeature.ArcChordStart = ChordStart;
+            AFeature.ArcChordEnd = ChordEnd;
+
+            AFeature.ArcCenter = ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(CenterX)), static_cast<ClipperLib::cInt>(std::llround(CenterY)));
+
+            AFeature.ArcChordLength = ChordLength;
+            AFeature.ArcRadius = Radius;
+            AFeature.ArcChordAngle = std::atan2(ChordDY, ChordDX);
+            AFeature.ArcSweepAngle = CET_SHAPE_PI;
+            AFeature.ArcBulgeSign = BulgeSign;
+
+            AFeature.ArcFitError = std::max(AverageRadiusError, AreaError);
+
+            std::cout << "[SHAPE][ARC] Index=" << AFeature.OriginalIndex << " Radius=" << AFeature.ArcRadius << " Chord=" << AFeature.ArcChordLength << " FitError=" << AFeature.ArcFitError << " BulgeSign=" << AFeature.ArcBulgeSign << std::endl;
+
+            return true;
         }
       /*  MetShapeType CetShapeAnalyzer::_ClassifyShape(const TetShapeFeature& AFeature, bool AHasHoles)
         {

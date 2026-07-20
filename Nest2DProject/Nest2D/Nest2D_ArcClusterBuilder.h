@@ -17,7 +17,7 @@ namespace ET {
             CetArcClusterBuilder();
             ~CetArcClusterBuilder();
 
-            // 统一替换为以大写 A 开头的传参名
+        public:
             void BuildCandidates(const CetTNestItemVector& AItems,const std::vector<TetShapeFeature>& AFeatures,const std::vector<int>& AIndices,const TetNestOptions& AOptions,std::vector<TetClusterCandidate>& AOut);
         };
 

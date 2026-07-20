@@ -108,6 +108,41 @@ enum class MetShapeType
     ConvexPolygon,
     ConcavePolygon
 };
+struct TetShapeBucketKey {
+    MetShapeType Type = MetShapeType::Unknown;
+    long long ShortSideBucket = 0;
+    long long LongSideBucket = 0;
+    bool operator<(const TetShapeBucketKey& Other) const {
+        const int LeftType = static_cast<int>(Type);
+        const int RightType = static_cast<int>(Other.Type);
+        if (LeftType != RightType) return LeftType < RightType;
+        if (ShortSideBucket != Other.ShortSideBucket) return ShortSideBucket < Other.ShortSideBucket;
+        return LongSideBucket < Other.LongSideBucket;
+    }
+};
+struct TetArcCandidateLocal
+{
+    bool Valid = false;
+    double CenterX = 0.0;
+    double CenterY = 0.0;
+    double OuterRadius = 0.0;
+    double InnerRadius = 0.0;
+    double FitError = 1.0;
+    double ChordAngle = 0.0;
+    int BulgeSign = 0;
+    ClipperLib::IntPoint ChordStart;
+    ClipperLib::IntPoint ChordEnd;
+};
+
+struct TetRectanglePose
+{
+    double Rotation = 0.0;
+    double MinX = 0.0;
+    double MinY = 0.0;
+    double Width = 0.0;
+    double Height = 0.0;
+};
+
 enum class MetTriangleSideType
 {
     Unknown = 0,

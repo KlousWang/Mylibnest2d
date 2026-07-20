@@ -17,6 +17,7 @@ namespace ET {
         public:
             CetShapeAnalyzer();
             ~CetShapeAnalyzer();
+        public:
             std::vector<TetShapeFeature> AnalyzeALL(const CetTNestItemVector& AItems);
         protected:
             TetShapeFeature _AnalyzeOne(const CetNestItem& AItem, int AOriginalIndex);
@@ -29,7 +30,9 @@ namespace ET {
             double _AngleAtVertex(const ClipperLib::IntPoint& APrevious,const ClipperLib::IntPoint& ACurrent,const ClipperLib::IntPoint& ANext);
             double _CalculatePerimeter(const CetPath& AContour);
             bool _IsConvex(const CetPath& AContour);
-            void _NormalizePath(CetPath& APath);
+            void _NormalizePath(CetPath& APath);        
+            bool _AnalyzeThickArcFeature(const CetPath& AContour,TetShapeFeature& AFeature);
+            bool _AnalyzeSolidArcFeature(const CetPath& AContour,TetShapeFeature& AFeature);
         };
 
     }

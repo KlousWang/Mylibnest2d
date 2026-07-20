@@ -126,53 +126,69 @@ namespace ET {
 
         bool CetClusterGeometryHelper::_ValidateChildSpacing(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const TetClusterCandidate& ACandidate) const 
         {
-			/*
-	* 第一阶段安全策略：
-	* 这里只检查子件之间是否真实重叠。
-	*
-	* 不在这里强制扩大 Spacing。
-	* 原因：
-	* 1. 三角形、半圆等组合候选可能本身就是贴边构造；
-	* 2. 过早使用 inflation 检查，容易把所有候选都拒绝；
-	* 3. 外层排样时组合件之间仍然会按组合件代理轮廓和全局 Spacing 排。
-	*
-	* 后续第二阶段如果要严格保证组合件内部也有 Spacing，
-	* 再单独实现更精确的 Offset/Clipper 距离检测。
-	*/
+            /*
+               * 将用户输入的实际单位转换为 libnest2d 内部坐标。
+               *
+               * 例如：
+               * AOptions.Spacing = 1 mm
+               * 转换后可能为 1000000 个内部坐标单位。
+               */
+            const double SpacingCoord = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
 
-			for (std::size_t i = 0; i < ACandidate.Transforms.size(); ++i) {
-				const auto& TransformA = ACandidate.Transforms[i];
-
+            for (std::size_t i = 0; i < ACandidate.Transforms.size(); ++i) {
+                const auto& TransformA = ACandidate.Transforms[i];
                 CetNestItem ItemA = AOriginalItems[TransformA.OriginalId];
 
-                ItemA.translation(libnest2d::Point(
-                    static_cast<ClipperLib::cInt>(std::llround(TransformA.RelativeX)),
-                    static_cast<ClipperLib::cInt>(std::llround(TransformA.RelativeY))
-                ));
-
+                /*
+                 * 恢复子件 A 在组合件局部坐标系中的位置和旋转。
+                 */
+                ItemA.translation(libnest2d::Point(static_cast<ClipperLib::cInt>(std::llround(TransformA.RelativeX)), static_cast<ClipperLib::cInt>(std::llround(TransformA.RelativeY))));
                 ItemA.rotation(libnest2d::Radians(TransformA.RelativeRotation));
+
+                /*
+                 * 原始碰撞检查必须先清除零件原有 inflation，
+                 * 防止外部排样配置影响组合件内部校验。
+                 */
                 ItemA.inflation(0);
 
                 for (std::size_t j = i + 1; j < ACandidate.Transforms.size(); ++j) {
                     const auto& TransformB = ACandidate.Transforms[j];
-
                     CetNestItem ItemB = AOriginalItems[TransformB.OriginalId];
 
-                    ItemB.translation(libnest2d::Point(
-                        static_cast<ClipperLib::cInt>(std::llround(TransformB.RelativeX)),
-                        static_cast<ClipperLib::cInt>(std::llround(TransformB.RelativeY))
-                    ));
-
+                    /*
+                     * 恢复子件 B 在组合件局部坐标系中的位置和旋转。
+                     */
+                    ItemB.translation(libnest2d::Point(static_cast<ClipperLib::cInt>(std::llround(TransformB.RelativeX)), static_cast<ClipperLib::cInt>(std::llround(TransformB.RelativeY))));
                     ItemB.rotation(libnest2d::Radians(TransformB.RelativeRotation));
                     ItemB.inflation(0);
 
-                    if (CetNestItem::intersects(ItemA, ItemB)) {
-                        std::cout << "[GEOMETRY][REJECT] Child intersects. "
-                            << "A=" << TransformA.OriginalId
-                            << ", B=" << TransformB.OriginalId
-                            << std::endl;
+                    if (SpacingCoord > 0.0) {
+                        /*
+                         * 将 A 向外膨胀完整的 Spacing。
+                         *
+                         * 如果膨胀后的 A 与 B 相交，
+                         * 说明原始 A、B 之间的距离小于 Spacing。
+                         *
+                         * 只膨胀 A 即可，不需要 A、B 各膨胀一半。
+                         */
+                        CetNestItem InflatedItemA = ItemA;
+                        const auto OriginalInflation = InflatedItemA.inflation();
+                        InflatedItemA.inflation(static_cast<decltype(OriginalInflation)>(SpacingCoord));
 
-                        return false;
+                        if (CetNestItem::intersects(InflatedItemA, ItemB)) {
+                            std::cout << "[GEOMETRY][REJECT] Child spacing violation. A=" << TransformA.OriginalId << ", B=" << TransformB.OriginalId << ", RequiredSpacing=" << AOptions.Spacing << ", SpacingCoord=" << SpacingCoord << std::endl;
+                            return false;
+                        }
+                    }
+                    else {
+                        /*
+                         * Spacing == 0 时不进行轮廓膨胀，
+                         * 只禁止两个零件发生实体重叠。
+                         */
+                        if (CetNestItem::intersects(ItemA, ItemB)) {
+                            std::cout << "[GEOMETRY][REJECT] Child intersects. A=" << TransformA.OriginalId << ", B=" << TransformB.OriginalId << std::endl;
+                            return false;
+                        }
                     }
                 }
             }

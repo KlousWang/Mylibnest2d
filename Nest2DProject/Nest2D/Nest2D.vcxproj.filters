@@ -99,10 +99,10 @@
     <ClInclude Include="Nest2D_EllipseClusterBuilder.h">
       <Filter>头文件\Cluster</Filter>
     </ClInclude>
-    <ClInclude Include="Nest2D_RectangleClusterBuilder.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="Nest2D_ArcClusterBuilder.h">
+      <Filter>头文件\Cluster</Filter>
+    </ClInclude>
+    <ClInclude Include="Nest2D_RectangleClusterBuilder.h">
       <Filter>头文件\Cluster</Filter>
     </ClInclude>
   </ItemGroup>

@@ -15,7 +15,6 @@ namespace ET {
             CetEllipseClusterBuilder();
             ~CetEllipseClusterBuilder();
 
-            // 修改了这里的传参命名
             void BuildCandidates(const CetTNestItemVector& AItems,const std::vector<TetShapeFeature>& AFeatures,const std::vector<int>& AIndices,const TetNestOptions& AOptions,std::vector<TetClusterCandidate>& AOut);
         };
 

@@ -3,6 +3,7 @@
 #include "Nest2D_ClusterGeometryHelper.h"
 #include "NestUtils.h"
 #include <algorithm>
+#include <iostream>
 #include <cmath>
 
 namespace ET {
@@ -19,8 +20,9 @@ namespace ET {
             if (AItems.size() != AFeatures.size()) return;
 
             CetClusterGeometryHelper Geometry;
-            const double Gap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
-
+            const double RequiredGap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
+            const double SafetyGap =RequiredGap > 0.0? std::max(10.0, RequiredGap * 0.001): 0.0;
+            const double Gap = RequiredGap + SafetyGap;
             // lambda 表达式参数去除单字母
             auto Nearly = [](double ValA, double ValB, double Tolerance) {
                 return std::abs(ValA - ValB) <= std::max(1.0, std::max(std::abs(ValA), std::abs(ValB))) * Tolerance;
