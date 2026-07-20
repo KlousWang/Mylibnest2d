@@ -112,7 +112,10 @@ namespace ET {
 
             const double CellWidth = std::max(FeatureA.Width, FeatureB.Width);
             const double CellHeight = std::max(FeatureA.Height, FeatureB.Height);
-            const double Gap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
+            const double RequiredGap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
+            const double SafetyGap =RequiredGap > 0.0? std::max(10.0, RequiredGap * 0.001): 0.0;
+
+            const double Gap = RequiredGap + SafetyGap;
             const double ClusterWidth = CellWidth * 2.0 + Gap;
             const double ClusterHeight = CellHeight;
 
@@ -181,7 +184,10 @@ namespace ET {
                 CellHeight = std::max(CellHeight, Feature->Height);
                 RealArea += Feature->Area;
             }
-            const double Gap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
+            const double RequiredGap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
+            const double SafetyGap =RequiredGap > 0.0? std::max(10.0, RequiredGap * 0.001): 0.0;
+
+            const double Gap = RequiredGap + SafetyGap;
             const double ClusterWidth = CellWidth * 2.0 + Gap;
             const double ClusterHeight = CellHeight * 2.0 + Gap;
             if (!_FitsBin(ClusterWidth, ClusterHeight, AOptions)) { return false; }
@@ -206,7 +212,17 @@ namespace ET {
 
             CetClusterGeometryHelper Geometry;
 
-            if (!Geometry.FinalizeCandidate(AOriginalItems, AOptions, AOutCandidate)) { return false; }
+            if (!Geometry.FinalizeCandidate(AOriginalItems, AOptions, AOutCandidate)) { 
+                std::cout << "[CIRCLE][REJECT] Block4 FinalizeCandidate failed. Indices="
+                    << AIndex0 << ", "
+                    << AIndex1 << ", "
+                    << AIndex2 << ", "
+                    << AIndex3
+                    << ", RequiredGap=" << RequiredGap
+                    << ", UsedGap=" << Gap
+                    << std::endl; 
+                return false; 
+            }
 
             return true;
         }

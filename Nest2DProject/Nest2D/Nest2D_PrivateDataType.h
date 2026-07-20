@@ -13,6 +13,7 @@ using CetNestItem = CetTNestItemVector::value_type;
 using CetPackGround = libnest2d::_PackGroup<libnest2d::PolygonImpl>;
 using CetPath = ClipperLib::Path;
 using CetPolygonImpl = libnest2d::PolygonImpl;
+using CetInpoint = ClipperLib::IntPoint;
 struct TetLib2DItemDataType
 {
 
@@ -149,6 +150,14 @@ enum class MetTriangleSideType
     Equilateral,
     Isosceles,
     Scalene
+};
+struct TetTriangleEdgePose
+{
+    CetInpoint Start;
+    CetInpoint End;
+
+    double Length = 0.0;
+    double Angle = 0.0;
 };
 
 enum class MetTriangleAngleType

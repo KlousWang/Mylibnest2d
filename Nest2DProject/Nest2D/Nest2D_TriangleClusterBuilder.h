@@ -37,6 +37,13 @@ namespace ET {
 			bool _BuildRightTrianglePairCandidate(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, int AAIndex, int ABIndex, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate);
 			bool _AreCongruentTriangles(const TetShapeFeature& AA, const TetShapeFeature& AB);
 			
+			bool _BuildAnyTrianglePairCandidate(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, int AAIndex, int ABIndex, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate);
+			bool _TryBuildTriangleEdgePairCandidate(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, int AAIndex, int ABIndex, int AEdgeIndex, int BEdgeIndex, int ANormalSide, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate);
+			bool _GetTriangleEdgePose(const CetPath& AContour, int AEdgeIndex, TetTriangleEdgePose& AOutEdge) ;
+			double _NormalizeAngle(double AAngle) ;
+			CetInpoint _RotatePoint(const CetInpoint& APoint, double ARotation) ;
+			bool _BuildOppositeTrianglePairCandidate(const CetTNestItemVector& AOriginalItems,const std::vector<TetShapeFeature>& AFeatures,int AAIndex,int ABIndex,const TetNestOptions& AOptions,TetClusterCandidate& AOutCandidate);
+
 		};
 	}
 }
