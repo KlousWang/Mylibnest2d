@@ -4,243 +4,609 @@
 #include "NestUtils.h"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <iostream>
 #include <limits>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace ET {
     namespace NEST2DMANAGERLIB {
+
+        namespace {
+            constexpr double CET_CIRCLE_SIZE_TOLERANCE = 0.01;
+            constexpr double CET_CIRCLE_HONEYCOMB_ROW_RATIO = 0.86602540378443864676;
+
+            struct TetCircleLayoutSlot
+            {
+                double CenterX = 0.0;
+                double CenterY = 0.0;
+            };
+
+            struct TetCircleLayout
+            {
+                std::vector<TetCircleLayoutSlot> Slots;
+                double Width = 0.0;
+                double Height = 0.0;
+                std::string ClusterType;
+            };
+
+            bool NearlyEqual(double A, double B, double RelativeTolerance)
+            {
+                const double Denominator = std::max(1.0, std::max(std::abs(A), std::abs(B)));
+                return std::abs(A - B) <= Denominator * RelativeTolerance;
+            }
+
+            double GetCircleSizeKey(const TetShapeFeature& AFeature)
+            {
+                return std::max(AFeature.Width, AFeature.Height);
+            }
+
+            bool IsValidCircleFeature(const TetShapeFeature& AFeature)
+            {
+                return AFeature.ShapeType == MetShapeType::CircleLike &&
+                    AFeature.Width > 0.0 &&
+                    AFeature.Height > 0.0 &&
+                    AFeature.Area > 0.0;
+            }
+
+            std::vector<std::vector<int>> GroupCircleIndices(const std::vector<int>& AIndices, const std::vector<TetShapeFeature>& AFeatures)
+            {
+                struct TetCircleIndexInfo
+                {
+                    int Index = -1;
+                    double SizeKey = 0.0;
+                };
+
+                std::vector<TetCircleIndexInfo> Infos;
+                Infos.reserve(AIndices.size());
+
+                for (int Index : AIndices) {
+                    if (Index < 0 || Index >= static_cast<int>(AFeatures.size())) {
+                        continue;
+                    }
+
+                    const TetShapeFeature& Feature = AFeatures[Index];
+                    if (!IsValidCircleFeature(Feature)) {
+                        continue;
+                    }
+
+                    Infos.push_back({ Index, GetCircleSizeKey(Feature) });
+                }
+
+                std::sort(
+                    Infos.begin(),
+                    Infos.end(),
+                    [](const TetCircleIndexInfo& A, const TetCircleIndexInfo& B)
+                    {
+                        if (A.SizeKey != B.SizeKey) {
+                            return A.SizeKey < B.SizeKey;
+                        }
+                        return A.Index < B.Index;
+                    });
+
+                Infos.erase(
+                    std::unique(
+                        Infos.begin(),
+                        Infos.end(),
+                        [](const TetCircleIndexInfo& A, const TetCircleIndexInfo& B)
+                        {
+                            return A.Index == B.Index;
+                        }),
+                    Infos.end());
+
+                std::vector<std::vector<int>> Groups;
+                if (Infos.empty()) {
+                    return Groups;
+                }
+
+                std::vector<int> CurrentGroup;
+                double CurrentBaseSize = 0.0;
+
+                for (const TetCircleIndexInfo& Info : Infos) {
+                    if (CurrentGroup.empty()) {
+                        CurrentBaseSize = Info.SizeKey;
+                        CurrentGroup.push_back(Info.Index);
+                        continue;
+                    }
+
+                    if (NearlyEqual(CurrentBaseSize, Info.SizeKey, CET_CIRCLE_SIZE_TOLERANCE)) {
+                        CurrentGroup.push_back(Info.Index);
+                    }
+                    else {
+                        Groups.push_back(std::move(CurrentGroup));
+                        CurrentGroup.clear();
+                        CurrentBaseSize = Info.SizeKey;
+                        CurrentGroup.push_back(Info.Index);
+                    }
+                }
+
+                if (!CurrentGroup.empty()) {
+                    Groups.push_back(std::move(CurrentGroup));
+                }
+
+                return Groups;
+            }
+
+            long double Cross(const CetInpoint& A, const CetInpoint& B, const CetInpoint& C)
+            {
+                return static_cast<long double>(B.X - A.X) * static_cast<long double>(C.Y - A.Y)
+                    - static_cast<long double>(B.Y - A.Y) * static_cast<long double>(C.X - A.X);
+            }
+
+            CetPath BuildConvexHull(const std::vector<CetInpoint>& APoints)
+            {
+                if (APoints.size() < 3) {
+                    return {};
+                }
+
+                std::vector<CetInpoint> Points = APoints;
+                std::sort(
+                    Points.begin(),
+                    Points.end(),
+                    [](const CetInpoint& A, const CetInpoint& B)
+                    {
+                        if (A.X != B.X) return A.X < B.X;
+                        if (A.Y != B.Y) return A.Y < B.Y;
+                        return false;
+                    });
+
+                Points.erase(
+                    std::unique(
+                        Points.begin(),
+                        Points.end(),
+                        [](const CetInpoint& A, const CetInpoint& B)
+                        {
+                            return A.X == B.X && A.Y == B.Y;
+                        }),
+                    Points.end());
+
+                if (Points.size() < 3) {
+                    return {};
+                }
+
+                std::vector<CetInpoint> Hull;
+                Hull.resize(Points.size() * 2);
+                std::size_t K = 0;
+
+                for (const CetInpoint& P : Points) {
+                    while (K >= 2 && Cross(Hull[K - 2], Hull[K - 1], P) <= 0.0L) {
+                        --K;
+                    }
+                    Hull[K++] = P;
+                }
+
+                const std::size_t LowerSize = K;
+                for (std::size_t I = Points.size(); I-- > 0;) {
+                    const CetInpoint& P = Points[I];
+                    while (K > LowerSize && Cross(Hull[K - 2], Hull[K - 1], P) <= 0.0L) {
+                        --K;
+                    }
+                    Hull[K++] = P;
+                }
+
+                if (K > 1) {
+                    --K;
+                }
+
+                Hull.resize(K);
+                if (Hull.size() < 3) {
+                    return {};
+                }
+
+                CetPath Result;
+                Result.reserve(Hull.size());
+                for (const CetInpoint& P : Hull) {
+                    Result.push_back(P);
+                }
+
+                if (!ClipperLib::Orientation(Result)) {
+                    std::reverse(Result.begin(), Result.end());
+                }
+
+                return Result;
+            }
+
+            CetPath BuildProxyContour(const CetTNestItemVector& AOriginalItems,const std::vector<TetItemTransform>& ATransforms)
+            {
+                CetClusterGeometryHelper Geometry;
+                std::vector<CetInpoint> Points;
+
+                for (const TetItemTransform& Transform : ATransforms) {
+                    if (Transform.OriginalId < 0 || Transform.OriginalId >= static_cast<int>(AOriginalItems.size())) {
+                        continue;
+                    }
+
+                    const CetPath Child = Geometry.TransformContour(
+                        Geometry.GetIdentityContour(AOriginalItems[Transform.OriginalId]),
+                        Transform.RelativeRotation,
+                        Transform.RelativeX,
+                        Transform.RelativeY);
+
+                    for (const CetInpoint& Point : Child) {
+                        Points.push_back(Point);
+                    }
+                }
+
+                CetPath Hull = BuildConvexHull(Points);
+                if (Hull.size() < 3) {
+                    return {};
+                }
+
+                return Hull;
+            }
+
+            bool FitsBin(double AClusterWidth, double AClusterHeight, const TetNestOptions& AOptions)
+            {
+                if (AClusterWidth <= 0.0 || AClusterHeight <= 0.0) {
+                    return false;
+                }
+
+                const double BinWidth = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth));
+                const double BinHeight = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinHeight));
+                if (BinWidth <= 0.0 || BinHeight <= 0.0) {
+                    return false;
+                }
+
+                const bool FitsNormally = AClusterWidth <= BinWidth && AClusterHeight <= BinHeight;
+                const bool FitsAfterRotation = AOptions.Rotations > 1 && AClusterHeight <= BinWidth && AClusterWidth <= BinHeight;
+                return FitsNormally || FitsAfterRotation;
+            }
+
+            TetCircleLayout MakePairLayout(double ACellSize, double AGap)
+            {
+                TetCircleLayout Layout;
+                const double Radius = ACellSize * 0.5;
+                const double Step = ACellSize + AGap;
+
+                Layout.Slots = {
+                    { Radius, Radius },
+                    { Radius + Step, Radius }
+                };
+                Layout.Width = ACellSize * 2.0 + AGap;
+                Layout.Height = ACellSize;
+                Layout.ClusterType = "CirclePair2";
+                return Layout;
+            }
+
+            TetCircleLayout MakeTriangleLayout(double ACellSize, double AGap)
+            {
+                TetCircleLayout Layout;
+                const double Radius = ACellSize * 0.5;
+                const double Step = ACellSize + AGap;
+                const double RowStep = Step * CET_CIRCLE_HONEYCOMB_ROW_RATIO;
+
+                Layout.Slots = {
+                    { Radius, Radius },
+                    { Radius + Step, Radius },
+                    { Radius + Step * 0.5, Radius + RowStep }
+                };
+                Layout.Width = ACellSize * 2.0 + AGap;
+                Layout.Height = ACellSize + RowStep;
+                Layout.ClusterType = "CircleTriangle3";
+                return Layout;
+            }
+
+            TetCircleLayout MakeSquareLayout(double ACellSize, double AGap)
+            {
+                TetCircleLayout Layout;
+                const double Radius = ACellSize * 0.5;
+                const double Step = ACellSize + AGap;
+
+                Layout.Slots = {
+                    { Radius, Radius },
+                    { Radius + Step, Radius },
+                    { Radius, Radius + Step },
+                    { Radius + Step, Radius + Step }
+                };
+                Layout.Width = ACellSize * 2.0 + AGap;
+                Layout.Height = ACellSize * 2.0 + AGap;
+                Layout.ClusterType = "CircleBlock4";
+                return Layout;
+            }
+
+            TetCircleLayout MakeHoneycombLayout(std::size_t ACount, int ARows, double ACellSize, double AGap)
+            {
+                TetCircleLayout Layout;
+
+                if (ACount < 5 || ARows < 2 || ARows > static_cast<int>(ACount)) {
+                    return Layout;
+                }
+
+                const double Radius = ACellSize * 0.5;
+                const double Step = ACellSize + AGap;
+                const double RowStep = Step * CET_CIRCLE_HONEYCOMB_ROW_RATIO;
+
+                const int BaseCount = static_cast<int>(ACount / static_cast<std::size_t>(ARows));
+                int ExtraCount = static_cast<int>(ACount % static_cast<std::size_t>(ARows));
+
+                std::vector<int> RowCounts(static_cast<std::size_t>(ARows), BaseCount);
+
+                for (int Row = 0; Row < ARows && ExtraCount > 0; Row += 2) {
+                    ++RowCounts[static_cast<std::size_t>(Row)];
+                    --ExtraCount;
+                }
+                for (int Row = 1; Row < ARows && ExtraCount > 0; Row += 2) {
+                    ++RowCounts[static_cast<std::size_t>(Row)];
+                    --ExtraCount;
+                }
+
+                for (int Row = 0; Row < ARows; ++Row) {
+                    const double ShiftX = (Row % 2 == 0) ? 0.0 : Step * 0.5;
+                    const double CenterY = Radius + static_cast<double>(Row) * RowStep;
+                    for (int Col = 0; Col < RowCounts[static_cast<std::size_t>(Row)]; ++Col) {
+                        Layout.Slots.push_back({
+                            Radius + ShiftX + static_cast<double>(Col) * Step,
+                            CenterY
+                            });
+                    }
+                }
+
+                if (Layout.Slots.size() != ACount) {
+                    return {};
+                }
+
+                const double MinX = Radius;
+                const double MinY = Radius;
+
+                double MaxX = std::numeric_limits<double>::lowest();
+                double MaxY = std::numeric_limits<double>::lowest();
+                for (const TetCircleLayoutSlot& Slot : Layout.Slots) {
+                    MaxX = std::max(MaxX, Slot.CenterX + Radius);
+                    MaxY = std::max(MaxY, Slot.CenterY + Radius);
+                }
+
+                for (TetCircleLayoutSlot& Slot : Layout.Slots) {
+                    Slot.CenterX -= MinX;
+                    Slot.CenterY -= MinY;
+                }
+
+                Layout.Width = MaxX - MinX;
+                Layout.Height = MaxY - MinY;
+                Layout.ClusterType = "CircleHoneycomb_" + std::to_string(ACount) + "_R" + std::to_string(ARows);
+                return Layout;
+            }
+
+            TetCircleLayout SelectBestHoneycombLayout(std::size_t ACount, double ACellSize, double AGap, const TetNestOptions& AOptions)
+            {
+                TetCircleLayout BestLayout;
+                double BestCost = std::numeric_limits<double>::infinity();
+
+                for (int Rows = 2; Rows <= static_cast<int>(ACount); ++Rows) {
+                    TetCircleLayout Layout = MakeHoneycombLayout(ACount, Rows, ACellSize, AGap);
+                    if (Layout.Slots.size() != ACount) {
+                        continue;
+                    }
+
+                    if (!FitsBin(Layout.Width, Layout.Height, AOptions)) {
+                        continue;
+                    }
+
+                    const double Area = Layout.Width * Layout.Height;
+                    const double Aspect = Layout.Height > 0.0 ? Layout.Width / Layout.Height : 0.0;
+                    double Cost = Area;
+
+                    if (Aspect < 1.0) {
+                        Cost *= 1.12;
+                    }
+
+                    Cost += static_cast<double>(Rows) * 0.001;
+
+                    if (Cost < BestCost) {
+                        BestCost = Cost;
+                        BestLayout = std::move(Layout);
+                    }
+                }
+
+                return BestLayout;
+            }
+        }
 
         CetCircleClusterBuilder::CetCircleClusterBuilder() : CetCoreObject() {}
         CetCircleClusterBuilder::~CetCircleClusterBuilder() {}
 
         void CetCircleClusterBuilder::BuildCandidates(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const std::vector<int>& AIndices, const TetNestOptions& AOptions, std::vector<TetClusterCandidate>& AOutCandidates)
         {
-            if (AOriginalItems.empty()) { return; }
-
-            if (AFeatures.size() != AOriginalItems.size()) {
-                std::cout << "[CIRCLE][ERROR] Feature count mismatch. OriginalItems = " << AOriginalItems.size() << ", Features = " << AFeatures.size() << std::endl;
+            if (AOriginalItems.empty()) {
                 return;
             }
 
-            if (AIndices.size() < 2) { return; }
-
-            std::vector<int> ValidIndices;
-            ValidIndices.reserve(AIndices.size());
-
-            for (int Index : AIndices) {
-                if (Index < 0 || Index >= static_cast<int>(AOriginalItems.size())) { continue; }
-                const TetShapeFeature& Feature = AFeatures[Index];
-                if (Feature.ShapeType != MetShapeType::CircleLike) { continue; }
-                if (Feature.Width <= 0.0 || Feature.Height <= 0.0 || Feature.Area <= 0.0) { continue; }
-                ValidIndices.push_back(Index);
+            if (AFeatures.size() != AOriginalItems.size()) {
+                std::cout << "[CIRCLE][ERROR] Feature count mismatch. OriginalItems = " << AOriginalItems.size()
+                    << ", Features = " << AFeatures.size() << std::endl;
+                return;
             }
 
-            std::sort(ValidIndices.begin(), ValidIndices.end());
-            ValidIndices.erase(std::unique(ValidIndices.begin(), ValidIndices.end()), ValidIndices.end());
+            if (AIndices.size() < 2) {
+                return;
+            }
 
-            if (ValidIndices.size() < 2) { return; }
+            const std::vector<std::vector<int>> Groups = GroupCircleIndices(AIndices, AFeatures);
+            if (Groups.empty()) {
+                return;
+            }
 
             const std::size_t OldCandidateCount = AOutCandidates.size();
 
-            _BuildBlock4Candidates(AOriginalItems, AFeatures, ValidIndices, AOptions, AOutCandidates);
-            _BuildPairCandidates(AOriginalItems, AFeatures, ValidIndices, AOptions, AOutCandidates);
+            for (const std::vector<int>& Group : Groups) {
+                _BuildSameSizeClusterCandidates(AOriginalItems, AFeatures, Group, AOptions, AOutCandidates);
+            }
 
-            std::cout << "[CIRCLE][BUILD CANDIDATES] IndexCount = " << ValidIndices.size() << ", NewCandidateCount = " << AOutCandidates.size() - OldCandidateCount << std::endl;
+            std::cout << "[CIRCLE][BUILD CANDIDATES] GroupCount = " << Groups.size()
+                << ", NewCandidateCount = " << AOutCandidates.size() - OldCandidateCount << std::endl;
         }
 
-        void CetCircleClusterBuilder::_BuildPairCandidates(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const std::vector<int>& AIndices, const TetNestOptions& AOptions, std::vector<TetClusterCandidate>& AOutCandidates)
+        void CetCircleClusterBuilder::_BuildSameSizeClusterCandidates(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const std::vector<int>& AIndices, const TetNestOptions& AOptions, std::vector<TetClusterCandidate>& AOutCandidates)
         {
-            if (AFeatures.size() != AOriginalItems.size() || AIndices.size() < 2) { return; }
+            if (AIndices.size() < 2) {
+                return;
+            }
 
-            for (std::size_t i = 0; i < AIndices.size(); ++i) {
-                for (std::size_t j = i + 1; j < AIndices.size(); ++j) {
-                    const int IndexA = AIndices[i];
-                    const int IndexB = AIndices[j];
-                    if (IndexA < 0 || IndexB < 0 || IndexA >= static_cast<int>(AOriginalItems.size()) || IndexB >= static_cast<int>(AOriginalItems.size()) || IndexA == IndexB) { continue; }
+            std::vector<int> Remaining = AIndices;
+            std::sort(Remaining.begin(), Remaining.end());
+            Remaining.erase(std::unique(Remaining.begin(), Remaining.end()), Remaining.end());
 
-                    TetClusterCandidate Candidate;
-                    if (!_BuildPairCandidate(AOriginalItems, AFeatures, IndexA, IndexB, AOptions, Candidate)) { continue; }
+            while (Remaining.size() >= 2) {
+                std::size_t Low = 2;
+                std::size_t High = Remaining.size();
+                std::size_t BestCount = 0;
+                TetClusterCandidate BestCandidate;
 
-                    AOutCandidates.push_back(std::move(Candidate));
-                    std::cout << "[CIRCLE][PAIR CANDIDATE] " << IndexA << " + " << IndexB << std::endl;
+                while (Low <= High) {
+                    const std::size_t Mid = Low + (High - Low) / 2;
+                    std::vector<int> TrialIndices(
+                        Remaining.begin(),
+                        Remaining.begin() + static_cast<std::vector<int>::difference_type>(Mid));
+
+                    TetClusterCandidate TrialCandidate;
+                    if (_BuildClusterCandidate(AOriginalItems, AFeatures, TrialIndices, AOptions, TrialCandidate)) {
+                        BestCount = Mid;
+                        BestCandidate = std::move(TrialCandidate);
+                        Low = Mid + 1;
+                    }
+                    else {
+                        if (Mid == 0) {
+                            break;
+                        }
+                        High = Mid - 1;
+                    }
                 }
+
+                if (BestCount < 2) {
+                    std::cout << "[CIRCLE][REJECT] No board-fitting cluster can be built. RemainingCount = "
+                        << Remaining.size() << std::endl;
+                    return;
+                }
+
+                AOutCandidates.push_back(std::move(BestCandidate));
+                std::cout << "[CIRCLE][CANDIDATE] Size = " << BestCount
+                    << ", Type = " << AOutCandidates.back().ClusterType
+                    << ", Score = " << AOutCandidates.back().Score << std::endl;
+
+                Remaining.erase(
+                    Remaining.begin(),
+                    Remaining.begin() + static_cast<std::vector<int>::difference_type>(BestCount));
             }
         }
 
-        void CetCircleClusterBuilder::_BuildBlock4Candidates(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const std::vector<int>& AIndices, const TetNestOptions& AOptions, std::vector<TetClusterCandidate>& AOutCandidates)
-        {
-            if (AFeatures.size() != AOriginalItems.size() || AIndices.size() < 4) { return; }
-
-            for (std::size_t i = 0; i + 3 < AIndices.size(); i += 4) {
-                const int Index0 = AIndices[i];
-                const int Index1 = AIndices[i + 1];
-                const int Index2 = AIndices[i + 2];
-                const int Index3 = AIndices[i + 3];
-                if (Index0 < 0 || Index1 < 0 || Index2 < 0 || Index3 < 0 || Index0 >= static_cast<int>(AOriginalItems.size()) || Index1 >= static_cast<int>(AOriginalItems.size()) || Index2 >= static_cast<int>(AOriginalItems.size()) || Index3 >= static_cast<int>(AOriginalItems.size())) { continue; }
-
-                TetClusterCandidate Candidate;
-                if (!_BuildBlock4Candidate(AOriginalItems, AFeatures, Index0, Index1, Index2, Index3, AOptions, Candidate)) { continue; }
-
-                AOutCandidates.push_back(std::move(Candidate));
-                std::cout << "[CIRCLE][BLOCK4 CANDIDATE] " << Index0 << ", " << Index1 << ", " << Index2 << ", " << Index3 << std::endl;
-            }
-        }
-
-        bool CetCircleClusterBuilder::_BuildPairCandidate(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, int AIndexA, int AIndexB, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate)
+        bool CetCircleClusterBuilder::_BuildClusterCandidate(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const std::vector<int>& AIndices, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate)
         {
             AOutCandidate = TetClusterCandidate{};
 
-            if (AIndexA < 0 || AIndexB < 0 || AIndexA >= static_cast<int>(AFeatures.size()) || AIndexB >= static_cast<int>(AFeatures.size()) || AIndexA >= static_cast<int>(AOriginalItems.size()) || AIndexB >= static_cast<int>(AOriginalItems.size()) || AIndexA == AIndexB) { return false; }
+            if (AOriginalItems.size() != AFeatures.size() || AIndices.size() < 2) {
+                return false;
+            }
 
-            const TetShapeFeature& FeatureA = AFeatures[AIndexA];
-            const TetShapeFeature& FeatureB = AFeatures[AIndexB];
+            std::vector<int> Indices = AIndices;
+            std::sort(Indices.begin(), Indices.end());
+            Indices.erase(std::unique(Indices.begin(), Indices.end()), Indices.end());
 
-            if (FeatureA.ShapeType != MetShapeType::CircleLike || FeatureB.ShapeType != MetShapeType::CircleLike) { return false; }
+            if (Indices.size() < 2) {
+                return false;
+            }
 
-            if (FeatureA.Width <= 0.0 || FeatureA.Height <= 0.0 || FeatureB.Width <= 0.0 || FeatureB.Height <= 0.0 || FeatureA.Area <= 0.0 || FeatureB.Area <= 0.0) { return false; }
-
-            auto NearlyEqual = [](double ValA, double ValB, double RelativeTolerance) {
-                const double Denominator = std::max(1.0, std::max(std::abs(ValA), std::abs(ValB)));
-                return std::abs(ValA - ValB) <= Denominator * RelativeTolerance;
-                };
-
-            constexpr double SizeTolerance = 0.03;
-
-            if (!NearlyEqual(FeatureA.Width, FeatureB.Width, SizeTolerance) || !NearlyEqual(FeatureA.Height, FeatureB.Height, SizeTolerance)) { return false; }
-
-            const double CellWidth = std::max(FeatureA.Width, FeatureB.Width);
-            const double CellHeight = std::max(FeatureA.Height, FeatureB.Height);
-            const double RequiredGap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
-            const double SafetyGap =RequiredGap > 0.0? std::max(10.0, RequiredGap * 0.001): 0.0;
-
-            const double Gap = RequiredGap + SafetyGap;
-            const double ClusterWidth = CellWidth * 2.0 + Gap;
-            const double ClusterHeight = CellHeight;
-
-            if (!_FitsBin(ClusterWidth, ClusterHeight, AOptions)) { return false; }
-
-            TetItemTransform TransformA;
-            TransformA.OriginalId = AIndexA;
-            TransformA.RelativeX = 0.0 - FeatureA.MinX;
-            TransformA.RelativeY = 0.0 - FeatureA.MinY;
-            TransformA.RelativeRotation = 0.0;
-            TetItemTransform TransformB;
-            TransformB.OriginalId = AIndexB;
-            TransformB.RelativeX = CellWidth + Gap - FeatureB.MinX;
-            TransformB.RelativeY = 0.0 - FeatureB.MinY;
-            TransformB.RelativeRotation = 0.0;
-
-            AOutCandidate.BuilderName = "CircleBuilder";
-            AOutCandidate.ClusterType = "CirclePair2";
-            AOutCandidate.OriginalIndices = { AIndexA, AIndexB };
-            AOutCandidate.Transforms = { TransformA, TransformB };
-            AOutCandidate.Confidence = 1.0;
-
-            CetClusterGeometryHelper Geometry;
-
-            if (!Geometry.FinalizeCandidate(AOriginalItems, AOptions, AOutCandidate)) { return false; }
-
-            return true;
-        }
-
-        bool CetCircleClusterBuilder::_BuildBlock4Candidate(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, int AIndex0, int AIndex1, int AIndex2, int AIndex3, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate)
-        {
-            AOutCandidate = TetClusterCandidate{};
-            const std::array<int, 4> Indices = { AIndex0, AIndex1, AIndex2, AIndex3 };
-
-            for (std::size_t i = 0; i < Indices.size(); ++i) {
-                if (Indices[i] < 0 || Indices[i] >= static_cast<int>(AFeatures.size())) { return false; }
-                for (std::size_t j = i + 1; j < Indices.size(); ++j) {
-                    if (Indices[i] == Indices[j]) { return false; }
+            for (int Index : Indices) {
+                if (Index < 0 || Index >= static_cast<int>(AFeatures.size())) {
+                    return false;
                 }
             }
 
-            const TetShapeFeature& Feature0 = AFeatures[AIndex0];
-            const TetShapeFeature& Feature1 = AFeatures[AIndex1];
-            const TetShapeFeature& Feature2 = AFeatures[AIndex2];
-            const TetShapeFeature& Feature3 = AFeatures[AIndex3];
-
-            const std::array<const TetShapeFeature*, 4> Features = { &Feature0, &Feature1, &Feature2, &Feature3 };
-
-            for (const TetShapeFeature* Feature : Features) {
-                if (Feature == nullptr || Feature->ShapeType != MetShapeType::CircleLike || Feature->Width <= 0.0 || Feature->Height <= 0.0 || Feature->Area <= 0.0) { return false; }
+            const TetShapeFeature& BaseFeature = AFeatures[Indices.front()];
+            if (!IsValidCircleFeature(BaseFeature)) {
+                return false;
             }
 
-            auto NearlyEqual = [](double ValA, double ValB, double RelativeTolerance) {
-                const double Denominator = std::max(1.0, std::max(std::abs(ValA), std::abs(ValB)));
-                return std::abs(ValA - ValB) <= Denominator * RelativeTolerance;
-                };
-            constexpr double SizeTolerance = 0.03;
-            for (std::size_t i = 1; i < Features.size(); ++i) {
-                if (!NearlyEqual(Feature0.Width, Features[i]->Width, SizeTolerance) || !NearlyEqual(Feature0.Height, Features[i]->Height, SizeTolerance)) { return false; }
+            const double BaseSize = GetCircleSizeKey(BaseFeature);
+            double CellSize = BaseSize;
+
+            for (int Index : Indices) {
+                const TetShapeFeature& Feature = AFeatures[Index];
+                if (!IsValidCircleFeature(Feature)) {
+                    return false;
+                }
+
+                const double SizeKey = GetCircleSizeKey(Feature);
+                if (!NearlyEqual(BaseSize, SizeKey, CET_CIRCLE_SIZE_TOLERANCE)) {
+                    return false;
+                }
+
+                CellSize = std::max(CellSize, SizeKey);
             }
-            double CellWidth = 0.0;
-            double CellHeight = 0.0;
-            double RealArea = 0.0;
-            for (const TetShapeFeature* Feature : Features) {
-                CellWidth = std::max(CellWidth, Feature->Width);
-                CellHeight = std::max(CellHeight, Feature->Height);
-                RealArea += Feature->Area;
-            }
+
             const double RequiredGap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
-            const double SafetyGap =RequiredGap > 0.0? std::max(10.0, RequiredGap * 0.001): 0.0;
-
+            const double SafetyGap = RequiredGap > 0.0 ? std::max(10.0, RequiredGap * 0.001) : 0.0;
             const double Gap = RequiredGap + SafetyGap;
-            const double ClusterWidth = CellWidth * 2.0 + Gap;
-            const double ClusterHeight = CellHeight * 2.0 + Gap;
-            if (!_FitsBin(ClusterWidth, ClusterHeight, AOptions)) { return false; }
-            const std::array<double, 4> TargetMinX = { 0.0, CellWidth + Gap, 0.0, CellWidth + Gap };
-            const std::array<double, 4> TargetMinY = { 0.0, 0.0, CellHeight + Gap, CellHeight + Gap };
-            AOutCandidate.Transforms.clear();
-            AOutCandidate.Transforms.reserve(4);
-            AOutCandidate.OriginalIndices.clear();
-            AOutCandidate.OriginalIndices.reserve(4);
-            for (std::size_t i = 0; i < Indices.size(); ++i) {
+
+            TetCircleLayout Layout;
+            if (Indices.size() == 2) {
+                Layout = MakePairLayout(CellSize, Gap);
+            }
+            else if (Indices.size() == 3) {
+                Layout = MakeTriangleLayout(CellSize, Gap);
+            }
+            else if (Indices.size() == 4) {
+                Layout = MakeSquareLayout(CellSize, Gap);
+            }
+            else {
+                Layout = SelectBestHoneycombLayout(Indices.size(), CellSize, Gap, AOptions);
+            }
+
+            if (Layout.Slots.size() != Indices.size() || Layout.Width <= 0.0 || Layout.Height <= 0.0) {
+                return false;
+            }
+
+            if (!FitsBin(Layout.Width, Layout.Height, AOptions)) {
+                return false;
+            }
+
+            std::vector<TetItemTransform> Transforms;
+            Transforms.reserve(Indices.size());
+
+            for (std::size_t I = 0; I < Indices.size(); ++I) {
+                const int Index = Indices[I];
+                const TetShapeFeature& Feature = AFeatures[Index];
+                const TetCircleLayoutSlot& Slot = Layout.Slots[I];
+
                 TetItemTransform Transform;
-                Transform.OriginalId = Indices[i];
-                Transform.RelativeX = TargetMinX[i] - Features[i]->MinX;
-                Transform.RelativeY = TargetMinY[i] - Features[i]->MinY;
+                Transform.OriginalId = Index;
                 Transform.RelativeRotation = 0.0;
-                AOutCandidate.Transforms.push_back(Transform);
-                AOutCandidate.OriginalIndices.push_back(Indices[i]);
+                Transform.RelativeX = Slot.CenterX - (Feature.MinX + Feature.Width * 0.5);
+                Transform.RelativeY = Slot.CenterY - (Feature.MinY + Feature.Height * 0.5);
+                Transforms.push_back(Transform);
             }
+
             AOutCandidate.BuilderName = "CircleBuilder";
-            AOutCandidate.ClusterType = "CircleBlock4";
+            AOutCandidate.ClusterType = Layout.ClusterType;
+            AOutCandidate.OriginalIndices = Indices;
+            AOutCandidate.Transforms = std::move(Transforms);
             AOutCandidate.Confidence = 1.0;
+            AOutCandidate.ProxyContour = BuildProxyContour(AOriginalItems, AOutCandidate.Transforms);
+
+            if (!AOutCandidate.ProxyContour.empty()) {
+                AOutCandidate.ProxyContourNormalized = false;
+            }
 
             CetClusterGeometryHelper Geometry;
-
-            if (!Geometry.FinalizeCandidate(AOriginalItems, AOptions, AOutCandidate)) { 
-                std::cout << "[CIRCLE][REJECT] Block4 FinalizeCandidate failed. Indices="
-                    << AIndex0 << ", "
-                    << AIndex1 << ", "
-                    << AIndex2 << ", "
-                    << AIndex3
-                    << ", RequiredGap=" << RequiredGap
-                    << ", UsedGap=" << Gap
-                    << std::endl; 
-                return false; 
+            if (!Geometry.FinalizeCandidate(AOriginalItems, AOptions, AOutCandidate)) {
+                return false;
             }
 
+            AOutCandidate.Score = _CalculateScore(AOutCandidate);
             return true;
         }
 
         bool CetCircleClusterBuilder::_FitsBin(double AClusterWidth, double AClusterHeight, const TetNestOptions& AOptions)
         {
-            if (AClusterWidth <= 0.0 || AClusterHeight <= 0.0) { return false; }
-            const double BinWidth = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth));
-            const double BinHeight = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinHeight));
-            if (BinWidth <= 0.0 || BinHeight <= 0.0) { return false; }
-            const bool FitsNormally = AClusterWidth <= BinWidth && AClusterHeight <= BinHeight;
-            const bool FitsAfterRotation = AOptions.Rotations > 1 && AClusterHeight <= BinWidth && AClusterWidth <= BinHeight;
-            return FitsNormally || FitsAfterRotation;
+            return FitsBin(AClusterWidth, AClusterHeight, AOptions);
         }
 
         double CetCircleClusterBuilder::_CalculateScore(const TetClusterCandidate& ACandidate)
         {
-            if (!ACandidate.Valid || ACandidate.OriginalIndices.empty() || ACandidate.ClusterWidth <= 0.0 || ACandidate.ClusterHeight <= 0.0 || ACandidate.ProxyArea <= 0.0) { return -std::numeric_limits<double>::infinity(); }
+            if (!ACandidate.Valid || ACandidate.OriginalIndices.empty() || ACandidate.ClusterWidth <= 0.0 || ACandidate.ClusterHeight <= 0.0 || ACandidate.ProxyArea <= 0.0) {
+                return -std::numeric_limits<double>::infinity();
+            }
+
             const double FillScore = ACandidate.FillRatio * 1000.0;
             const double ItemCountScore = static_cast<double>(ACandidate.OriginalIndices.size()) * 50.0;
             const double LongSide = std::max(ACandidate.ClusterWidth, ACandidate.ClusterHeight);
