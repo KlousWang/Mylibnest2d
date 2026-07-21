@@ -144,10 +144,10 @@ namespace ET {
 
                     if (FeatureA.ShapeType != MetShapeType::TriangleLike || FeatureB.ShapeType != MetShapeType::TriangleLike) { continue; }
 
-                    /*
-                     * 第一版先只处理全等或近似全等三角形。
-                     * 注意：这里不再要求 RightTriangle。
-                     */
+                    
+                     //第一版先只处理全等或近似全等三角形。
+                     //注意：这里不再要求 RightTriangle。
+                     
                     if (!_AreCongruentTriangles(FeatureA, FeatureB)) {
                         std::cout << "[TRIANGLE][REJECT] not congruent: " << AIndex << " + " << BIndex << std::endl;
                         continue;
@@ -170,9 +170,8 @@ namespace ET {
                         }
                     }
 
-                    /*
-                     * 新的任意三角形边匹配。
-                     */
+                    // 新的任意三角形边匹配。
+                   
                     {
                         TetClusterCandidate AnyCandidate;
 
@@ -193,11 +192,9 @@ namespace ET {
                         std::cout << "[TRIANGLE][REJECT] all triangle build failed: " << AIndex << " + " << BIndex << std::endl;
                         continue;
                     }
-
+                    std::cout<< "[TRIANGLE][CANDIDATE][FINAL] "<< AIndex << " + " << BIndex<< " Type=" << BestCandidate.ClusterType<< ", Score=" << BestCandidate.Score<< std::endl;
                     AOutCandidates.push_back(std::move(BestCandidate));
-
-
-                    std::cout << "[TRIANGLE][CANDIDATE] " << AIndex << " + " << BIndex << " Type=AnyTrianglePair" << std::endl;
+                    //std::cout << "[TRIANGLE][CANDIDATE] " << AIndex << " + " << BIndex << " Type=AnyTrianglePair" << std::endl;
                 }
             }
             std::cout << "[TRIANGLE][BUILD CANDIDATES] IndexCount=" << AIndices.size() << ", NewCandidateCount=" << AOutCandidates.size() - OldCandidateCount << std::endl;
@@ -330,6 +327,8 @@ namespace ET {
         {
             bool HasBest = false;
             TetClusterCandidate BestCandidate;
+            int EdgeTryCount = 0;
+            int EdgeSuccessCount = 0;
             /*
              * 三角形有 3 条边。
              * A 的每条边都尝试和 B 的每条边匹配。
@@ -338,12 +337,13 @@ namespace ET {
             for (int AEdgeIndex = 0; AEdgeIndex < 3; ++AEdgeIndex) {
                 for (int BEdgeIndex = 0; BEdgeIndex < 3; ++BEdgeIndex) {
                     for (int NormalSide : { 1, -1 }) {
+                        ++EdgeTryCount;
                         TetClusterCandidate Candidate;
 
                         if (!_TryBuildTriangleEdgePairCandidate(AOriginalItems, AFeatures, AAIndex, ABIndex, AEdgeIndex, BEdgeIndex, NormalSide, AOptions, Candidate)) {
                             continue;
                         }
-
+                        ++EdgeSuccessCount;
                         if (!HasBest || Candidate.Score > BestCandidate.Score) {
                             HasBest = true;
                             BestCandidate = std::move(Candidate);
@@ -351,6 +351,7 @@ namespace ET {
                     }
                 }
             }
+            std::cout<< "[TRIANGLE][ANY][EDGE SUMMARY] "<< "A=" << AAIndex<< ", B=" << ABIndex<< ", EdgeTryCount=" << EdgeTryCount<< ", EdgeSuccessCount=" << EdgeSuccessCount<< std::endl;
             if (!HasBest)
             {
                 TetClusterCandidate OppositeCandidate;
@@ -373,117 +374,195 @@ namespace ET {
         }
         bool CetTriangleClusterBuilder::_TryBuildTriangleEdgePairCandidate(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, int AAIndex, int ABIndex, int AEdgeIndex, int BEdgeIndex, int ANormalSide, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate)
         {
-            if (AAIndex < 0 || ABIndex < 0 || AAIndex == ABIndex || AAIndex >= static_cast<int>(AOriginalItems.size()) || ABIndex >= static_cast<int>(AOriginalItems.size()) || AAIndex >= static_cast<int>(AFeatures.size()) || ABIndex >= static_cast<int>(AFeatures.size())) {
+            (void)ANormalSide;
+
+            if (AAIndex < 0 || ABIndex < 0 || AAIndex == ABIndex ||
+                AAIndex >= static_cast<int>(AOriginalItems.size()) || ABIndex >= static_cast<int>(AOriginalItems.size()) ||
+                AAIndex >= static_cast<int>(AFeatures.size()) || ABIndex >= static_cast<int>(AFeatures.size())) {
+                return false;
+            }
+            const TetShapeFeature& FeatureA = AFeatures[AAIndex];
+            const TetShapeFeature& FeatureB = AFeatures[ABIndex];
+            if (FeatureA.ShapeType != MetShapeType::TriangleLike || FeatureB.ShapeType != MetShapeType::TriangleLike) {
+                return false;
+            }
+            if (!_AreCongruentTriangles(FeatureA, FeatureB)) {
                 return false;
             }
 
-            const TetShapeFeature& FeatureA = AFeatures[AAIndex];
-            const TetShapeFeature& FeatureB = AFeatures[ABIndex];
-
-            if (FeatureA.ShapeType != MetShapeType::TriangleLike || FeatureB.ShapeType != MetShapeType::TriangleLike) { return false; }
-
-            if (!_AreCongruentTriangles(FeatureA, FeatureB)) { return false; }
-
             CetClusterGeometryHelper Geometry;
-
             CetPath ContourA = Geometry.GetIdentityContour(AOriginalItems[AAIndex]);
             CetPath ContourB = Geometry.GetIdentityContour(AOriginalItems[ABIndex]);
+            // 去除首尾重合的点
+            auto removeDuplicateStartEnd = [](CetPath& path) {
+                if (path.size() > 3 && path.front().X == path.back().X && path.front().Y == path.back().Y) {
+                    path.pop_back();
+                }
+                };
+            removeDuplicateStartEnd(ContourA);
+            removeDuplicateStartEnd(ContourB);
 
-            if (ContourA.size() != 3 || ContourB.size() != 3) { return false; }
-
+            if (ContourA.size() != 3 || ContourB.size() != 3) {
+                std::cout << "Failed at Contour Size. A=" << ContourA.size() << ", B=" << ContourB.size() << std::endl;
+                return false;
+            }
             TetTriangleEdgePose EdgeA;
             TetTriangleEdgePose EdgeB;
+            if (!_GetTriangleEdgePose(ContourA, AEdgeIndex, EdgeA) || !_GetTriangleEdgePose(ContourB, BEdgeIndex, EdgeB)) {
+                return false;
+            }
+            if (!_NearlyEqual(EdgeA.Length, EdgeB.Length, 0.03)) {
+                std::cout << "Failed at Edge Length. A=" << EdgeA.Length << ", B=" << EdgeB.Length << std::endl;
+                return false;
+            }
+            CetInpoint AThird;
+            CetInpoint BThird;
+            if (!_GetTriangleThirdPoint(ContourA, AEdgeIndex, AThird) || !_GetTriangleThirdPoint(ContourB, BEdgeIndex, BThird)) {
+                return false;
+            }
 
-            if (!_GetTriangleEdgePose(ContourA, AEdgeIndex, EdgeA) || !_GetTriangleEdgePose(ContourB, BEdgeIndex, EdgeB)) { return false; }
+            const double ASide = _Cross(EdgeA.Start, EdgeA.End, AThird);
+            if (std::abs(ASide) <= 1.0) {
+                return false;
+            }
 
-            /*
-             * 只匹配长度接近的边。
-             */
-            if (!_NearlyEqual(EdgeA.Length, EdgeB.Length, 0.03)) { return false; }
-
-            /*
-             * 让 B 的边方向与 A 的边方向反向。
-             *
-             * AEdge direction: angleA
-             * BEdge direction after rotation should be: angleA + PI
-             */
+            /* 让 B 的匹配边和 A 的匹配边反向平行。 */
             const double RotationB = _NormalizeAngle(EdgeA.Angle + CET_TRIANGLE_PI - EdgeB.Angle);
 
-            double AMinX = 0.0;
-            double AMinY = 0.0;
-            double AMaxX = 0.0;
-            double AMaxY = 0.0;
+            double AMinX = 0.0, AMinY = 0.0, AMaxX = 0.0, AMaxY = 0.0;
+            if (!Geometry.GetBounds(ContourA, AMinX, AMinY, AMaxX, AMaxY)) {
+                return false;
+            }
 
-            if (!Geometry.GetBounds(ContourA, AMinX, AMinY, AMaxX, AMaxY)) { return false; }
-
-            /*
-             * A 先平移到局部坐标原点附近。
-             */
             const double ATranslationX = -AMinX;
             const double ATranslationY = -AMinY;
-
             const double AStartX = static_cast<double>(EdgeA.Start.X) + ATranslationX;
             const double AStartY = static_cast<double>(EdgeA.Start.Y) + ATranslationY;
+            const double AEndX = static_cast<double>(EdgeA.End.X) + ATranslationX;
+            const double AEndY = static_cast<double>(EdgeA.End.Y) + ATranslationY;
 
-            /*
-             * 旋转 B 的匹配边。
-             * 因为 B 的边已经被旋转成和 A 反向，
-             * 这里用 B 的 End 点去对齐 A 的 Start 点。
-             */
-            const ClipperLib::IntPoint RotatedBEnd = _RotatePoint(EdgeB.End, RotationB);
-
-            /*
-             * A 边单位方向。
-             */
-            const double EdgeDX = static_cast<double>(EdgeA.End.X - EdgeA.Start.X);
-            const double EdgeDY = static_cast<double>(EdgeA.End.Y - EdgeA.Start.Y);
+            const double EdgeDX = AEndX - AStartX;
+            const double EdgeDY = AEndY - AStartY;
             const double EdgeLen = std::sqrt(EdgeDX * EdgeDX + EdgeDY * EdgeDY);
 
-            if (EdgeLen <= 0.0) { return false; }
+            if (EdgeLen <= 0.0) {
+                return false;
+            }
 
             const double UnitX = EdgeDX / EdgeLen;
             const double UnitY = EdgeDY / EdgeLen;
-
-            /*
-             * A 边的法线方向。
-             * ANormalSide = 1 / -1，分别尝试两侧。
-             */
-            const double NormalX = -UnitY * static_cast<double>(ANormalSide);
-            const double NormalY = UnitX * static_cast<double>(ANormalSide);
-
             const double RequiredGap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
-            /*
-             * 加一个非常小的内部坐标安全量，避免整数取整后刚好被判定为贴边。
-             */
-            const double Gap = RequiredGap > 0.0 ? RequiredGap + 2.0 : 0.0;
-            const double BTranslationX = AStartX + NormalX * Gap - static_cast<double>(RotatedBEnd.X);
-            const double BTranslationY = AStartY + NormalY * Gap - static_cast<double>(RotatedBEnd.Y);
-            AOutCandidate = TetClusterCandidate{};
-            AOutCandidate.BuilderName = "TriangleBuilder";
-            AOutCandidate.ClusterType = "AnyTriangleEdgePair";
-            AOutCandidate.OriginalIndices = { AAIndex, ABIndex };
-            TetItemTransform TransformA;
-            TransformA.OriginalId = AAIndex;
-            TransformA.RelativeX = ATranslationX;
-            TransformA.RelativeY = ATranslationY;
-            TransformA.RelativeRotation = 0.0;
+            const double SafetyGap = RequiredGap > 0.0 ? std::max(10.0, RequiredGap * 0.001) : 0.0;
+            const double Gap = RequiredGap + SafetyGap;
 
-            TetItemTransform TransformB;
-            TransformB.OriginalId = ABIndex;
-            TransformB.RelativeX = BTranslationX;
-            TransformB.RelativeY = BTranslationY;
-            TransformB.RelativeRotation = RotationB;
-            AOutCandidate.Transforms = { TransformA, TransformB };
-            /*
-             * 任意三角形边匹配比旧的直角三角形模板更通用，
-             * 但第一版先不给过高置信度。
-             */
-            AOutCandidate.Confidence = 0.85;
+            const CetInpoint RotatedBStart = _RotatePoint(EdgeB.Start, RotationB);
+            const CetInpoint RotatedBEnd = _RotatePoint(EdgeB.End, RotationB);
+            const CetInpoint RotatedBThird = _RotatePoint(BThird, RotationB);
 
-            if (!Geometry.FinalizeCandidate(AOriginalItems, AOptions, AOutCandidate)) { return false; }
+            const double AMidX = (AStartX + AEndX) * 0.5;
+            const double AMidY = (AStartY + AEndY) * 0.5;
+            const double BMidX = (static_cast<double>(RotatedBStart.X) + static_cast<double>(RotatedBEnd.X)) * 0.5;
+            const double BMidY = (static_cast<double>(RotatedBStart.Y) + static_cast<double>(RotatedBEnd.Y)) * 0.5;
 
+            struct TetBaseOffset {
+                double X = 0.0;
+                double Y = 0.0;
+            };
+            std::vector<TetBaseOffset> BaseOffsets;
+
+            /* 1. 中点对中点。 */
+            BaseOffsets.push_back({ AMidX - BMidX, AMidY - BMidY });
+            /* 2. A.Start 对 B.End。 */
+            BaseOffsets.push_back({ AStartX - static_cast<double>(RotatedBEnd.X), AStartY - static_cast<double>(RotatedBEnd.Y) });
+            /* 3. A.End 对 B.Start。 */
+            BaseOffsets.push_back({ AEndX - static_cast<double>(RotatedBStart.X), AEndY - static_cast<double>(RotatedBStart.Y) });
+            /* 4. A.Start 对 B.Start。对部分顶点顺序不同的三角形更稳。 */
+            BaseOffsets.push_back({ AStartX - static_cast<double>(RotatedBStart.X), AStartY - static_cast<double>(RotatedBStart.Y) });
+            /* 5. A.End 对 B.End。 */
+            BaseOffsets.push_back({ AEndX - static_cast<double>(RotatedBEnd.X), AEndY - static_cast<double>(RotatedBEnd.Y) });
+
+            bool HasBest = false;
+            TetClusterCandidate BestCandidate;
+            int SideRejectCount = 0;
+            int FinalizeRejectCount = 0;
+
+            for (const auto& BaseOffset : BaseOffsets) {
+                /* 先不加 Gap，判断 B 第三个点在基础对齐位置下位于 A 匹配边的哪一侧。 */
+                const double BThirdBaseX = static_cast<double>(RotatedBThird.X) + BaseOffset.X;
+                const double BThirdBaseY = static_cast<double>(RotatedBThird.Y) + BaseOffset.Y;
+                const double BaseAPX = BThirdBaseX - AStartX;
+                const double BaseAPY = BThirdBaseY - AStartY;
+                const double BSideBase = EdgeDX * BaseAPY - EdgeDY * BaseAPX;
+
+                /* A 和 B 的三角形主体必须在匹配边两侧。 */
+                if (ASide * BSideBase >= 0.0) {
+                    ++SideRejectCount;
+                    continue;
+                }
+
+                /*
+                 * BSideBase > 0 代表 B 在 A 边左侧；BSideBase < 0 代表 B 在 A 边右侧。
+                 * Gap 应该继续沿 B 所在侧推出去。
+                 */
+                const double OffsetSign = BSideBase > 0.0 ? 1.0 : -1.0;
+                const double BTranslationX = BaseOffset.X + (-UnitY) * OffsetSign * Gap;
+                const double BTranslationY = BaseOffset.Y + UnitX * OffsetSign * Gap;
+
+                /* 加 Gap 后，再确认 B 仍在 A 的另一侧。 */
+                const double BThirdX = static_cast<double>(RotatedBThird.X) + BTranslationX;
+                const double BThirdY = static_cast<double>(RotatedBThird.Y) + BTranslationY;
+                const double APX = BThirdX - AStartX;
+                const double APY = BThirdY - AStartY;
+                const double BSide = EdgeDX * APY - EdgeDY * APX;
+
+                if (ASide * BSide >= 0.0) {
+                    ++SideRejectCount;
+                    continue;
+                }
+
+                TetClusterCandidate Candidate;
+                Candidate.BuilderName = "TriangleBuilder";
+                Candidate.ClusterType = "AnyTriangleEdgePair";
+                Candidate.OriginalIndices = { AAIndex, ABIndex };
+
+                TetItemTransform TransformA;
+                TransformA.OriginalId = AAIndex;
+                TransformA.RelativeX = ATranslationX;
+                TransformA.RelativeY = ATranslationY;
+                TransformA.RelativeRotation = 0.0;
+
+                TetItemTransform TransformB;
+                TransformB.OriginalId = ABIndex;
+                TransformB.RelativeX = BTranslationX;
+                TransformB.RelativeY = BTranslationY;
+                TransformB.RelativeRotation = RotationB;
+
+                Candidate.Transforms = { TransformA, TransformB };
+                Candidate.Confidence = 0.90;
+
+                if (!Geometry.FinalizeCandidate(AOriginalItems, AOptions, Candidate)) {
+                    ++FinalizeRejectCount;
+                    continue;
+                }
+
+                const double LengthMatchRatio = std::min(EdgeA.Length, EdgeB.Length) / std::max(EdgeA.Length, EdgeB.Length);
+                Candidate.Score += LengthMatchRatio * 50.0;
+
+                if (!HasBest || Candidate.Score > BestCandidate.Score) {
+                    HasBest = true;
+                    BestCandidate = std::move(Candidate);
+                }
+            }
+
+            if (!HasBest) {
+                std::cout << "[TRIANGLE][EDGE][REJECT] A=" << AAIndex << ", B=" << ABIndex
+                    << ", AEdge=" << AEdgeIndex << ", BEdge=" << BEdgeIndex
+                    << ", SideReject=" << SideRejectCount << ", FinalizeReject=" << FinalizeRejectCount << std::endl;
+                return false;
+            }
+
+            AOutCandidate = std::move(BestCandidate);
             return true;
-
         }
         bool CetTriangleClusterBuilder::_GetTriangleEdgePose(const CetPath& AContour, int AEdgeIndex, TetTriangleEdgePose& AOutEdge)
         {
@@ -599,6 +678,26 @@ namespace ET {
                 return false;
             }
 
+            return true;
+        }
+        //判断点在哪一侧
+        double CetTriangleClusterBuilder::_Cross(const CetInpoint& AA, const CetInpoint& AB, CetInpoint& AP)
+        {
+            const double ABX = static_cast<double>(AB.X - AA.X);
+            const double ABY = static_cast<double>(AB.Y - AA.Y);
+
+            const double APX = static_cast<double>(AP.X - AA.X);
+            const double APY = static_cast<double>(AP.Y - AA.Y);
+
+            return ABX * APY - ABY * APX;
+        }
+        //获取第三个点
+        bool CetTriangleClusterBuilder::_GetTriangleThirdPoint(const CetPath& AContour, int AEdgeIndex, CetInpoint& AOutPoint)
+        {
+            if (AContour.size() != 3) {return false;}
+            if (AEdgeIndex < 0 || AEdgeIndex >= 3) {return false;}
+            const int ThirdIndex = (AEdgeIndex + 2) % 3;
+            AOutPoint = AContour[ThirdIndex];
             return true;
         }
     }

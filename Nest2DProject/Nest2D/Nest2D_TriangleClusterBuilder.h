@@ -43,6 +43,8 @@ namespace ET {
 			double _NormalizeAngle(double AAngle) ;
 			CetInpoint _RotatePoint(const CetInpoint& APoint, double ARotation) ;
 			bool _BuildOppositeTrianglePairCandidate(const CetTNestItemVector& AOriginalItems,const std::vector<TetShapeFeature>& AFeatures,int AAIndex,int ABIndex,const TetNestOptions& AOptions,TetClusterCandidate& AOutCandidate);
+			double _Cross(const CetInpoint&AA,const CetInpoint &AB,CetInpoint&AP);
+			bool _GetTriangleThirdPoint(const CetPath& AContour,int AEdgeIndex,CetInpoint& AOutPoint);
 
 		};
 	}
