@@ -9,8 +9,6 @@
 namespace ET {
     namespace NEST2DMANAGERLIB {
 
-        namespace { constexpr double PI = 3.14159265358979323846; }
-
         CetArcClusterBuilder::CetArcClusterBuilder() : CetCoreObject() {}
         CetArcClusterBuilder::~CetArcClusterBuilder() {}
 
@@ -56,7 +54,7 @@ namespace ET {
 
                     TetItemTransform TransformB;
                     TransformB.OriginalId = IndexB;
-                    TransformB.RelativeRotation = PI - FeatureB.ArcChordAngle;
+                    TransformB.RelativeRotation = CET_CLUSTER_PI - FeatureB.ArcChordAngle;
 
                     // 先将两个半圆旋转到水平弦，再把第二个放到第一件右侧；FinalizeCandidate 负责归一化。
                     CetPath PathA = Geometry.TransformContour(Geometry.GetIdentityContour(AItems[IndexA]), TransformA.RelativeRotation, 0, 0);

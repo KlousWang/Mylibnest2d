@@ -12,8 +12,6 @@
 
 namespace ET {
     namespace NEST2DMANAGERLIB {
-        constexpr double CET_RECT_PI = 3.14159265358979323846;
-        constexpr double CET_RECT_HALF_PI = CET_RECT_PI * 0.5;
 
         // 两个矩形的长边和短边允许有 5% 的相对误差。
         constexpr double CET_RECT_SIZE_TOLERANCE = 0.05;
@@ -48,7 +46,7 @@ namespace ET {
                  * 如果 ARotate90 为 true，
                  * 再额外旋转 90°。
                  */
-                AOutPose.Rotation = -AFeature.OrientedAngle + (ARotate90 ? CET_RECT_HALF_PI : 0.0);
+                AOutPose.Rotation = -AFeature.OrientedAngle + (ARotate90 ? CET_CLUSTER_HALF_PI : 0.0);
                 const CetPath Contour = AGeometry.TransformContour(AGeometry.GetIdentityContour(AItem), AOutPose.Rotation, 0.0, 0.0);
                 double MaxX = 0.0;
                 double MaxY = 0.0;

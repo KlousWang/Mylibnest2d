@@ -13,17 +13,7 @@
 namespace ET {
     namespace NEST2DMANAGERLIB {
         
-        struct TetCircleExportInfo
-        {
-            bool Valid = false;
 
-            TetNestPoint CenterLocal;
-            TetNestPoint CenterWorld;
-
-            double Radius = 0.0;        // 真实圆半径
-            double VertexRadius = 0.0;  // 外切多边形顶点半径
-            int Segments = 0;
-        };
         static bool _IsCircleItem(const TetNestPolygon& AItem)
         {
             return AItem.Name == "Circle";
@@ -87,8 +77,7 @@ namespace ET {
             if (vertexRadius <= 0.0) {
                 return false;
             }
-            constexpr double PI = 3.14159265358979323846;
-            double realRadius = vertexRadius * std::cos(PI / static_cast<double>(segments));
+            double realRadius = vertexRadius * std::cos(CET_CLUSTER_PI / static_cast<double>(segments));
             if (realRadius <= 0.0) {
                 return false;
             }
@@ -99,7 +88,13 @@ namespace ET {
             AInfo.VertexRadius = vertexRadius;
             AInfo.Segments = segments;
 
-            AInfo.CenterWorld = _ApplyTransform(AInfo.CenterLocal, AItem.Out_x, AItem.Out_y, AItem.Out_angle);
+            TetNestPoint CenterLocalPoint;
+            CenterLocalPoint.X = AInfo.CenterLocal.X;
+            CenterLocalPoint.Y = AInfo.CenterLocal.Y;
+
+            const TetNestPoint CenterWorldPoint = _ApplyTransform(CenterLocalPoint, AItem.Out_x, AItem.Out_y, AItem.Out_angle);
+            AInfo.CenterWorld.X = CenterWorldPoint.X;
+            AInfo.CenterWorld.Y = CenterWorldPoint.Y;
 
             return true;
         }

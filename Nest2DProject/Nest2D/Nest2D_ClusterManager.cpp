@@ -3,6 +3,7 @@
 #include"Nest2D_PrivateDataType.h"
 #include "Nest2D_TriangleClusterBuilder.h"
 #include "Nest2D_CircleClusterBuilder.h"
+#include "Nest2D_GapFillClusterBuilder.h"
 #include "Nest2D_EllipseClusterBuilder.h"
 #include "Nest2D_RectangleClusterBuilder.h"
 #include "Nest2D_ArcClusterBuilder.h"
@@ -20,7 +21,6 @@ using namespace libnest2d;
 
 namespace ET {
 	namespace NEST2DMANAGERLIB {
-		constexpr double CET_CLUSTER_PI = 3.14159265358979323846;
 
 		CetClusterManager::CetClusterManager() :CetCoreObject()
 		{
@@ -321,6 +321,19 @@ namespace ET {
 					AOptions,
 					AllCandidates);
 				AppendBuilderLog("CircleBuilder", OldCount);
+			}
+
+			{
+				const std::size_t OldCount = AllCandidates.size();
+				const std::vector<TetClusterCandidate> BaseCandidates = AllCandidates;
+				CetGapFillClusterBuilder Builder;
+				Builder.BuildCandidates(
+					AOriginalItems,
+					AFeatures,
+					BaseCandidates,
+					AOptions,
+					AllCandidates);
+				AppendBuilderLog("GapFillBuilder", OldCount);
 			}
 
 			{

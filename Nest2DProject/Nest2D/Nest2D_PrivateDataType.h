@@ -14,9 +14,31 @@ using CetPackGround = libnest2d::_PackGroup<libnest2d::PolygonImpl>;
 using CetPath = ClipperLib::Path;
 using CetPolygonImpl = libnest2d::PolygonImpl;
 using CetInpoint = ClipperLib::IntPoint;
+
+constexpr double CET_CLUSTER_PI = 3.14159265358979323846;
+constexpr double CET_CLUSTER_HALF_PI = CET_CLUSTER_PI * 0.5;
+constexpr double CET_CLUSTER_TWO_PI = CET_CLUSTER_PI * 2.0;
+constexpr double CET_CLUSTER_THREE_HALF_PI = CET_CLUSTER_PI * 1.5;
 struct TetLib2DItemDataType
 {
 
+};
+struct TetCircleExportPoint
+{
+    double X = 0.0;
+    double Y = 0.0;
+};
+
+struct TetCircleExportInfo
+{
+    bool Valid = false;
+
+    TetCircleExportPoint CenterLocal;
+    TetCircleExportPoint CenterWorld;
+
+    double Radius = 0.0;
+    double VertexRadius = 0.0;
+    int Segments = 0;
 };
 struct TetBoardBounds
 {
@@ -158,6 +180,38 @@ struct TetTriangleEdgePose
 
     double Length = 0.0;
     double Angle = 0.0;
+};
+struct TetBaseOffset
+{
+    double X = 0.0;
+    double Y = 0.0;
+};
+
+struct TetCircleLayoutSlot
+{
+    double CenterX = 0.0;
+    double CenterY = 0.0;
+};
+
+struct TetCircleLayout
+{
+    std::vector<TetCircleLayoutSlot> Slots;
+    double Width = 0.0;
+    double Height = 0.0;
+    std::string ClusterType;
+};
+
+struct TetCircleIndexInfo
+{
+    int Index = -1;
+    double SizeKey = 0.0;
+};
+
+struct TetGapFillCircleCenter
+{
+    double X = 0.0;
+    double Y = 0.0;
+    double Size = 0.0;
 };
 
 enum class MetTriangleAngleType

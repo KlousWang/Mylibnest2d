@@ -178,6 +178,7 @@
     <ClInclude Include="Nest2D_Def.h" />
     <ClInclude Include="Nest2D_EllipseClusterBuilder.h" />
     <ClInclude Include="Nest2D_Engine.h" />
+    <ClInclude Include="Nest2D_GapFillClusterBuilder.h" />
     <ClInclude Include="Nest2D_GeometryUtils.h" />
     <ClInclude Include="Nest2D_InvokeFunctor.h" />
     <ClInclude Include="Nest2D_PolygonBoardRepairer.h" />
@@ -212,6 +213,7 @@
     <ClCompile Include="Nest2D_ClusterManager.cpp" />
     <ClCompile Include="Nest2D_EllipseClusterBuilder.cpp" />
     <ClCompile Include="Nest2D_Engine.cpp" />
+    <ClCompile Include="Nest2D_GapFillClusterBuilder.cpp" />
     <ClCompile Include="Nest2D_GeometryUtils.cpp" />
     <ClCompile Include="Nest2D_InvokeFunctor.cpp" />
     <ClCompile Include="Nest2D_PolygonBoardRepairer.cpp" />

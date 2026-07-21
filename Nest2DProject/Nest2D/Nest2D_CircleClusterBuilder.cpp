@@ -18,24 +18,10 @@ namespace ET {
             constexpr double CET_CIRCLE_SIZE_TOLERANCE = 0.01;
             constexpr double CET_CIRCLE_HONEYCOMB_ROW_RATIO = 0.86602540378443864676;
 
-            struct TetCircleLayoutSlot
+            bool NearlyEqual(double AA, double AB, double ARelativeTolerance)
             {
-                double CenterX = 0.0;
-                double CenterY = 0.0;
-            };
-
-            struct TetCircleLayout
-            {
-                std::vector<TetCircleLayoutSlot> Slots;
-                double Width = 0.0;
-                double Height = 0.0;
-                std::string ClusterType;
-            };
-
-            bool NearlyEqual(double A, double B, double RelativeTolerance)
-            {
-                const double Denominator = std::max(1.0, std::max(std::abs(A), std::abs(B)));
-                return std::abs(A - B) <= Denominator * RelativeTolerance;
+                const double Denominator = std::max(1.0, std::max(std::abs(AA), std::abs(AB)));
+                return std::abs(AA - AB) <= Denominator * ARelativeTolerance;
             }
 
             double GetCircleSizeKey(const TetShapeFeature& AFeature)
@@ -53,12 +39,6 @@ namespace ET {
 
             std::vector<std::vector<int>> GroupCircleIndices(const std::vector<int>& AIndices, const std::vector<TetShapeFeature>& AFeatures)
             {
-                struct TetCircleIndexInfo
-                {
-                    int Index = -1;
-                    double SizeKey = 0.0;
-                };
-
                 std::vector<TetCircleIndexInfo> Infos;
                 Infos.reserve(AIndices.size());
 
@@ -336,10 +316,7 @@ namespace ET {
                     const double ShiftX = (Row % 2 == 0) ? 0.0 : Step * 0.5;
                     const double CenterY = Radius + static_cast<double>(Row) * RowStep;
                     for (int Col = 0; Col < RowCounts[static_cast<std::size_t>(Row)]; ++Col) {
-                        Layout.Slots.push_back({
-                            Radius + ShiftX + static_cast<double>(Col) * Step,
-                            CenterY
-                            });
+                        Layout.Slots.push_back({Radius + ShiftX + static_cast<double>(Col) * Step,CenterY});
                     }
                 }
 
@@ -433,8 +410,7 @@ namespace ET {
                 _BuildSameSizeClusterCandidates(AOriginalItems, AFeatures, Group, AOptions, AOutCandidates);
             }
 
-            std::cout << "[CIRCLE][BUILD CANDIDATES] GroupCount = " << Groups.size()
-                << ", NewCandidateCount = " << AOutCandidates.size() - OldCandidateCount << std::endl;
+            std::cout << "[CIRCLE][BUILD CANDIDATES] GroupCount = " << Groups.size()<< ", NewCandidateCount = " << AOutCandidates.size() - OldCandidateCount << std::endl;
         }
 
         void CetCircleClusterBuilder::_BuildSameSizeClusterCandidates(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const std::vector<int>& AIndices, const TetNestOptions& AOptions, std::vector<TetClusterCandidate>& AOutCandidates)
@@ -497,21 +473,17 @@ namespace ET {
             if (AOriginalItems.size() != AFeatures.size() || AIndices.size() < 2) {
                 return false;
             }
-
             std::vector<int> Indices = AIndices;
             std::sort(Indices.begin(), Indices.end());
             Indices.erase(std::unique(Indices.begin(), Indices.end()), Indices.end());
-
             if (Indices.size() < 2) {
                 return false;
             }
-
             for (int Index : Indices) {
                 if (Index < 0 || Index >= static_cast<int>(AFeatures.size())) {
                     return false;
                 }
             }
-
             const TetShapeFeature& BaseFeature = AFeatures[Indices.front()];
             if (!IsValidCircleFeature(BaseFeature)) {
                 return false;

@@ -11,7 +11,6 @@ using namespace ClipperLib;
 using namespace libnest2d;
 namespace ET {
     namespace NEST2DMANAGERLIB {
-        constexpr double CET_TRIANGLE_PI = 3.14159265358979323846;
         CetTriangleClusterBuilder::CetTriangleClusterBuilder() : CetCoreObject()
         {
         }
@@ -103,7 +102,7 @@ namespace ET {
             TransformB.OriginalId = ABIndex;
             TransformB.RelativeX = ClusterW;
             TransformB.RelativeY = ClusterH;
-            TransformB.RelativeRotation = CET_TRIANGLE_PI;
+            TransformB.RelativeRotation = CET_CLUSTER_PI;
             Meta.TransformData.push_back(TransformB);
 
             AResult.MetaItems.push_back(Meta);
@@ -303,7 +302,7 @@ namespace ET {
 
             TetItemTransform TB;
             TB.OriginalId = ABIndex;
-            TB.RelativeRotation = CET_TRIANGLE_PI;
+            TB.RelativeRotation = CET_CLUSTER_PI;
             // 旋转180度后放到右上角，随后由 GeometryHelper 精确归一化和校验。
             TB.RelativeX = FA.Width + Gap - FB.MinX;
             TB.RelativeY = FA.Height + Gap - FB.MinY;
@@ -427,7 +426,7 @@ namespace ET {
             }
 
             /* 让 B 的匹配边和 A 的匹配边反向平行。 */
-            const double RotationB = _NormalizeAngle(EdgeA.Angle + CET_TRIANGLE_PI - EdgeB.Angle);
+            const double RotationB = _NormalizeAngle(EdgeA.Angle + CET_CLUSTER_PI - EdgeB.Angle);
 
             double AMinX = 0.0, AMinY = 0.0, AMaxX = 0.0, AMaxY = 0.0;
             if (!Geometry.GetBounds(ContourA, AMinX, AMinY, AMaxX, AMaxY)) {
@@ -464,10 +463,6 @@ namespace ET {
             const double BMidX = (static_cast<double>(RotatedBStart.X) + static_cast<double>(RotatedBEnd.X)) * 0.5;
             const double BMidY = (static_cast<double>(RotatedBStart.Y) + static_cast<double>(RotatedBEnd.Y)) * 0.5;
 
-            struct TetBaseOffset {
-                double X = 0.0;
-                double Y = 0.0;
-            };
             std::vector<TetBaseOffset> BaseOffsets;
 
             /* 1. 中点对中点。 */
@@ -587,11 +582,11 @@ namespace ET {
         }
         double CetTriangleClusterBuilder::_NormalizeAngle(double AAngle)
         {
-            while (AAngle > CET_TRIANGLE_PI) {
-                AAngle -= 2.0 * CET_TRIANGLE_PI;
+            while (AAngle > CET_CLUSTER_PI) {
+                AAngle -= CET_CLUSTER_TWO_PI;
             }
-            while (AAngle <= -CET_TRIANGLE_PI) {
-                AAngle += 2.0 * CET_TRIANGLE_PI;
+            while (AAngle <= -CET_CLUSTER_PI) {
+                AAngle += CET_CLUSTER_TWO_PI;
             }
             return AAngle;
         }
@@ -636,7 +631,7 @@ namespace ET {
 
             CetClusterGeometryHelper Geometry;
             CetPath PathA = Geometry.GetIdentityContour(AOriginalItems[AAIndex]);
-            CetPath PathB = Geometry.TransformContour(Geometry.GetIdentityContour(AOriginalItems[ABIndex]), CET_TRIANGLE_PI, 0.0, 0.0);
+            CetPath PathB = Geometry.TransformContour(Geometry.GetIdentityContour(AOriginalItems[ABIndex]), CET_CLUSTER_PI, 0.0, 0.0);
 
             double AMinX = 0.0, AMinY = 0.0, AMaxX = 0.0, AMaxY = 0.0;
             double BMinX = 0.0, BMinY = 0.0, BMaxX = 0.0, BMaxY = 0.0;
@@ -658,7 +653,7 @@ namespace ET {
             // B 旋转 180 度，放到 A 上方：A 的最高点 + Gap 对齐 B 旋转后的最低点
             TetItemTransform TransformB;
             TransformB.OriginalId = ABIndex;
-            TransformB.RelativeRotation = CET_TRIANGLE_PI;
+            TransformB.RelativeRotation = CET_CLUSTER_PI;
 
             // X 方向居中对齐
             const double ACenterX = (AMaxX - AMinX) * 0.5;

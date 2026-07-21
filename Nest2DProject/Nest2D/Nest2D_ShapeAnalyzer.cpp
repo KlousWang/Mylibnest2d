@@ -6,7 +6,6 @@
 #include <iostream>
 namespace ET {
 	namespace NEST2DMANAGERLIB {
-		constexpr double CET_SHAPE_PI = 3.14159265358979323846;
 		constexpr double CET_SHAPE_EPSILON = 1e-9;
      
 		CetShapeAnalyzer::CetShapeAnalyzer() :CetCoreObject()
@@ -70,7 +69,7 @@ namespace ET {
 
             double Perimeter = _CalculatePerimeter(Contour);
             for (const auto& H : Holes) Perimeter += _CalculatePerimeter(H);
-            Feature.Circularity = Perimeter > CET_SHAPE_EPSILON ? 4.0 * CET_SHAPE_PI * Feature.Area / (Perimeter * Perimeter) : 0.0;
+            Feature.Circularity = Perimeter > CET_SHAPE_EPSILON ? 4.0 * CET_CLUSTER_PI * Feature.Area / (Perimeter * Perimeter) : 0.0;
             Feature.Circularity = std::clamp(Feature.Circularity, 0.0, 1.0);
 
             _AnalyzeTriangleFeature(Contour, Feature);
@@ -303,7 +302,7 @@ namespace ET {
             AFeature.EllipseMinorAxis = MinorAxis;
 
             AFeature.EllipseAngle =
-                AFeature.Width >= AFeature.Height ? 0.0 : CET_SHAPE_PI * 0.5;
+                AFeature.Width >= AFeature.Height ? 0.0 : CET_CLUSTER_HALF_PI;
 
             AFeature.EllipseFitError = AverageError;
 
@@ -459,7 +458,7 @@ namespace ET {
                  * Area = 0.5 * pi * (OuterR^2 - InnerR^2)
                  * 这里通过当前轮廓面积反推出 InnerRadius。
                  */
-                const double InnerRadiusSquared = AOuterRadius * AOuterRadius - 2.0 * AFeature.Area / CET_SHAPE_PI;
+                const double InnerRadiusSquared = AOuterRadius * AOuterRadius - 2.0 * AFeature.Area / CET_CLUSTER_PI;
 
                 if (InnerRadiusSquared <= CET_SHAPE_EPSILON || InnerRadiusSquared >= AOuterRadius * AOuterRadius) { return; }
 
@@ -591,12 +590,12 @@ namespace ET {
                 const double OuterRadius = Height * 0.5;
 
                 // 右半圆：圆心在左边界附近。
-                TryCandidate(MinX, CenterY, OuterRadius, false, 1, CET_SHAPE_PI * 0.5,
+                TryCandidate(MinX, CenterY, OuterRadius, false, 1, CET_CLUSTER_HALF_PI,
                     ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(MinX)), static_cast<ClipperLib::cInt>(std::llround(CenterY - OuterRadius))),
                     ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(MinX)), static_cast<ClipperLib::cInt>(std::llround(CenterY + OuterRadius)))
                 );
                 // 左半圆：圆心在右边界附近。
-                TryCandidate(MaxX, CenterY, OuterRadius, false, -1, CET_SHAPE_PI * 0.5,
+                TryCandidate(MaxX, CenterY, OuterRadius, false, -1, CET_CLUSTER_HALF_PI,
                     ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(MaxX)), static_cast<ClipperLib::cInt>(std::llround(CenterY - OuterRadius))),
                     ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(MaxX)), static_cast<ClipperLib::cInt>(std::llround(CenterY + OuterRadius)))
                 );
@@ -607,7 +606,7 @@ namespace ET {
             AFeature.ArcRadius = BestCandidate.OuterRadius;
             AFeature.ArcChordLength = BestCandidate.OuterRadius * 2.0;
             AFeature.ArcChordAngle = BestCandidate.ChordAngle;
-            AFeature.ArcSweepAngle = CET_SHAPE_PI;
+            AFeature.ArcSweepAngle = CET_CLUSTER_PI;
             AFeature.ArcBulgeSign = BestCandidate.BulgeSign;
             AFeature.ArcFitError = BestCandidate.FitError;
             AFeature.ArcChordStart = BestCandidate.ChordStart;
@@ -717,7 +716,7 @@ namespace ET {
             if (AverageRadiusError > 0.12 || MaxRadiusError > 0.25) { return false; }
 
             // 4. 面积接近半圆面积。
-            const double ExpectedArea = 0.5 * CET_SHAPE_PI * Radius * Radius;
+            const double ExpectedArea = 0.5 * CET_CLUSTER_PI * Radius * Radius;
 
             if (ExpectedArea <= CET_SHAPE_EPSILON) { return false; }
 
@@ -734,7 +733,7 @@ namespace ET {
             AFeature.ArcChordLength = ChordLength;
             AFeature.ArcRadius = Radius;
             AFeature.ArcChordAngle = std::atan2(ChordDY, ChordDX);
-            AFeature.ArcSweepAngle = CET_SHAPE_PI;
+            AFeature.ArcSweepAngle = CET_CLUSTER_PI;
             AFeature.ArcBulgeSign = BulgeSign;
 
             AFeature.ArcFitError = std::max(AverageRadiusError, AreaError);

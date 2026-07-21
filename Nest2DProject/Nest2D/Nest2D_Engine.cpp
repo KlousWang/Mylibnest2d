@@ -33,8 +33,7 @@ namespace ET {
 			ARotations.clear();
 
 			if (ARotationCount > 0) {
-				const double PI = 3.14159265358979323846;
-				double AngleStep = (2.0 * PI) / ARotationCount;
+				double AngleStep = CET_CLUSTER_TWO_PI / ARotationCount;
 
 				for (int i = 0; i < ARotationCount; ++i) {
 					ARotations.push_back(libnest2d::Radians(i * AngleStep));

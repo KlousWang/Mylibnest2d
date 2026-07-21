@@ -176,8 +176,7 @@ namespace ET {
             }
 
             if (_Options->Rotations > 0) {
-                const double PI = 3.14159265358979323846;
-                const double AngleStep = (2.0 * PI) / _Options->Rotations;
+                const double AngleStep = CET_CLUSTER_TWO_PI / _Options->Rotations;
 
                 for (int i = 0; i < _Options->Rotations; ++i) {
                     m_Rotations.push_back(libnest2d::Radians(i * AngleStep));

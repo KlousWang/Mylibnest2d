@@ -24,8 +24,7 @@ TetNestPoint ET::NEST2DMANAGERLIB::CetGeometryUtils::TransformPoint(const TetNes
 
 double ET::NEST2DMANAGERLIB::CetGeometryUtils::RadToDeg(double ARad)
 {
-    constexpr double PI = 3.14159265358979323846;
-    return ARad * 180.0 / PI;
+    return ARad * 180.0 / CET_CLUSTER_PI;
 }
 
 bool ET::NEST2DMANAGERLIB::CetGeometryUtils::PointInPolygon(const TetNestPoint& AP, const std::vector<TetNestPoint>& APolygon)
