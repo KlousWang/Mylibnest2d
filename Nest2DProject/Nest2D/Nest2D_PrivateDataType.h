@@ -213,6 +213,27 @@ struct TetGapFillCircleCenter
     double Y = 0.0;
     double Size = 0.0;
 };
+struct TetEllipseIndexInfo
+{
+    int Index = -1;
+    double MajorAxis = 0.0;
+    double MinorAxis = 0.0;
+};
+
+struct TetEllipseLayoutSlot
+{
+    double X = 0.0;
+    double Y = 0.0;
+    bool RotateToVertical = false;
+};
+
+struct TetEllipseLayout
+{
+    std::vector<TetEllipseLayoutSlot> Slots;
+    double Width = 0.0;
+    double Height = 0.0;
+    std::string ClusterType;
+};
 
 enum class MetTriangleAngleType
 {

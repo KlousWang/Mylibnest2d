@@ -325,6 +325,17 @@ namespace ET {
 
 			{
 				const std::size_t OldCount = AllCandidates.size();
+				CetEllipseClusterBuilder Builder;
+				Builder.BuildCandidates(
+					AOriginalItems,
+					AFeatures,
+					IndicesByType[MetShapeType::EllipseLike],
+					AOptions,
+					AllCandidates);
+				AppendBuilderLog("EllipseBuilder", OldCount);
+			}
+			{
+				const std::size_t OldCount = AllCandidates.size();
 				const std::vector<TetClusterCandidate> BaseCandidates = AllCandidates;
 				CetGapFillClusterBuilder Builder;
 				Builder.BuildCandidates(
@@ -336,17 +347,6 @@ namespace ET {
 				AppendBuilderLog("GapFillBuilder", OldCount);
 			}
 
-			{
-				const std::size_t OldCount = AllCandidates.size();
-				CetEllipseClusterBuilder Builder;
-				Builder.BuildCandidates(
-					AOriginalItems,
-					AFeatures,
-					IndicesByType[MetShapeType::EllipseLike],
-					AOptions,
-					AllCandidates);
-				AppendBuilderLog("EllipseBuilder", OldCount);
-			}
 
 			{
 				const std::size_t OldCount = AllCandidates.size();

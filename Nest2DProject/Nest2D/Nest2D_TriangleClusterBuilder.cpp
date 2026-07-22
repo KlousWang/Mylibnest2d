@@ -230,7 +230,7 @@ namespace ET {
         {
             double Den = std::max(1.0, std::max(std::abs(A), std::abs(B)));
             return std::abs(A - B) <= Den * RelTol;
-        }
+        }  
         double CetTriangleClusterBuilder::_GetItemWidth(const CetNestItem& AItem)
         {
             return static_cast<double>(AItem.boundingBox().width());

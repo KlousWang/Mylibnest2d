@@ -3,6 +3,8 @@
 #include "Nest2D_PrivateDataType.h"
 #include "Nest2D_DataType.h"
 
+#include <vector>
+
 namespace ET {
     namespace NEST2DMANAGERLIB {
 
@@ -16,6 +18,11 @@ namespace ET {
             ~CetEllipseClusterBuilder();
 
             void BuildCandidates(const CetTNestItemVector& AItems,const std::vector<TetShapeFeature>& AFeatures,const std::vector<int>& AIndices,const TetNestOptions& AOptions,std::vector<TetClusterCandidate>& AOut);
+
+        protected:
+            void _BuildSameSizeClusterCandidates(const CetTNestItemVector& AItems,const std::vector<TetShapeFeature>& AFeatures,const std::vector<int>& AIndices,const TetNestOptions& AOptions,std::vector<TetClusterCandidate>& AOut);
+            bool _BuildClusterCandidate(const CetTNestItemVector& AItems,const std::vector<TetShapeFeature>& AFeatures,const std::vector<int>& AIndices,const TetNestOptions& AOptions,TetClusterCandidate& AOutCandidate);
+            double _CalculateScore(const TetClusterCandidate& ACandidate, const TetNestOptions& AOptions);
         };
 
     }

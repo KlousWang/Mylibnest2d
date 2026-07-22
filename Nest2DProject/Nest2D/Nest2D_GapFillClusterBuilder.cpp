@@ -105,7 +105,7 @@ namespace ET {
                 AProbes.emplace_back(AX, AY);
             }
 
-            std::vector<std::pair<double, double>> BuildProbePositions(const std::vector<TetShapeFeature>& AFeatures, const TetClusterCandidate& ABaseCandidate, double AFillerWidth, double AFillerHeight)
+            std::vector<std::pair<double, double>> BuildProbePositions(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetClusterCandidate& ABaseCandidate, double AFillerWidth, double AFillerHeight)
             {
                 std::vector<std::pair<double, double>> Probes;
 
@@ -128,64 +128,88 @@ namespace ET {
                     }
                 }
 
-                std::vector<TetGapFillCircleCenter> CircleCenters;
-                double MaxCircleSize = 0.0;
+                CetClusterGeometryHelper Geometry;
+                std::vector<TetGapFillCircleCenter> BaseCenters;
+                double MaxBaseSize = 0.0;
 
                 for (const TetItemTransform& Transform : ABaseCandidate.Transforms) {
-                    if (Transform.OriginalId < 0 || Transform.OriginalId >= static_cast<int>(AFeatures.size())) {
+                    if (Transform.OriginalId < 0 ||
+                        Transform.OriginalId >= static_cast<int>(AFeatures.size()) ||
+                        Transform.OriginalId >= static_cast<int>(AOriginalItems.size())){
                         continue;
                     }
 
                     const TetShapeFeature& Feature = AFeatures[Transform.OriginalId];
-                    if (Feature.ShapeType != MetShapeType::CircleLike || Feature.Width <= 0.0 || Feature.Height <= 0.0) {
+                    if ((Feature.ShapeType != MetShapeType::CircleLike && Feature.ShapeType != MetShapeType::EllipseLike) ||Feature.Width <= 0.0 ||
+                        Feature.Height <= 0.0){
+                        continue;
+                    }
+
+                    const CetPath ChildContour = Geometry.TransformContour(
+                        Geometry.GetIdentityContour(AOriginalItems[Transform.OriginalId]),
+                        Transform.RelativeRotation,
+                        Transform.RelativeX,
+                        Transform.RelativeY);
+
+                    double ChildMinX = 0.0;
+                    double ChildMinY = 0.0;
+                    double ChildMaxX = 0.0;
+                    double ChildMaxY = 0.0;
+                    if (!Geometry.GetBounds(ChildContour, ChildMinX, ChildMinY, ChildMaxX, ChildMaxY)) {
+                        continue;
+                    }
+
+                    const double ChildWidth = ChildMaxX - ChildMinX;
+                    const double ChildHeight = ChildMaxY - ChildMinY;
+                    if (ChildWidth <= 0.0 || ChildHeight <= 0.0) {
                         continue;
                     }
 
                     TetGapFillCircleCenter Center;
-                    Center.X = Transform.RelativeX + Feature.MinX + Feature.Width * 0.5;
-                    Center.Y = Transform.RelativeY + Feature.MinY + Feature.Height * 0.5;
-                    Center.Size = std::max(Feature.Width, Feature.Height);
-                    MaxCircleSize = std::max(MaxCircleSize, Center.Size);
-                    CircleCenters.push_back(Center);
+                    Center.X = (ChildMinX + ChildMaxX) * 0.5;
+                    Center.Y = (ChildMinY + ChildMaxY) * 0.5;
+                    Center.Size = std::max(ChildWidth, ChildHeight);
+                    MaxBaseSize = std::max(MaxBaseSize, Center.Size);
+                    BaseCenters.push_back(Center);
                 }
 
-                if (CircleCenters.empty() || MaxCircleSize <= 0.0) {
+                if (BaseCenters.empty() || MaxBaseSize <= 0.0) {
                     return Probes;
                 }
 
                 const double FillerCenterOffsetX = AFillerWidth * 0.5;
                 const double FillerCenterOffsetY = AFillerHeight * 0.5;
-                const double NeighborDistanceLimit = MaxCircleSize * 2.5;
+                const double NeighborDistanceLimit = MaxBaseSize * 2.5;
 
-                for (const TetGapFillCircleCenter& Center : CircleCenters) {
+                for (const TetGapFillCircleCenter& Center : BaseCenters) {
                     AddProbePosition(Probes, Center.X - FillerCenterOffsetX, Center.Y - FillerCenterOffsetY, MaxX, MaxY, ProbeTolerance);
                 }
 
-                for (std::size_t I = 0; I < CircleCenters.size(); ++I) {
-                    for (std::size_t J = I + 1; J < CircleCenters.size(); ++J) {
-                        const double DX = CircleCenters[I].X - CircleCenters[J].X;
-                        const double DY = CircleCenters[I].Y - CircleCenters[J].Y;
+                for (std::size_t I = 0; I < BaseCenters.size(); ++I) {
+                    for (std::size_t J = I + 1; J < BaseCenters.size(); ++J) {
+                        const double DX = BaseCenters[I].X - BaseCenters[J].X;
+                        const double DY = BaseCenters[I].Y - BaseCenters[J].Y;
                         const double Distance = std::sqrt(DX * DX + DY * DY);
                         if (Distance > NeighborDistanceLimit) {
                             continue;
                         }
 
-                        const double CenterX = (CircleCenters[I].X + CircleCenters[J].X) * 0.5;
-                        const double CenterY = (CircleCenters[I].Y + CircleCenters[J].Y) * 0.5;
+                        const double CenterX = (BaseCenters[I].X + BaseCenters[J].X) * 0.5;
+                        const double CenterY = (BaseCenters[I].Y + BaseCenters[J].Y) * 0.5;
                         AddProbePosition(Probes, CenterX - FillerCenterOffsetX, CenterY - FillerCenterOffsetY, MaxX, MaxY, ProbeTolerance);
                     }
                 }
 
-                for (std::size_t I = 0; I < CircleCenters.size(); ++I) {
+                for (std::size_t I = 0; I < BaseCenters.size(); ++I) {
                     std::vector<std::pair<double, std::size_t>> Neighbors;
 
-                    for (std::size_t J = 0; J < CircleCenters.size(); ++J) {
+                    for (std::size_t J = 0; J < BaseCenters.size(); ++J) {
                         if (I == J) {
                             continue;
                         }
 
-                        const double DX = CircleCenters[I].X - CircleCenters[J].X;
-                        const double DY = CircleCenters[I].Y - CircleCenters[J].Y;
+                        const double DX = BaseCenters[I].X - BaseCenters[J].X;
+                        const double DY = BaseCenters[I].Y - BaseCenters[J].Y;
                         const double Distance = std::sqrt(DX * DX + DY * DY);
                         if (Distance <= NeighborDistanceLimit) {
                             Neighbors.emplace_back(Distance, J);
@@ -208,15 +232,15 @@ namespace ET {
                         for (std::size_t B = A + 1; B < Neighbors.size(); ++B) {
                             const std::size_t J = Neighbors[A].second;
                             const std::size_t K = Neighbors[B].second;
-                            const double JKDX = CircleCenters[J].X - CircleCenters[K].X;
-                            const double JKDY = CircleCenters[J].Y - CircleCenters[K].Y;
+                            const double JKDX = BaseCenters[J].X - BaseCenters[K].X;
+                            const double JKDY = BaseCenters[J].Y - BaseCenters[K].Y;
                             const double JKDistance = std::sqrt(JKDX * JKDX + JKDY * JKDY);
                             if (JKDistance > NeighborDistanceLimit) {
                                 continue;
                             }
 
-                            const double CenterX = (CircleCenters[I].X + CircleCenters[J].X + CircleCenters[K].X) / 3.0;
-                            const double CenterY = (CircleCenters[I].Y + CircleCenters[J].Y + CircleCenters[K].Y) / 3.0;
+                            const double CenterX = (BaseCenters[I].X + BaseCenters[J].X + BaseCenters[K].X) / 3.0;
+                            const double CenterY = (BaseCenters[I].Y + BaseCenters[J].Y + BaseCenters[K].Y) / 3.0;
                             AddProbePosition(Probes, CenterX - FillerCenterOffsetX, CenterY - FillerCenterOffsetY, MaxX, MaxY, ProbeTolerance);
                         }
                     }
@@ -257,7 +281,7 @@ namespace ET {
         {
             AOutCandidate = TetClusterCandidate{};
 
-            if (!_IsCircleBaseCandidate(ABaseCandidate) || !ABaseCandidate.Valid || ABaseCandidate.ProxyContour.size() < 3) {
+            if (!_IsSupportedBaseCandidate(ABaseCandidate) || !ABaseCandidate.Valid || ABaseCandidate.ProxyContour.size() < 3) {
                 return false;
             }
 
@@ -356,7 +380,7 @@ namespace ET {
                     continue;
                 }
 
-                const std::vector<std::pair<double, double>> ProbePositions = BuildProbePositions(AFeatures, ABaseCandidate, FillerWidth, FillerHeight);
+                const std::vector<std::pair<double, double>> ProbePositions = BuildProbePositions(AOriginalItems, AFeatures, ABaseCandidate, FillerWidth, FillerHeight);
                 for (const auto& ProbePosition : ProbePositions) {
                     const double X = ProbePosition.first;
                     const double Y = ProbePosition.second;
@@ -401,10 +425,12 @@ namespace ET {
             return true;
         }
 
-        bool CetGapFillClusterBuilder::_IsCircleBaseCandidate(const TetClusterCandidate& ACandidate)
+        bool CetGapFillClusterBuilder::_IsSupportedBaseCandidate(const TetClusterCandidate& ACandidate)
         {
             return ACandidate.BuilderName == "CircleBuilder" ||
-                StartsWith(ACandidate.ClusterType, "Circle");
+                ACandidate.BuilderName == "EllipseBuilder" ||
+                StartsWith(ACandidate.ClusterType, "Circle") ||
+                StartsWith(ACandidate.ClusterType, "Ellipse");
         }
 
         bool CetGapFillClusterBuilder::_CanUseAsFiller(const TetShapeFeature& AFeature, const TetClusterCandidate& ABaseCandidate)
