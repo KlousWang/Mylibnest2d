@@ -1,13 +1,355 @@
-ï»¿#include "pch.h"
+#include "pch.h"
 #include "Nest2D_ShapeAnalyzer.h"
 
 #include <cmath>
 #include <algorithm>
 #include <iostream>
+#include <limits>
+#include <vector>
 namespace ET {
 	namespace NEST2DMANAGERLIB {
 		constexpr double CET_SHAPE_EPSILON = 1e-9;
-     
+
+        namespace {
+            constexpr double CET_GENERAL_ARC_MIN_SWEEP = CET_CLUSTER_PI / 18.0;
+            constexpr double CET_GENERAL_ARC_MAX_SWEEP = CET_CLUSTER_TWO_PI - CET_CLUSTER_PI / 36.0;
+            constexpr double CET_GENERAL_ARC_SEMI_TOLERANCE = CET_CLUSTER_PI / 36.0;
+
+            double NormalizeAngle(double Angle)
+            {
+                double NormalizedAngle = std::fmod(Angle, CET_CLUSTER_TWO_PI);
+                if (NormalizedAngle < 0.0) {
+                    NormalizedAngle += CET_CLUSTER_TWO_PI;
+                }
+                return NormalizedAngle;
+            }
+
+            TetCircleFitResult FitCircleCenterFromThreePoints(const ClipperLib::IntPoint& FirstPoint, const ClipperLib::IntPoint& MiddlePoint, const ClipperLib::IntPoint& LastPoint)
+            {
+                TetCircleFitResult FitResult;
+
+                const double FirstX = static_cast<double>(FirstPoint.X);
+                const double FirstY = static_cast<double>(FirstPoint.Y);
+                const double MiddleX = static_cast<double>(MiddlePoint.X);
+                const double MiddleY = static_cast<double>(MiddlePoint.Y);
+                const double LastX = static_cast<double>(LastPoint.X);
+                const double LastY = static_cast<double>(LastPoint.Y);
+
+                const double Denominator = 2.0 * (FirstX * (MiddleY - LastY) + MiddleX * (LastY - FirstY) + LastX * (FirstY - MiddleY));
+                if (std::abs(Denominator) <= CET_SHAPE_EPSILON) {
+                    return FitResult;
+                }
+
+                const double FirstSquared = FirstX * FirstX + FirstY * FirstY;
+                const double MiddleSquared = MiddleX * MiddleX + MiddleY * MiddleY;
+                const double LastSquared = LastX * LastX + LastY * LastY;
+
+                FitResult.CenterX = (FirstSquared * (MiddleY - LastY) + MiddleSquared * (LastY - FirstY) + LastSquared * (FirstY - MiddleY)) / Denominator;
+                FitResult.CenterY = (FirstSquared * (LastX - MiddleX) + MiddleSquared * (FirstX - LastX) + LastSquared * (MiddleX - FirstX)) / Denominator;
+                FitResult.Valid = std::isfinite(FitResult.CenterX) && std::isfinite(FitResult.CenterY);
+                return FitResult;
+            }
+
+            TetCircleFitResult FitCircleCenterFromChain(const CetPath& Chain)
+            {
+                if (Chain.size() < 3) {
+                    return TetCircleFitResult{};
+                }
+
+                const std::size_t MiddleIndex = Chain.size() / 2;
+                return FitCircleCenterFromThreePoints(Chain.front(), Chain[MiddleIndex], Chain.back());
+            }
+
+            CetPath BuildClosedContourChain(const CetPath& Contour, std::size_t StartIndex, std::size_t EndIndex)
+            {
+                CetPath Chain;
+                if (Contour.empty()) {
+                    return Chain;
+                }
+
+                std::size_t CurrentIndex = StartIndex % Contour.size();
+                const std::size_t TargetIndex = EndIndex % Contour.size();
+
+                while (true) {
+                    Chain.push_back(Contour[CurrentIndex]);
+                    if (CurrentIndex == TargetIndex) {
+                        break;
+                    }
+                    CurrentIndex = (CurrentIndex + 1) % Contour.size();
+                    if (Chain.size() > Contour.size()) {
+                        Chain.clear();
+                        break;
+                    }
+                }
+
+                return Chain;
+            }
+
+            bool EvaluateArcChain(const CetPath& Chain, double CenterX, double CenterY, double& OutAverageRadius, double& OutAverageError, double& OutMaxError)
+            {
+                OutAverageRadius = 0.0;
+                OutAverageError = 1.0;
+                OutMaxError = 1.0;
+
+                if (Chain.size() < 3) {
+                    return false;
+                }
+
+                for (const ClipperLib::IntPoint& Point : Chain) {
+                    OutAverageRadius += std::hypot(static_cast<double>(Point.X) - CenterX, static_cast<double>(Point.Y) - CenterY);
+                }
+
+                OutAverageRadius /= static_cast<double>(Chain.size());
+                if (OutAverageRadius <= CET_SHAPE_EPSILON) {
+                    return false;
+                }
+
+                double SumError = 0.0;
+                double MaxError = 0.0;
+                for (const ClipperLib::IntPoint& Point : Chain) {
+                    const double Radius = std::hypot(static_cast<double>(Point.X) - CenterX, static_cast<double>(Point.Y) - CenterY);
+                    const double Error = std::abs(Radius - OutAverageRadius) / std::max(1.0, OutAverageRadius);
+                    SumError += Error;
+                    MaxError = std::max(MaxError, Error);
+                }
+
+                OutAverageError = SumError / static_cast<double>(Chain.size());
+                OutMaxError = MaxError;
+                return true;
+            }
+
+            bool TryFitArcChains(const CetPath& Contour, TetArcChainFitResult& OutFitResult, CetPath& OutOuterChain)
+            {
+                OutFitResult = TetArcChainFitResult{};
+                OutOuterChain.clear();
+
+                const std::size_t ContourSize = Contour.size();
+                if (ContourSize < 6) {
+                    return false;
+                }
+
+                std::vector<std::pair<double, std::size_t>> EdgeLengths;
+                EdgeLengths.reserve(ContourSize);
+                for (std::size_t EdgeIndex = 0; EdgeIndex < ContourSize; ++EdgeIndex) {
+                    const ClipperLib::IntPoint& StartPoint = Contour[EdgeIndex];
+                    const ClipperLib::IntPoint& EndPoint = Contour[(EdgeIndex + 1) % ContourSize];
+                    const double EdgeLength = std::hypot(static_cast<double>(EndPoint.X - StartPoint.X), static_cast<double>(EndPoint.Y - StartPoint.Y));
+                    EdgeLengths.emplace_back(EdgeLength, EdgeIndex);
+                }
+
+                std::sort(
+                    EdgeLengths.begin(),
+                    EdgeLengths.end(),
+                    [](const auto& FirstEdge, const auto& SecondEdge)
+                    {
+                        return FirstEdge.first > SecondEdge.first;
+                    });
+
+                TetArcChainFitResult BestFitResult;
+                CetPath BestOuterChain;
+
+                const std::size_t CandidateLimit = std::min<std::size_t>(8, EdgeLengths.size());
+                for (std::size_t FirstEdgeOffset = 0; FirstEdgeOffset < CandidateLimit; ++FirstEdgeOffset) {
+                    for (std::size_t SecondEdgeOffset = FirstEdgeOffset + 1; SecondEdgeOffset < CandidateLimit; ++SecondEdgeOffset) {
+                        const std::size_t FirstEdgeIndex = EdgeLengths[FirstEdgeOffset].second;
+                        const std::size_t SecondEdgeIndex = EdgeLengths[SecondEdgeOffset].second;
+                        if (FirstEdgeIndex == SecondEdgeIndex) {
+                            continue;
+                        }
+
+                        const CetPath FirstChain = BuildClosedContourChain(Contour, (FirstEdgeIndex + 1) % ContourSize, SecondEdgeIndex);
+                        const CetPath SecondChain = BuildClosedContourChain(Contour, (SecondEdgeIndex + 1) % ContourSize, FirstEdgeIndex);
+                        if (FirstChain.size() < 3 || SecondChain.size() < 3) {
+                            continue;
+                        }
+
+                        const TetCircleFitResult FirstCenterFit = FitCircleCenterFromChain(FirstChain);
+                        const TetCircleFitResult SecondCenterFit = FitCircleCenterFromChain(SecondChain);
+                        if (!FirstCenterFit.Valid || !SecondCenterFit.Valid) {
+                            continue;
+                        }
+
+                        const double CenterDistance = std::hypot(FirstCenterFit.CenterX - SecondCenterFit.CenterX, FirstCenterFit.CenterY - SecondCenterFit.CenterY);
+                        const double CenterX = (FirstCenterFit.CenterX + SecondCenterFit.CenterX) * 0.5;
+                        const double CenterY = (FirstCenterFit.CenterY + SecondCenterFit.CenterY) * 0.5;
+
+                        double FirstRadius = 0.0;
+                        double FirstAverageError = 1.0;
+                        double FirstMaxError = 1.0;
+                        double SecondRadius = 0.0;
+                        double SecondAverageError = 1.0;
+                        double SecondMaxError = 1.0;
+                        if (!EvaluateArcChain(FirstChain, CenterX, CenterY, FirstRadius, FirstAverageError, FirstMaxError) ||
+                            !EvaluateArcChain(SecondChain, CenterX, CenterY, SecondRadius, SecondAverageError, SecondMaxError))
+                        {
+                            continue;
+                        }
+
+                        const double OuterRadius = std::max(FirstRadius, SecondRadius);
+                        const double InnerRadius = std::min(FirstRadius, SecondRadius);
+                        if (InnerRadius <= CET_SHAPE_EPSILON || OuterRadius <= InnerRadius) {
+                            continue;
+                        }
+
+                        if (CenterDistance > OuterRadius * 0.10) {
+                            continue;
+                        }
+
+                        const double Thickness = OuterRadius - InnerRadius;
+                        if (Thickness < OuterRadius * 0.02 || Thickness > OuterRadius * 0.80) {
+                            continue;
+                        }
+
+                        const double AverageError = (FirstAverageError + SecondAverageError) * 0.5 + CenterDistance / std::max(1.0, OuterRadius);
+                        const double MaxError = std::max(FirstMaxError, SecondMaxError);
+                        if (AverageError > 0.08 || MaxError > 0.20) {
+                            continue;
+                        }
+
+                        if (!BestFitResult.Valid || AverageError < BestFitResult.AverageError) {
+                            BestFitResult.Valid = true;
+                            BestFitResult.CenterX = CenterX;
+                            BestFitResult.CenterY = CenterY;
+                            BestFitResult.InnerRadius = InnerRadius;
+                            BestFitResult.OuterRadius = OuterRadius;
+                            BestFitResult.AverageError = AverageError;
+                            BestFitResult.MaxError = MaxError;
+                            BestOuterChain = FirstRadius >= SecondRadius ? FirstChain : SecondChain;
+                        }
+                    }
+                }
+
+                if (!BestFitResult.Valid) {
+                    return false;
+                }
+
+                OutFitResult = BestFitResult;
+                OutOuterChain = std::move(BestOuterChain);
+                return true;
+            }
+
+            TetAngleSpanResult FindMinimalAngleSpan(const CetPath& Chain, double CenterX, double CenterY)
+            {
+                TetAngleSpanResult Result;
+                if (Chain.size() < 2) {
+                    return Result;
+                }
+
+                std::vector<double> Angles;
+                Angles.reserve(Chain.size());
+                for (const ClipperLib::IntPoint& Point : Chain) {
+                    Angles.push_back(NormalizeAngle(std::atan2(static_cast<double>(Point.Y) - CenterY, static_cast<double>(Point.X) - CenterX)));
+                }
+
+                std::sort(Angles.begin(), Angles.end());
+                Angles.erase(
+                    std::unique(
+                        Angles.begin(),
+                        Angles.end(),
+                        [](double FirstAngle, double SecondAngle)
+                        {
+                            return std::abs(FirstAngle - SecondAngle) <= 1e-9;
+                        }),
+                    Angles.end());
+
+                if (Angles.size() < 2) {
+                    return Result;
+                }
+
+                double LargestGap = -1.0;
+                std::size_t LargestGapStartIndex = 0;
+                for (std::size_t AngleIndex = 0; AngleIndex < Angles.size(); ++AngleIndex) {
+                    const std::size_t NextAngleIndex = (AngleIndex + 1) % Angles.size();
+                    const double CurrentAngle = Angles[AngleIndex];
+                    const double NextAngle = NextAngleIndex == 0 ? Angles[NextAngleIndex] + CET_CLUSTER_TWO_PI : Angles[NextAngleIndex];
+                    const double Gap = NextAngle - CurrentAngle;
+                    if (Gap > LargestGap) {
+                        LargestGap = Gap;
+                        LargestGapStartIndex = AngleIndex;
+                    }
+                }
+
+                const std::size_t SpanStartIndex = (LargestGapStartIndex + 1) % Angles.size();
+                const double StartAngle = Angles[SpanStartIndex];
+                const double EndAngle = Angles[LargestGapStartIndex] < StartAngle ? Angles[LargestGapStartIndex] + CET_CLUSTER_TWO_PI : Angles[LargestGapStartIndex];
+                const double SweepAngle = EndAngle - StartAngle;
+
+                if (SweepAngle < CET_GENERAL_ARC_MIN_SWEEP || SweepAngle > CET_GENERAL_ARC_MAX_SWEEP) {
+                    return Result;
+                }
+
+                Result.Valid = true;
+                Result.StartAngle = StartAngle;
+                Result.EndAngle = EndAngle;
+                Result.SweepAngle = SweepAngle;
+                return Result;
+            }
+
+            bool TryAnalyzeGeneralThickArcFeature(const CetPath& Contour, TetShapeFeature& Feature)
+            {
+                TetArcChainFitResult ChainFit;
+                CetPath OuterChain;
+                if (!TryFitArcChains(Contour, ChainFit, OuterChain)) {
+                    return false;
+                }
+
+                const TetAngleSpanResult AngleSpan = FindMinimalAngleSpan(OuterChain, ChainFit.CenterX, ChainFit.CenterY);
+                if (!AngleSpan.Valid) {
+                    return false;
+                }
+
+                const double ExpectedArea = 0.5 * AngleSpan.SweepAngle * (ChainFit.OuterRadius * ChainFit.OuterRadius - ChainFit.InnerRadius * ChainFit.InnerRadius);
+                if (ExpectedArea <= CET_SHAPE_EPSILON) {
+                    return false;
+                }
+
+                const double AreaError = std::abs(Feature.Area - ExpectedArea) / std::max(1.0, ExpectedArea);
+                if (AreaError > 0.22) {
+                    return false;
+                }
+
+                const double ChordStartX = ChainFit.CenterX + ChainFit.OuterRadius * std::cos(AngleSpan.StartAngle);
+                const double ChordStartY = ChainFit.CenterY + ChainFit.OuterRadius * std::sin(AngleSpan.StartAngle);
+                const double ChordEndX = ChainFit.CenterX + ChainFit.OuterRadius * std::cos(AngleSpan.EndAngle);
+                const double ChordEndY = ChainFit.CenterY + ChainFit.OuterRadius * std::sin(AngleSpan.EndAngle);
+                const double ChordDeltaX = ChordEndX - ChordStartX;
+                const double ChordDeltaY = ChordEndY - ChordStartY;
+                const double ChordLength = std::hypot(ChordDeltaX, ChordDeltaY);
+                if (ChordLength <= CET_SHAPE_EPSILON) {
+                    return false;
+                }
+
+                const double MidAngle = AngleSpan.StartAngle + AngleSpan.SweepAngle * 0.5;
+                const double MidArcX = ChainFit.CenterX + ChainFit.OuterRadius * std::cos(MidAngle);
+                const double MidArcY = ChainFit.CenterY + ChainFit.OuterRadius * std::sin(MidAngle);
+                const double MidCross = ChordDeltaX * (MidArcY - ChordStartY) - ChordDeltaY * (MidArcX - ChordStartX);
+                const int BulgeSign = MidCross >= 0.0 ? 1 : -1;
+
+                Feature.ArcType = std::abs(AngleSpan.SweepAngle - CET_CLUSTER_PI) <= CET_GENERAL_ARC_SEMI_TOLERANCE
+                    ? MetArcType::SemiCircleLike
+                    : MetArcType::GeneralArcLike;
+                Feature.ArcCenter = ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(ChainFit.CenterX)), static_cast<ClipperLib::cInt>(std::llround(ChainFit.CenterY)));
+                Feature.ArcChordStart = ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(ChordStartX)), static_cast<ClipperLib::cInt>(std::llround(ChordStartY)));
+                Feature.ArcChordEnd = ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(ChordEndX)), static_cast<ClipperLib::cInt>(std::llround(ChordEndY)));
+                Feature.ArcRadius = ChainFit.OuterRadius;
+                Feature.ArcChordLength = ChordLength;
+                Feature.ArcChordAngle = std::atan2(ChordDeltaY, ChordDeltaX);
+                Feature.ArcSweepAngle = AngleSpan.SweepAngle;
+                Feature.ArcBulgeSign = BulgeSign;
+                Feature.ArcFitError = std::max(ChainFit.AverageError, AreaError);
+
+                std::cout << "[SHAPE][ARC][GENERAL_THICK] Index=" << Feature.OriginalIndex
+                    << " Type=" << static_cast<int>(Feature.ArcType)
+                    << " OuterRadius=" << Feature.ArcRadius
+                    << " InnerRadius=" << ChainFit.InnerRadius
+                    << " Sweep=" << Feature.ArcSweepAngle
+                    << " Chord=" << Feature.ArcChordLength
+                    << " FitError=" << Feature.ArcFitError
+                    << " BulgeSign=" << Feature.ArcBulgeSign << std::endl;
+
+                return true;
+            }
+        }
 		CetShapeAnalyzer::CetShapeAnalyzer() :CetCoreObject()
 		{
 		}
@@ -206,8 +548,8 @@ namespace ET {
                 return;
             }
             /*
-             * åšåº¦åŠåœ†å¼§é€šå¸¸æ˜¯å‡¹å¤šè¾¹å½¢ã€‚
-             * ä¾‹å¦‚ radius=20, thickness=4, start=0, end=180ã€‚
+             * ºñ¶È°ëÔ²»¡Í¨³£ÊÇ°¼¶à±ßĞÎ¡£
+             * ÀıÈç radius=20, thickness=4, start=0, end=180¡£
              */
             if (!AFeature.IsConvex) {
                 _AnalyzeThickArcFeature(AContour, AFeature);
@@ -215,7 +557,7 @@ namespace ET {
             }
 
             /*
-             * å‡¸å›¾å½¢ç»§ç»­èµ°åŸæ¥çš„å®å¿ƒåŠåœ†è¯†åˆ«é€»è¾‘ã€‚
+             * Í¹Í¼ĞÎ¼ÌĞø×ßÔ­À´µÄÊµĞÄ°ëÔ²Ê¶±ğÂß¼­¡£
              */
             _AnalyzeSolidArcFeature(AContour, AFeature);
         }
@@ -235,8 +577,8 @@ namespace ET {
                 return;
             }
 
-            // é¡¶ç‚¹å¤ªå°‘æ—¶ä¸è®¤ä¸ºæ˜¯æ¤­åœ†ã€‚
-            // CAD ä¸­åœ†/æ¤­åœ†ä¸€èˆ¬ä¼šç¦»æ•£æˆè¾ƒå¤šç‚¹ã€‚
+            // ¶¥µãÌ«ÉÙÊ±²»ÈÏÎªÊÇÍÖÔ²¡£
+            // CAD ÖĞÔ²/ÍÖÔ²Ò»°ã»áÀëÉ¢³É½Ï¶àµã¡£
             if (AContour.size() < 8) {
                 return;
             }
@@ -282,8 +624,8 @@ namespace ET {
             const double AverageError =
                 SumError / static_cast<double>(AContour.size());
 
-            // ç¬¬ä¸€é˜¶æ®µåªåšè½´å‘æ¤­åœ†è¯†åˆ«ã€‚
-            // æ—‹è½¬æ¤­åœ†æš‚æ—¶å¯ä»¥é€€åŒ–ä¸º ConvexPolygon / Singleã€‚
+            // µÚÒ»½×¶ÎÖ»×öÖáÏòÍÖÔ²Ê¶±ğ¡£
+            // Ğı×ªÍÖÔ²ÔİÊ±¿ÉÒÔÍË»¯Îª ConvexPolygon / Single¡£
             if (AverageError > 0.12 || MaxError > 0.35) {
                 return;
             }
@@ -340,7 +682,7 @@ namespace ET {
             if (Den <= CET_SHAPE_EPSILON) return 0.0;
             return std::acos(std::clamp((AX * BX + AY * BY) / Den, -1.0, 1.0));
         }
-	
+
         double CetShapeAnalyzer::_CalculatePerimeter(const CetPath& AContour)
         {
             const std::size_t Count = AContour.size();
@@ -350,18 +692,18 @@ namespace ET {
             long double Perimeter = 0.0L;
             for (std::size_t i = 0; i < Count; ++i) {
                 /*
-                 * ä½¿ç”¨å–æ¨¡è®©æœ€åä¸€ä¸ªç‚¹è¿æ¥å›ç¬¬ä¸€ä¸ªç‚¹ã€‚
+                 * Ê¹ÓÃÈ¡Ä£ÈÃ×îºóÒ»¸öµãÁ¬½Ó»ØµÚÒ»¸öµã¡£
                  *
-                 * ä¾‹å¦‚Count=3ï¼š
-                 * i=0ï¼ŒNextIndex=1
-                 * i=1ï¼ŒNextIndex=2
-                 * i=2ï¼ŒNextIndex=0
+                 * ÀıÈçCount=3£º
+                 * i=0£¬NextIndex=1
+                 * i=1£¬NextIndex=2
+                 * i=2£¬NextIndex=0
                  */
                 const std::size_t NextIndex =(i + 1) % Count;
 
                 /*
-                 * è°ƒè¯•é˜¶æ®µä½¿ç”¨at()ã€‚
-                 * å¦‚æœä»¥åå†æ¬¡å‘ç”Ÿè¶Šç•Œï¼Œèƒ½å¤Ÿæ›´å®¹æ˜“æš´éœ²é—®é¢˜ã€‚
+                 * µ÷ÊÔ½×¶ÎÊ¹ÓÃat()¡£
+                 * Èç¹ûÒÔºóÔÙ´Î·¢ÉúÔ½½ç£¬ÄÜ¹»¸üÈİÒ×±©Â¶ÎÊÌâ¡£
                  */
                 const ClipperLib::IntPoint& Current =AContour.at(i);
                 const ClipperLib::IntPoint& Next =AContour.at(NextIndex);
@@ -372,7 +714,7 @@ namespace ET {
 
             return static_cast<double>(Perimeter);
         }
-		//åˆ¤æ–­æ˜¯å¦æ˜¯å‡¸å¤šè¾¹å½¢
+		//ÅĞ¶ÏÊÇ·ñÊÇÍ¹¶à±ßĞÎ
 		bool CetShapeAnalyzer::_IsConvex(const CetPath& AContour)
 		{
 			const std::size_t Count = AContour.size();
@@ -390,14 +732,14 @@ namespace ET {
 				const long double BCX =static_cast<long double>(C.X) -static_cast<long double>(B.X);
 			    const long double BCY =static_cast<long double>(C.Y) -static_cast<long double>(B.Y);
 				const long double Cross =ABX * BCY -ABY * BCX;
-				//å…±çº¿ç‚¹ä¸å½±å“å‡¸æ€§åˆ¤æ–­
+				//¹²Ïßµã²»Ó°ÏìÍ¹ĞÔÅĞ¶Ï
 				if (Cross > 0.0l) {
 					HasPositiveCross = true;
 				}
 				else if(Cross<0.0l){
 					HasNegativeCross = true;
 				}
-				//åŒæ—¶å‡ºç°æ­£äº¤å‰å’Œè´Ÿäº¤å‰è¯æ˜ç¼ºé™·å­˜åœ¨
+				//Í¬Ê±³öÏÖÕı½»²æºÍ¸º½»²æÖ¤Ã÷È±Ïİ´æÔÚ
 				if (HasPositiveCross && HasNegativeCross)return false;
 
 			}
@@ -406,17 +748,17 @@ namespace ET {
         void CetShapeAnalyzer::_NormalizePath(CetPath& APath)
         {
             if (APath.empty()) return;
-            // åˆ é™¤è¿ç»­é‡å¤ç‚¹
+            // É¾³ıÁ¬ĞøÖØ¸´µã
             CetPath Clean;
             Clean.reserve(APath.size());
             for (const auto& Point : APath) {
                 if (!Clean.empty() && Clean.back().X == Point.X && Clean.back().Y == Point.Y) continue;
                 Clean.push_back(Point);
             }
-            // åˆ é™¤é¦–å°¾é‡å¤é—­åˆç‚¹
+            // É¾³ıÊ×Î²ÖØ¸´±ÕºÏµã
             if (Clean.size() >= 2 && Clean.front().X == Clean.back().X && Clean.front().Y == Clean.back().Y)
                 Clean.pop_back();
-            // åˆ é™¤å…±çº¿çš„å¤šä½™ä¸­é—´ç‚¹ï¼ˆå¾ªç¯å¤„ç†ç›´åˆ°æ²¡æœ‰ç‚¹è¢«åˆ é™¤ï¼‰
+            // É¾³ı¹²ÏßµÄ¶àÓàÖĞ¼äµã£¨Ñ­»·´¦ÀíÖ±µ½Ã»ÓĞµã±»É¾³ı£©
             bool Changed = true;
             while (Changed && Clean.size() > 3) {
                 Changed = false;
@@ -426,7 +768,7 @@ namespace ET {
                     const auto& A = Clean[(i + Count - 1) % Count];
                     const auto& B = Clean[i];
                     const auto& C = Clean[(i + 1) % Count];
-                    const long double Cross = static_cast<long double>(B.X - A.X) * static_cast<long double>(C.Y - B.Y) - static_cast<long double>(B.Y - A.Y) 
+                    const long double Cross = static_cast<long double>(B.X - A.X) * static_cast<long double>(C.Y - B.Y) - static_cast<long double>(B.Y - A.Y)
                         * static_cast<long double>(C.X - B.X);
                     if (Cross == 0.0L) { Changed = true; continue; }
                     Result.push_back(B);
@@ -443,7 +785,9 @@ namespace ET {
             if (AContour.size() < 5) { return false; }
 
             if (AFeature.Width <= CET_SHAPE_EPSILON || AFeature.Height <= CET_SHAPE_EPSILON || AFeature.Area <= CET_SHAPE_EPSILON) { return false; }
- 
+
+            if (TryAnalyzeGeneralThickArcFeature(AContour, AFeature)) { return true; }
+
             if (AFeature.AspectRatio < 1.40 || AFeature.AspectRatio > 2.60) { return false; }
             if (AFeature.FillRatio < 0.10 || AFeature.FillRatio > 0.55) { return false; }
             const std::size_t Count = AContour.size();
@@ -454,9 +798,9 @@ namespace ET {
                 if (AOuterRadius <= CET_SHAPE_EPSILON) { return; }
 
                 /*
-                 * åŠåœ†ç¯é¢ç§¯ï¼š
+                 * °ëÔ²»·Ãæ»ı£º
                  * Area = 0.5 * pi * (OuterR^2 - InnerR^2)
-                 * è¿™é‡Œé€šè¿‡å½“å‰è½®å»“é¢ç§¯åæ¨å‡º InnerRadiusã€‚
+                 * ÕâÀïÍ¨¹ıµ±Ç°ÂÖÀªÃæ»ı·´ÍÆ³ö InnerRadius¡£
                  */
                 const double InnerRadiusSquared = AOuterRadius * AOuterRadius - 2.0 * AFeature.Area / CET_CLUSTER_PI;
 
@@ -468,9 +812,9 @@ namespace ET {
                 if (Thickness <= CET_SHAPE_EPSILON) { return; }
 
                 /*
-                 * åšåº¦ä¸èƒ½å¤ªè–„ï¼Œä¹Ÿä¸èƒ½å¤ªåšã€‚
-                 * å¤ªè–„å¯èƒ½æ˜¯ç¦»æ•£è¯¯å·®ï¼›
-                 * å¤ªåšå¯èƒ½ä¸æ˜¯åŠåœ†å¼§ï¼Œè€Œæ˜¯æ™®é€šå‡¹å¤šè¾¹å½¢ã€‚
+                 * ºñ¶È²»ÄÜÌ«±¡£¬Ò²²»ÄÜÌ«ºñ¡£
+                 * Ì«±¡¿ÉÄÜÊÇÀëÉ¢Îó²î£»
+                 * Ì«ºñ¿ÉÄÜ²»ÊÇ°ëÔ²»¡£¬¶øÊÇÆÕÍ¨°¼¶à±ßĞÎ¡£
                  */
                 if (Thickness < AOuterRadius * 0.02 || Thickness > AOuterRadius * 0.80) { return; }
 
@@ -488,15 +832,15 @@ namespace ET {
                     const double PY = static_cast<double>(Point.Y);
 
                     /*
-                     * åŠåœ†å¼§ç‚¹åº”è¯¥åŸºæœ¬ä½äºåœ†å¿ƒçš„ä¸€ä¾§ã€‚
+                     * °ëÔ²»¡µãÓ¦¸Ã»ù±¾Î»ÓÚÔ²ĞÄµÄÒ»²à¡£
                      *
-                     * æ°´å¹³åŠåœ†ï¼š
-                     *   ä¸ŠåŠåœ†ï¼šPY >= CenterY
-                     *   ä¸‹åŠåœ†ï¼šPY <= CenterY
+                     * Ë®Æ½°ëÔ²£º
+                     *   ÉÏ°ëÔ²£ºPY >= CenterY
+                     *   ÏÂ°ëÔ²£ºPY <= CenterY
                      *
-                     * å‚ç›´åŠåœ†ï¼š
-                     *   å³åŠåœ†ï¼šPX >= CenterX
-                     *   å·¦åŠåœ†ï¼šPX <= CenterX
+                     * ´¹Ö±°ëÔ²£º
+                     *   ÓÒ°ëÔ²£ºPX >= CenterX
+                     *   ×ó°ëÔ²£ºPX <= CenterX
                      */
                     double SideValue = 0.0;
 
@@ -534,8 +878,8 @@ namespace ET {
                 const double AverageError = SumError / static_cast<double>(Count);
 
                 /*
-                 * å½“å‰æµ‹è¯•æ•°æ® FitError å¤§æ¦‚æ˜¯ 0.00016ï¼Œ
-                 * æ‰€ä»¥è¿™é‡Œ 0.05 å·²ç»æ¯”è¾ƒå®½æ¾ã€‚
+                 * µ±Ç°²âÊÔÊı¾İ FitError ´ó¸ÅÊÇ 0.00016£¬
+                 * ËùÒÔÕâÀï 0.05 ÒÑ¾­±È½Ï¿íËÉ¡£
                  */
                 if (AverageError > 0.05 || MaxError > 0.15) { return; }
 
@@ -563,18 +907,18 @@ namespace ET {
             const double CenterY = (MinY + MaxY) * 0.5;
 
             /*
-             * æ°´å¹³æ–¹å‘åŠåœ†å¼§ï¼š
-             * Width çº¦ç­‰äº 2 * OuterRadius
-             * Height çº¦ç­‰äº OuterRadius
+             * Ë®Æ½·½Ïò°ëÔ²»¡£º
+             * Width Ô¼µÈÓÚ 2 * OuterRadius
+             * Height Ô¼µÈÓÚ OuterRadius
              */
             if (Width >= Height * 1.40) {
                 const double OuterRadius = Width * 0.5;
-                // ä¸ŠåŠåœ†ï¼šåœ†å¿ƒåœ¨ä¸‹è¾¹ç•Œé™„è¿‘ã€‚
+                // ÉÏ°ëÔ²£ºÔ²ĞÄÔÚÏÂ±ß½ç¸½½ü¡£
                 TryCandidate(CenterX, MinY, OuterRadius, true, 1, 0.0,
                     ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(CenterX - OuterRadius)), static_cast<ClipperLib::cInt>(std::llround(MinY))),
                     ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(CenterX + OuterRadius)), static_cast<ClipperLib::cInt>(std::llround(MinY)))
                 );
-                // ä¸‹åŠåœ†ï¼šåœ†å¿ƒåœ¨ä¸Šè¾¹ç•Œé™„è¿‘ã€‚
+                // ÏÂ°ëÔ²£ºÔ²ĞÄÔÚÉÏ±ß½ç¸½½ü¡£
                 TryCandidate(CenterX, MaxY, OuterRadius, true, -1, 0.0,
                     ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(CenterX - OuterRadius)), static_cast<ClipperLib::cInt>(std::llround(MaxY))),
                     ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(CenterX + OuterRadius)), static_cast<ClipperLib::cInt>(std::llround(MaxY)))
@@ -582,19 +926,19 @@ namespace ET {
             }
 
             /*
-             * å‚ç›´æ–¹å‘åŠåœ†å¼§ï¼š
-             * Height çº¦ç­‰äº 2 * OuterRadius
-             * Width çº¦ç­‰äº OuterRadius
+             * ´¹Ö±·½Ïò°ëÔ²»¡£º
+             * Height Ô¼µÈÓÚ 2 * OuterRadius
+             * Width Ô¼µÈÓÚ OuterRadius
              */
             if (Height >= Width * 1.40) {
                 const double OuterRadius = Height * 0.5;
 
-                // å³åŠåœ†ï¼šåœ†å¿ƒåœ¨å·¦è¾¹ç•Œé™„è¿‘ã€‚
+                // ÓÒ°ëÔ²£ºÔ²ĞÄÔÚ×ó±ß½ç¸½½ü¡£
                 TryCandidate(MinX, CenterY, OuterRadius, false, 1, CET_CLUSTER_HALF_PI,
                     ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(MinX)), static_cast<ClipperLib::cInt>(std::llround(CenterY - OuterRadius))),
                     ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(MinX)), static_cast<ClipperLib::cInt>(std::llround(CenterY + OuterRadius)))
                 );
-                // å·¦åŠåœ†ï¼šåœ†å¿ƒåœ¨å³è¾¹ç•Œé™„è¿‘ã€‚
+                // ×ó°ëÔ²£ºÔ²ĞÄÔÚÓÒ±ß½ç¸½½ü¡£
                 TryCandidate(MaxX, CenterY, OuterRadius, false, -1, CET_CLUSTER_HALF_PI,
                     ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(MaxX)), static_cast<ClipperLib::cInt>(std::llround(CenterY - OuterRadius))),
                     ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(MaxX)), static_cast<ClipperLib::cInt>(std::llround(CenterY + OuterRadius)))
@@ -625,7 +969,7 @@ namespace ET {
 
             const std::size_t Count = AContour.size();
 
-            // 1. æ‰¾æœ€é•¿è¾¹ï¼Œä½œä¸ºåŠåœ†çš„ç›´å¾„å¼¦å€™é€‰ã€‚
+            // 1. ÕÒ×î³¤±ß£¬×÷Îª°ëÔ²µÄÖ±¾¶ÏÒºòÑ¡¡£
             std::size_t ChordStartIndex = 0;
             std::size_t ChordEndIndex = 1;
             double MaxEdgeLength = 0.0;
@@ -655,8 +999,8 @@ namespace ET {
 
             if (Radius <= CET_SHAPE_EPSILON) { return false; }
 
-            // 2. åŠåœ†çš„ç›´å¾„è¾¹åº”è¯¥æ˜¯è½®å»“é‡Œéå¸¸æ˜æ˜¾çš„æœ€é•¿è¾¹ã€‚
-            // å¦‚æœæœ€é•¿è¾¹å¹¶ä¸æ˜æ˜¾ï¼Œè¯´æ˜å®ƒæ›´å¯èƒ½æ˜¯æ™®é€šå¤šè¾¹å½¢æˆ–æ¤­åœ†ç¦»æ•£è¾¹ã€‚
+            // 2. °ëÔ²µÄÖ±¾¶±ßÓ¦¸ÃÊÇÂÖÀªÀï·Ç³£Ã÷ÏÔµÄ×î³¤±ß¡£
+            // Èç¹û×î³¤±ß²¢²»Ã÷ÏÔ£¬ËµÃ÷Ëü¸ü¿ÉÄÜÊÇÆÕÍ¨¶à±ßĞÎ»òÍÖÔ²ÀëÉ¢±ß¡£
             double SecondMaxEdgeLength = 0.0;
 
             for (std::size_t i = 0; i < Count; ++i) {
@@ -668,7 +1012,7 @@ namespace ET {
 
             if (SecondMaxEdgeLength > 0.0 && ChordLength < SecondMaxEdgeLength * 1.8) { return false; }
 
-            // 3. åŠåœ†ä¸­å¿ƒè¿‘ä¼¼ä¸ºç›´å¾„ä¸­ç‚¹ã€‚
+            // 3. °ëÔ²ÖĞĞÄ½üËÆÎªÖ±¾¶ÖĞµã¡£
             const double CenterX = (static_cast<double>(ChordStart.X) + static_cast<double>(ChordEnd.X)) * 0.5;
             const double CenterY = (static_cast<double>(ChordStart.Y) + static_cast<double>(ChordEnd.Y)) * 0.5;
 
@@ -706,16 +1050,16 @@ namespace ET {
 
             if (ArcPointCount <= 0) { return false; }
 
-            // åœ†å¼§ç‚¹å¿…é¡»åŸºæœ¬åœ¨ç›´å¾„è¾¹åŒä¸€ä¾§ã€‚
+            // Ô²»¡µã±ØĞë»ù±¾ÔÚÖ±¾¶±ßÍ¬Ò»²à¡£
             if (PositiveSideCount > 0 && NegativeSideCount > 0) { return false; }
 
             const int BulgeSign = PositiveSideCount >= NegativeSideCount ? 1 : -1;
             const double AverageRadiusError = SumRadiusError / static_cast<double>(ArcPointCount);
 
-            // ç¬¬ä¸€é˜¶æ®µå®¹å·®å¯ä»¥ç¨å¾®å®½ä¸€äº›ï¼Œé¿å… CAD ç¦»æ•£è¯¯å·®å¯¼è‡´è¯†åˆ«å¤±è´¥ã€‚
+            // µÚÒ»½×¶ÎÈİ²î¿ÉÒÔÉÔÎ¢¿íÒ»Ğ©£¬±ÜÃâ CAD ÀëÉ¢Îó²îµ¼ÖÂÊ¶±ğÊ§°Ü¡£
             if (AverageRadiusError > 0.12 || MaxRadiusError > 0.25) { return false; }
 
-            // 4. é¢ç§¯æ¥è¿‘åŠåœ†é¢ç§¯ã€‚
+            // 4. Ãæ»ı½Ó½ü°ëÔ²Ãæ»ı¡£
             const double ExpectedArea = 0.5 * CET_CLUSTER_PI * Radius * Radius;
 
             if (ExpectedArea <= CET_SHAPE_EPSILON) { return false; }

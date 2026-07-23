@@ -39,13 +39,13 @@ namespace ET {
                     if (NumberPos < ACurrentType.size()) {
                         int CurrentFillCount = 0;
                         bool HasNumber = false;
-                        for (std::size_t I = NumberPos; I < ACurrentType.size(); ++I) {
-                            const unsigned char Ch = static_cast<unsigned char>(ACurrentType[I]);
-                            if (!std::isdigit(Ch)) {
+                        for (std::size_t CharacterIndex = NumberPos; CharacterIndex < ACurrentType.size(); ++CharacterIndex) {
+                            const unsigned char Character = static_cast<unsigned char>(ACurrentType[CharacterIndex]);
+                            if (!std::isdigit(Character)) {
                                 break;
                             }
                             HasNumber = true;
-                            CurrentFillCount = CurrentFillCount * 10 + (ACurrentType[I] - '0');
+                            CurrentFillCount = CurrentFillCount * 10 + (ACurrentType[CharacterIndex] - '0');
                         }
 
                         if (HasNumber) {
@@ -119,12 +119,12 @@ namespace ET {
 
                 for (int ProbeY = 0; ProbeY < CET_GAPFILL_GRID_PROBE_COUNT; ++ProbeY) {
                     const double YRatio = CET_GAPFILL_GRID_PROBE_COUNT <= 1 ? 0.5 : static_cast<double>(ProbeY) / static_cast<double>(CET_GAPFILL_GRID_PROBE_COUNT - 1);
-                    const double Y = MaxY * YRatio;
+                    const double ProbeYPosition = MaxY * YRatio;
 
                     for (int ProbeX = 0; ProbeX < CET_GAPFILL_GRID_PROBE_COUNT; ++ProbeX) {
                         const double XRatio = CET_GAPFILL_GRID_PROBE_COUNT <= 1 ? 0.5 : static_cast<double>(ProbeX) / static_cast<double>(CET_GAPFILL_GRID_PROBE_COUNT - 1);
-                        const double X = MaxX * XRatio;
-                        AddProbePosition(Probes, X, Y, MaxX, MaxY, ProbeTolerance);
+                        const double ProbeXPosition = MaxX * XRatio;
+                        AddProbePosition(Probes, ProbeXPosition, ProbeYPosition, MaxX, MaxY, ProbeTolerance);
                     }
                 }
 
@@ -140,7 +140,7 @@ namespace ET {
                     }
 
                     const TetShapeFeature& Feature = AFeatures[Transform.OriginalId];
-                    if ((Feature.ShapeType != MetShapeType::CircleLike && Feature.ShapeType != MetShapeType::EllipseLike) ||Feature.Width <= 0.0 ||
+                    if ((Feature.ShapeType != MetShapeType::CircleLike && Feature.ShapeType != MetShapeType::EllipseLike && Feature.ShapeType != MetShapeType::ArcLike) ||Feature.Width <= 0.0 ||
                         Feature.Height <= 0.0){
                         continue;
                     }
@@ -185,62 +185,62 @@ namespace ET {
                     AddProbePosition(Probes, Center.X - FillerCenterOffsetX, Center.Y - FillerCenterOffsetY, MaxX, MaxY, ProbeTolerance);
                 }
 
-                for (std::size_t I = 0; I < BaseCenters.size(); ++I) {
-                    for (std::size_t J = I + 1; J < BaseCenters.size(); ++J) {
-                        const double DX = BaseCenters[I].X - BaseCenters[J].X;
-                        const double DY = BaseCenters[I].Y - BaseCenters[J].Y;
-                        const double Distance = std::sqrt(DX * DX + DY * DY);
+                for (std::size_t CenterIndex = 0; CenterIndex < BaseCenters.size(); ++CenterIndex) {
+                    for (std::size_t OtherCenterIndex = CenterIndex + 1; OtherCenterIndex < BaseCenters.size(); ++OtherCenterIndex) {
+                        const double DeltaX = BaseCenters[CenterIndex].X - BaseCenters[OtherCenterIndex].X;
+                        const double DeltaY = BaseCenters[CenterIndex].Y - BaseCenters[OtherCenterIndex].Y;
+                        const double Distance = std::sqrt(DeltaX * DeltaX + DeltaY * DeltaY);
                         if (Distance > NeighborDistanceLimit) {
                             continue;
                         }
 
-                        const double CenterX = (BaseCenters[I].X + BaseCenters[J].X) * 0.5;
-                        const double CenterY = (BaseCenters[I].Y + BaseCenters[J].Y) * 0.5;
+                        const double CenterX = (BaseCenters[CenterIndex].X + BaseCenters[OtherCenterIndex].X) * 0.5;
+                        const double CenterY = (BaseCenters[CenterIndex].Y + BaseCenters[OtherCenterIndex].Y) * 0.5;
                         AddProbePosition(Probes, CenterX - FillerCenterOffsetX, CenterY - FillerCenterOffsetY, MaxX, MaxY, ProbeTolerance);
                     }
                 }
 
-                for (std::size_t I = 0; I < BaseCenters.size(); ++I) {
+                for (std::size_t CenterIndex = 0; CenterIndex < BaseCenters.size(); ++CenterIndex) {
                     std::vector<std::pair<double, std::size_t>> Neighbors;
 
-                    for (std::size_t J = 0; J < BaseCenters.size(); ++J) {
-                        if (I == J) {
+                    for (std::size_t NeighborCenterIndex = 0; NeighborCenterIndex < BaseCenters.size(); ++NeighborCenterIndex) {
+                        if (CenterIndex == NeighborCenterIndex) {
                             continue;
                         }
 
-                        const double DX = BaseCenters[I].X - BaseCenters[J].X;
-                        const double DY = BaseCenters[I].Y - BaseCenters[J].Y;
-                        const double Distance = std::sqrt(DX * DX + DY * DY);
+                        const double DeltaX = BaseCenters[CenterIndex].X - BaseCenters[NeighborCenterIndex].X;
+                        const double DeltaY = BaseCenters[CenterIndex].Y - BaseCenters[NeighborCenterIndex].Y;
+                        const double Distance = std::sqrt(DeltaX * DeltaX + DeltaY * DeltaY);
                         if (Distance <= NeighborDistanceLimit) {
-                            Neighbors.emplace_back(Distance, J);
+                            Neighbors.emplace_back(Distance, NeighborCenterIndex);
                         }
                     }
 
                     std::sort(
                         Neighbors.begin(),
                         Neighbors.end(),
-                        [](const auto& A, const auto& B)
+                        [](const auto& FirstNeighbor, const auto& SecondNeighbor)
                         {
-                            return A.first < B.first;
+                            return FirstNeighbor.first < SecondNeighbor.first;
                         });
 
                     if (Neighbors.size() > 6) {
                         Neighbors.resize(6);
                     }
 
-                    for (std::size_t A = 0; A < Neighbors.size(); ++A) {
-                        for (std::size_t B = A + 1; B < Neighbors.size(); ++B) {
-                            const std::size_t J = Neighbors[A].second;
-                            const std::size_t K = Neighbors[B].second;
-                            const double JKDX = BaseCenters[J].X - BaseCenters[K].X;
-                            const double JKDY = BaseCenters[J].Y - BaseCenters[K].Y;
-                            const double JKDistance = std::sqrt(JKDX * JKDX + JKDY * JKDY);
-                            if (JKDistance > NeighborDistanceLimit) {
+                    for (std::size_t FirstNeighborOffset = 0; FirstNeighborOffset < Neighbors.size(); ++FirstNeighborOffset) {
+                        for (std::size_t SecondNeighborOffset = FirstNeighborOffset + 1; SecondNeighborOffset < Neighbors.size(); ++SecondNeighborOffset) {
+                            const std::size_t FirstNeighborIndex = Neighbors[FirstNeighborOffset].second;
+                            const std::size_t SecondNeighborIndex = Neighbors[SecondNeighborOffset].second;
+                            const double NeighborDeltaX = BaseCenters[FirstNeighborIndex].X - BaseCenters[SecondNeighborIndex].X;
+                            const double NeighborDeltaY = BaseCenters[FirstNeighborIndex].Y - BaseCenters[SecondNeighborIndex].Y;
+                            const double NeighborDistance = std::sqrt(NeighborDeltaX * NeighborDeltaX + NeighborDeltaY * NeighborDeltaY);
+                            if (NeighborDistance > NeighborDistanceLimit) {
                                 continue;
                             }
 
-                            const double CenterX = (BaseCenters[I].X + BaseCenters[J].X + BaseCenters[K].X) / 3.0;
-                            const double CenterY = (BaseCenters[I].Y + BaseCenters[J].Y + BaseCenters[K].Y) / 3.0;
+                            const double CenterX = (BaseCenters[CenterIndex].X + BaseCenters[FirstNeighborIndex].X + BaseCenters[SecondNeighborIndex].X) / 3.0;
+                            const double CenterY = (BaseCenters[CenterIndex].Y + BaseCenters[FirstNeighborIndex].Y + BaseCenters[SecondNeighborIndex].Y) / 3.0;
                             AddProbePosition(Probes, CenterX - FillerCenterOffsetX, CenterY - FillerCenterOffsetY, MaxX, MaxY, ProbeTolerance);
                         }
                     }
@@ -382,13 +382,13 @@ namespace ET {
 
                 const std::vector<std::pair<double, double>> ProbePositions = BuildProbePositions(AOriginalItems, AFeatures, ABaseCandidate, FillerWidth, FillerHeight);
                 for (const auto& ProbePosition : ProbePositions) {
-                    const double X = ProbePosition.first;
-                    const double Y = ProbePosition.second;
+                    const double ProbeXPosition = ProbePosition.first;
+                    const double ProbeYPosition = ProbePosition.second;
                     TetItemTransform FillerTransform;
                     FillerTransform.OriginalId = AFillerIndex;
                     FillerTransform.RelativeRotation = Rotation;
-                    FillerTransform.RelativeX = X - FillerMinX;
-                    FillerTransform.RelativeY = Y - FillerMinY;
+                    FillerTransform.RelativeX = ProbeXPosition - FillerMinX;
+                    FillerTransform.RelativeY = ProbeYPosition - FillerMinY;
 
                     TetClusterCandidate Candidate = ABaseCandidate;
                     Candidate.Valid = false;
@@ -429,8 +429,11 @@ namespace ET {
         {
             return ACandidate.BuilderName == "CircleBuilder" ||
                 ACandidate.BuilderName == "EllipseBuilder" ||
+                ACandidate.BuilderName == "ArcBuilder" ||
                 StartsWith(ACandidate.ClusterType, "Circle") ||
-                StartsWith(ACandidate.ClusterType, "Ellipse");
+                StartsWith(ACandidate.ClusterType, "Ellipse") ||
+                StartsWith(ACandidate.ClusterType, "Arc") ||
+                StartsWith(ACandidate.ClusterType, "SemiCircle");
         }
 
         bool CetGapFillClusterBuilder::_CanUseAsFiller(const TetShapeFeature& AFeature, const TetClusterCandidate& ABaseCandidate)

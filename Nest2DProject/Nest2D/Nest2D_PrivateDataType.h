@@ -250,6 +250,76 @@ enum class MetArcType
     GeneralArcLike
 };
 
+// ---------- 弧形组合与识别 ----------
+enum class MetArcSweepBucket
+{
+    Unknown = 0,
+    LessThanSemiCircle,
+    SemiCircle,
+    MoreThanSemiCircle
+};
+
+struct TetArcIndexInfo
+{
+    int Index = -1;
+    MetArcType ArcType = MetArcType::None;
+    MetArcSweepBucket SweepBucket = MetArcSweepBucket::Unknown;
+    double Radius = 0.0;
+    double ChordLength = 0.0;
+    double SweepAngle = 0.0;
+    int BulgeSign = 0;
+};
+
+struct TetArcOrientationBounds
+{
+    double Rotation = 0.0;
+    double MinX = 0.0;
+    double MinY = 0.0;
+    double Width = 0.0;
+    double Height = 0.0;
+};
+
+struct TetArcLayoutSlot
+{
+    double X = 0.0;
+    double Y = 0.0;
+    bool ReverseChordDirection = false;
+};
+
+struct TetArcLayout
+{
+    std::vector<TetArcLayoutSlot> Slots;
+    double Width = 0.0;
+    double Height = 0.0;
+    std::string ClusterType;
+};
+
+struct TetCircleFitResult
+{
+    bool Valid = false;
+    double CenterX = 0.0;
+    double CenterY = 0.0;
+};
+
+struct TetAngleSpanResult
+{
+    bool Valid = false;
+    double StartAngle = 0.0;
+    double EndAngle = 0.0;
+    double SweepAngle = 0.0;
+};
+
+struct TetArcChainFitResult
+{
+    bool Valid = false;
+    double CenterX = 0.0;
+    double CenterY = 0.0;
+    double InnerRadius = 0.0;
+    double OuterRadius = 0.0;
+    double AverageError = 1.0;
+    double MaxError = 1.0;
+};
+
 struct TetShapeFeature
 {
     int OriginalIndex = -1;
