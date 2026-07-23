@@ -39,15 +39,11 @@ CetPath ET::NEST2DMANAGERLIB::CetNest2DBoardUtils::BuildPathFromPoints(const std
 	Result.reserve(APoints.size());
 
 	for (const auto& P : APoints) {
-		Result.push_back(Point(
-			NestUtils::ToNestCoord(P.X - AOffsetX),
-			NestUtils::ToNestCoord(P.Y - AOffsetY)
-		));
+		Result.push_back(Point(NestUtils::ToNestCoord(P.X - AOffsetX),NestUtils::ToNestCoord(P.Y - AOffsetY)));
 	}
 
 	if (Result.size() >= 3) {
 		bool IsCCW = ClipperLib::Orientation(Result);
-
 		// ÍâÂÖÀª±£³Ö CCW
 		if (AWantOuter && !IsCCW) {
 			std::reverse(Result.begin(), Result.end());

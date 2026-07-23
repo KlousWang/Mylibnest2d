@@ -31,10 +31,7 @@ namespace ET {
 
             bool IsValidCircleFeature(const TetShapeFeature& AFeature)
             {
-                return AFeature.ShapeType == MetShapeType::CircleLike &&
-                    AFeature.Width > 0.0 &&
-                    AFeature.Height > 0.0 &&
-                    AFeature.Area > 0.0;
+                return AFeature.ShapeType == MetShapeType::CircleLike &&AFeature.Width > 0.0 &&AFeature.Height > 0.0 &&AFeature.Area > 0.0;
             }
 
             std::vector<std::vector<int>> GroupCircleIndices(const std::vector<int>& AIndices, const std::vector<TetShapeFeature>& AFeatures)
@@ -431,9 +428,7 @@ namespace ET {
 
                 while (Low <= High) {
                     const std::size_t Mid = Low + (High - Low) / 2;
-                    std::vector<int> TrialIndices(
-                        Remaining.begin(),
-                        Remaining.begin() + static_cast<std::vector<int>::difference_type>(Mid));
+                    std::vector<int> TrialIndices(Remaining.begin(),Remaining.begin() + static_cast<std::vector<int>::difference_type>(Mid));
 
                     TetClusterCandidate TrialCandidate;
                     if (_BuildClusterCandidate(AOriginalItems, AFeatures, TrialIndices, AOptions, TrialCandidate)) {
@@ -450,19 +445,15 @@ namespace ET {
                 }
 
                 if (BestCount < 2) {
-                    std::cout << "[CIRCLE][REJECT] No board-fitting cluster can be built. RemainingCount = "
-                        << Remaining.size() << std::endl;
+                    std::cout << "[CIRCLE][REJECT] No board-fitting cluster can be built. RemainingCount = "<< Remaining.size() << std::endl;
                     return;
                 }
 
                 AOutCandidates.push_back(std::move(BestCandidate));
-                std::cout << "[CIRCLE][CANDIDATE] Size = " << BestCount
-                    << ", Type = " << AOutCandidates.back().ClusterType
+                std::cout << "[CIRCLE][CANDIDATE] Size = " << BestCount<< ", Type = " << AOutCandidates.back().ClusterType
                     << ", Score = " << AOutCandidates.back().Score << std::endl;
 
-                Remaining.erase(
-                    Remaining.begin(),
-                    Remaining.begin() + static_cast<std::vector<int>::difference_type>(BestCount));
+                Remaining.erase(Remaining.begin(),Remaining.begin() + static_cast<std::vector<int>::difference_type>(BestCount));
             }
         }
 

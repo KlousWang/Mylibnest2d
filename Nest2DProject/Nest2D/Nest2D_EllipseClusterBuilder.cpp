@@ -279,19 +279,15 @@ namespace ET {
             if (AItems.empty() || AItems.size() != AFeatures.size() || AIndices.size() < 2) {
                 return;
             }
-
             const std::vector<std::vector<int>> Groups = GroupEllipseIndices(AIndices, AFeatures);
             if (Groups.empty()) {
                 return;
             }
-
             const std::size_t OldCandidateCount = AOut.size();
             for (const std::vector<int>& Group : Groups) {
                 _BuildSameSizeClusterCandidates(AItems, AFeatures, Group, AOptions, AOut);
             }
-
-            std::cout << "[ELLIPSE][BUILD CANDIDATES] GroupCount = " << Groups.size()
-                << ", NewCandidateCount = " << AOut.size() - OldCandidateCount << std::endl;
+            std::cout << "[ELLIPSE][BUILD CANDIDATES] GroupCount = " << Groups.size()<< ", NewCandidateCount = " << AOut.size() - OldCandidateCount << std::endl;
         }
 
         void CetEllipseClusterBuilder::_BuildSameSizeClusterCandidates(const CetTNestItemVector& AItems, const std::vector<TetShapeFeature>& AFeatures, const std::vector<int>& AIndices, const TetNestOptions& AOptions, std::vector<TetClusterCandidate>& AOut)
