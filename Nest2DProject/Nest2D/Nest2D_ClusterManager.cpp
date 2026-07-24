@@ -7,13 +7,12 @@
 #include "Nest2D_EllipseClusterBuilder.h"
 #include "Nest2D_RectangleClusterBuilder.h"
 #include "Nest2D_ArcClusterBuilder.h"
+#include "Nest2D_ClusterBoundary.h"
 #include "Nest2D_ClusterGeometryHelper.h"
 
 #include <algorithm>
 #include <cmath>
 #include <set>
-#include <atomic>
-#include <iterator>
 #include <map>
 
 using namespace ClipperLib;
@@ -136,12 +135,6 @@ namespace ET {
 			AResult.MetaItems.push_back(Meta);
 		}
 
-		bool CetClusterManager::_NearlyEqual(double A, double B, double RelTol)
-		{
-			double Den = std::max(1.0, std::max(std::abs(A), std::abs(B)));
-			return std::abs(A - B) <= Den * RelTol;
-		}
-
 		double CetClusterManager::_GetItemWidth(const CetNestItem& AItem)
 		{
 			return static_cast<double>(AItem.boundingBox().width());
@@ -150,23 +143,6 @@ namespace ET {
 		double CetClusterManager::_GetItemHeight(const CetNestItem& AItem)
 		{
 			return static_cast<double>(AItem.boundingBox().height());
-		}
-
-		CetNestItem CetClusterManager::_MakeRectangleNestItemByNestCoord(double AW, double AH)
-		{
-			using namespace libnest2d;
-			Path outerPoints;
-			outerPoints.reserve(4);
-			outerPoints.push_back(Point(0, 0));
-			outerPoints.push_back(Point(static_cast<ClipperLib::cInt>(AW), 0));
-			outerPoints.push_back(Point(static_cast<ClipperLib::cInt>(AW), static_cast<ClipperLib::cInt>(AH)));
-			outerPoints.push_back(Point(0, static_cast<ClipperLib::cInt>(AH)));
-			if (ClipperLib::Orientation(outerPoints) == false) {
-				std::reverse(outerPoints.begin(), outerPoints.end());
-			}
-			Paths holes;
-			PolygonImpl poly(std::move(outerPoints), std::move(holes));
-			return CetTNestItemVector::value_type(std::move(poly));
 		}
 
 		void CetClusterManager::_ExpandClusterChildren(const CetNestItem& APackedItem, const TetMetaItem& AMeta, CetTNestItemVector& AOutOriginalItems)
@@ -370,23 +346,14 @@ namespace ET {
 			return Result;
 		}
 
-		CetPath CetClusterManager::_GetItemIdentityContour(const CetNestItem& AItem)
-		{
-			CetNestItem TempItem = AItem;
-			TempItem.translation(libnest2d::Point(0, 0));
-			TempItem.rotation(libnest2d::Radians(0.0));
-			TempItem.inflation(0);
-			const CetPolygonImpl& Polygon = TempItem.transformedShape();
-			return Polygon.Contour;
-		}
-
 		bool CetClusterManager::_TryFindBestEdgePairCandidate(const CetTNestItemVector& AOriginalItems, int AIndex, int BIndex, const TetNestOptions& AOptions, TetAutoPairCandidate& ABestCandidate)
 		{
 			if (AIndex < 0 || BIndex < 0 || AIndex >= static_cast<int>(AOriginalItems.size()) || BIndex >= static_cast<int>(AOriginalItems.size()) || AIndex == BIndex) {
 				return false;
 			}
-			const ClipperLib::Path ContourA = _GetItemIdentityContour(AOriginalItems[AIndex]);
-			const ClipperLib::Path ContourB = _GetItemIdentityContour(AOriginalItems[BIndex]);
+			CetClusterGeometryHelper Geometry;
+			const ClipperLib::Path ContourA = Geometry.GetIdentityContour(AOriginalItems[AIndex]);
+			const ClipperLib::Path ContourB = Geometry.GetIdentityContour(AOriginalItems[BIndex]);
 			const std::vector<TetEdgeInfo> EdgesA = _CollectEdges(ContourA);
 			const std::vector<TetEdgeInfo> EdgesB = _CollectEdges(ContourB);
 			if (EdgesA.empty() || EdgesB.empty()) return false;
@@ -615,67 +582,30 @@ namespace ET {
 
 		CetNestItem CetClusterManager::_MakeUnionNestItemFromCandidate(const CetTNestItemVector& AOriginalItems, const TetAutoPairCandidate& ACandidate)
 		{
-			// 参数安全检查
+			CetClusterGeometryHelper Geometry;
+			auto MakeRectangleFallback = [&Geometry, &ACandidate]() {
+				CetPath Rectangle = Geometry.MakeRectangleContour(std::ceil(ACandidate.ClusterW), std::ceil(ACandidate.ClusterH));
+				return Geometry.MakeNestItemFromProxyContour(Rectangle);
+				};
+
 			if (!ACandidate.Valid || ACandidate.AIndex < 0 || ACandidate.BIndex < 0 || ACandidate.AIndex >= static_cast<int>(AOriginalItems.size()) || ACandidate.BIndex >= static_cast<int>(AOriginalItems.size())) {
-				return _MakeRectangleNestItemByNestCoord(std::ceil(ACandidate.ClusterW), std::ceil(ACandidate.ClusterH));
+				return MakeRectangleFallback();
 			}
-			ClipperLib::Paths Subject;
-			ClipperLib::Paths Solution;
-			_AddTransformedItemPathToSubject(AOriginalItems[ACandidate.AIndex], ACandidate.RelAX, ACandidate.RelAY, ACandidate.RelARotation, Subject);
-			_AddTransformedItemPathToSubject(AOriginalItems[ACandidate.BIndex], ACandidate.RelBX, ACandidate.RelBY, ACandidate.RelBRotation, Subject);
-			std::cout << "[AUTO_PAIR][UNION] SubjectPathCount = " << Subject.size() << std::endl;
-			if (Subject.empty()) {
-				std::cout << "[AUTO_PAIR][UNION][WARN] Subject is empty." << std::endl;
-				return _MakeRectangleNestItemByNestCoord(std::ceil(ACandidate.ClusterW), std::ceil(ACandidate.ClusterH));
-			}
-			ClipperLib::Clipper Clipper;
-			if (!Clipper.AddPaths(Subject, ClipperLib::ptSubject, true)) {
-				std::cout << "[AUTO_PAIR][UNION][WARN] Clipper.AddPaths failed." << std::endl;
-				return _MakeRectangleNestItemByNestCoord(std::ceil(ACandidate.ClusterW), std::ceil(ACandidate.ClusterH));
-			}
-			const bool ExecuteSuccess = Clipper.Execute(ClipperLib::ctUnion, Solution, ClipperLib::pftNonZero, ClipperLib::pftNonZero);
-			std::cout << "[AUTO_PAIR][UNION] ExecuteSuccess = " << ExecuteSuccess << ", SolutionPathCount = " << Solution.size() << std::endl;
-			if (!ExecuteSuccess || Solution.empty()) {
-				return _MakeRectangleNestItemByNestCoord(std::ceil(ACandidate.ClusterW), std::ceil(ACandidate.ClusterH));
-			}
-			if (Solution.size() != 1) {
-				std::cout << "[AUTO_PAIR][UNION] Multiple disconnected contours, fallback to rectangle." << std::endl;
-				return _MakeRectangleNestItemByNestCoord(std::ceil(ACandidate.ClusterW), std::ceil(ACandidate.ClusterH));
-			}
-			ClipperLib::Path Outer = std::move(Solution.front());
-			if (Outer.size() < 3) {
-				return _MakeRectangleNestItemByNestCoord(std::ceil(ACandidate.ClusterW), std::ceil(ACandidate.ClusterH));
-			}
-			if (!ClipperLib::Orientation(Outer)) {
-				std::reverse(Outer.begin(), Outer.end());
-			}
-			ClipperLib::Paths Holes;
-			PolygonImpl Poly(std::move(Outer), std::move(Holes));
-			return CetNestItem(std::move(Poly));
-		}
 
-		void CetClusterManager::_AddTransformedItemPathToSubject(const CetNestItem& AItem, double AOffsetX, double AOffsetY, double ARotation, ClipperLib::Paths& ASubject)
-		{
-			// 复制一份，避免修改原始零件
-			CetNestItem TempItem = AItem;
-			TempItem.translation(libnest2d::Point(static_cast<ClipperLib::cInt>(std::llround(AOffsetX)), static_cast<ClipperLib::cInt>(std::llround(AOffsetY))));
-			TempItem.rotation(libnest2d::Radians(ARotation));
-			TempItem.inflation(0);
-			// 让 libnest2d 自己完成旋转和平移
-			const CetPolygonImpl& TransformedPolygon = TempItem.transformedShape();
-			const CetPath& Outer = TransformedPolygon.Contour;
-			if (Outer.size() < 3) {
-				std::cout << "[AUTO_PAIR][UNION][WARN] Transformed contour is empty." << std::endl;
-				return;
-			}
-			ASubject.push_back(Outer);
-			for (const auto& Hole : TransformedPolygon.Holes) {
-				if (Hole.size() >= 3) {
-					ASubject.push_back(Hole);
-				}
-			}
-		}
+			std::vector<TetItemTransform> Transforms;
+			Transforms.reserve(2);
+			Transforms.push_back({ ACandidate.AIndex, ACandidate.RelAX, ACandidate.RelAY, ACandidate.RelARotation });
+			Transforms.push_back({ ACandidate.BIndex, ACandidate.RelBX, ACandidate.RelBY, ACandidate.RelBRotation });
 
+			CetClusterBoundary BoundaryBuilder;
+			CetPath Boundary;
+			if (!BoundaryBuilder.BuildBoundary(AOriginalItems, Transforms, Boundary)) {
+				std::cout << "[AUTO_PAIR][BOUNDARY][WARN] BuildBoundary failed, fallback to rectangle." << std::endl;
+				return MakeRectangleFallback();
+			}
+
+			return Geometry.MakeNestItemFromProxyContour(Boundary);
+		}
 		double CetClusterManager::_CalcEdgeLength(const ClipperLib::IntPoint& A, const ClipperLib::IntPoint& B)
 		{
 			const double DX = static_cast<double>(B.X - A.X);
@@ -947,7 +877,7 @@ namespace ET {
 			if (ACandidate.ProxyContour.size() >= 3) {
 				return Geometry.MakeNestItemFromProxyContour(ACandidate.ProxyContour);
 			}
-			return _MakeRectangleNestItemByNestCoord(ACandidate.ClusterWidth, ACandidate.ClusterHeight);
+			return Geometry.MakeNestItemFromProxyContour(Geometry.MakeRectangleContour(ACandidate.ClusterWidth, ACandidate.ClusterHeight));
 		}
 
 		bool CetClusterManager::_AddClusterCandidate(const TetClusterCandidate& ACandidate, TetClusterBuildResult& AResult)

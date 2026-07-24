@@ -72,9 +72,6 @@
     <ClInclude Include="Nest2D_PolygonBoardRepairer.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="Nest2D_ClusterManager.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="Nest2D_StrategyManager.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -109,6 +106,9 @@
       <Filter>头文件\Cluster</Filter>
     </ClInclude>
     <ClInclude Include="Nest2D_GapFillClusterBuilder.h">
+      <Filter>头文件\Cluster</Filter>
+    </ClInclude>
+    <ClInclude Include="Nest2D_ClusterManager.h">
       <Filter>头文件\Cluster</Filter>
     </ClInclude>
   </ItemGroup>

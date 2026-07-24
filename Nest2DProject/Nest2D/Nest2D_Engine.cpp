@@ -100,6 +100,8 @@ namespace ET {
 				<< std::endl;
 
 			CetTNestItemVector OriginalItems = ANestItems;
+			const std::vector<TetShapeFeature> Features =Nest2DUtils->Nest2DShape->AnalyzeALL(OriginalItems);
+			std::cout<< "[SHAPE ANALYZER][DONE]"<< " ItemCount = " << OriginalItems.size()<< ", FeatureCount = " << Features.size()<< std::endl;
 
 			bool HasBest = false;
 			CetTNestItemVector BestItems;
@@ -110,12 +112,13 @@ namespace ET {
 
 			std::vector<MetClusterStrategy> ClusterStrategies = {
 				MetClusterStrategy::None,
-				MetClusterStrategy::RightTrianglePair,
-				MetClusterStrategy::AutoPairCluster
+				//MetClusterStrategy::RightTrianglePair,
+				//MetClusterStrategy::AutoPairCluster,//ËÙ¶È¾ÞÂý
+				MetClusterStrategy::TemplateCluster
 			};
 
 			for (auto ClusterStrategy : ClusterStrategies) {
-				TetClusterBuildResult ClusterResult =Nest2DUtils->Nest2DCluster->BuildClusterItems(OriginalItems,AOptions,ClusterStrategy);
+				TetClusterBuildResult ClusterResult =Nest2DUtils->Nest2DCluster->BuildClusterItemsWithFeatures(OriginalItems,Features,AOptions,ClusterStrategy);
 				int ClusterCount = 0;
 				for (const auto& Meta : ClusterResult.MetaItems) {
 					if (Meta.IsCluster) {

@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Nest2D_ClusterBoundary.h"
+#include "Nest2D_ClusterGeometryHelper.h"
 
 #include <algorithm>
 #include <cmath>
@@ -32,34 +33,6 @@ namespace ET {
             return _BuildConvexHullBoundary(Contours, AOutBoundary);
         }
 
-        CetPath CetClusterBoundary::_GetIdentityContour(const CetNestItem& AItem)
-        {
-            CetNestItem TempItem = AItem;
-            TempItem.translation(libnest2d::Point(0, 0));
-            TempItem.rotation(libnest2d::Radians(0.0));
-            TempItem.inflation(0);
-            return TempItem.transformedShape().Contour;
-        }
-
-        CetPath CetClusterBoundary::_TransformContour(const CetPath& AContour, double ARotation, double ATranslationX, double ATranslationY)
-        {
-            CetPath Result;
-            Result.reserve(AContour.size());
-
-            const double CosValue = std::cos(ARotation);
-            const double SinValue = std::sin(ARotation);
-
-            for (const CetInpoint& Point : AContour) {
-                const double SourceX = static_cast<double>(Point.X);
-                const double SourceY = static_cast<double>(Point.Y);
-                Result.emplace_back(
-                    static_cast<ClipperLib::cInt>(std::llround(SourceX * CosValue - SourceY * SinValue + ATranslationX)),
-                    static_cast<ClipperLib::cInt>(std::llround(SourceX * SinValue + SourceY * CosValue + ATranslationY)));
-            }
-
-            return Result;
-        }
-
         bool CetClusterBoundary::_CollectTransformedContours(const CetTNestItemVector& AOriginalItems, const std::vector<TetItemTransform>& ATransforms, ClipperLib::Paths& AOutContours)
         {
             AOutContours.clear();
@@ -68,6 +41,7 @@ namespace ET {
             }
 
             AOutContours.reserve(ATransforms.size());
+            CetClusterGeometryHelper Geometry;
 
             for (const TetItemTransform& Transform : ATransforms) {
                 if (Transform.OriginalId < 0 || Transform.OriginalId >= static_cast<int>(AOriginalItems.size())) {
@@ -78,11 +52,7 @@ namespace ET {
                     return false;
                 }
 
-                CetPath Contour = _TransformContour(
-                    _GetIdentityContour(AOriginalItems[Transform.OriginalId]),
-                    Transform.RelativeRotation,
-                    Transform.RelativeX,
-                    Transform.RelativeY);
+                CetPath Contour = Geometry.TransformContour(Geometry.GetIdentityContour(AOriginalItems[Transform.OriginalId]),Transform.RelativeRotation,Transform.RelativeX,Transform.RelativeY);
 
                 if (Contour.size() < 3 || std::abs(static_cast<double>(ClipperLib::Area(Contour))) <= 0.0) {
                     continue;

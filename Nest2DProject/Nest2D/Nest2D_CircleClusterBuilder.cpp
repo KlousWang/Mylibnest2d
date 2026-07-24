@@ -106,114 +106,6 @@ namespace ET {
                 return Groups;
             }
 
-            long double Cross(const CetInpoint& A, const CetInpoint& B, const CetInpoint& C)
-            {
-                return static_cast<long double>(B.X - A.X) * static_cast<long double>(C.Y - A.Y)
-                    - static_cast<long double>(B.Y - A.Y) * static_cast<long double>(C.X - A.X);
-            }
-
-            CetPath BuildConvexHull(const std::vector<CetInpoint>& APoints)
-            {
-                if (APoints.size() < 3) {
-                    return {};
-                }
-
-                std::vector<CetInpoint> Points = APoints;
-                std::sort(
-                    Points.begin(),
-                    Points.end(),
-                    [](const CetInpoint& A, const CetInpoint& B)
-                    {
-                        if (A.X != B.X) return A.X < B.X;
-                        if (A.Y != B.Y) return A.Y < B.Y;
-                        return false;
-                    });
-
-                Points.erase(
-                    std::unique(
-                        Points.begin(),
-                        Points.end(),
-                        [](const CetInpoint& A, const CetInpoint& B)
-                        {
-                            return A.X == B.X && A.Y == B.Y;
-                        }),
-                    Points.end());
-
-                if (Points.size() < 3) {
-                    return {};
-                }
-
-                std::vector<CetInpoint> Hull;
-                Hull.resize(Points.size() * 2);
-                std::size_t K = 0;
-
-                for (const CetInpoint& P : Points) {
-                    while (K >= 2 && Cross(Hull[K - 2], Hull[K - 1], P) <= 0.0L) {
-                        --K;
-                    }
-                    Hull[K++] = P;
-                }
-
-                const std::size_t LowerSize = K;
-                for (std::size_t I = Points.size(); I-- > 0;) {
-                    const CetInpoint& P = Points[I];
-                    while (K > LowerSize && Cross(Hull[K - 2], Hull[K - 1], P) <= 0.0L) {
-                        --K;
-                    }
-                    Hull[K++] = P;
-                }
-
-                if (K > 1) {
-                    --K;
-                }
-
-                Hull.resize(K);
-                if (Hull.size() < 3) {
-                    return {};
-                }
-
-                CetPath Result;
-                Result.reserve(Hull.size());
-                for (const CetInpoint& P : Hull) {
-                    Result.push_back(P);
-                }
-
-                if (!ClipperLib::Orientation(Result)) {
-                    std::reverse(Result.begin(), Result.end());
-                }
-
-                return Result;
-            }
-
-            CetPath BuildProxyContour(const CetTNestItemVector& AOriginalItems,const std::vector<TetItemTransform>& ATransforms)
-            {
-                CetClusterGeometryHelper Geometry;
-                std::vector<CetInpoint> Points;
-
-                for (const TetItemTransform& Transform : ATransforms) {
-                    if (Transform.OriginalId < 0 || Transform.OriginalId >= static_cast<int>(AOriginalItems.size())) {
-                        continue;
-                    }
-
-                    const CetPath Child = Geometry.TransformContour(
-                        Geometry.GetIdentityContour(AOriginalItems[Transform.OriginalId]),
-                        Transform.RelativeRotation,
-                        Transform.RelativeX,
-                        Transform.RelativeY);
-
-                    for (const CetInpoint& Point : Child) {
-                        Points.push_back(Point);
-                    }
-                }
-
-                CetPath Hull = BuildConvexHull(Points);
-                if (Hull.size() < 3) {
-                    return {};
-                }
-
-                return Hull;
-            }
-
             bool FitsBin(double AClusterWidth, double AClusterHeight, const TetNestOptions& AOptions)
             {
                 if (AClusterWidth <= 0.0 || AClusterHeight <= 0.0) {
@@ -544,11 +436,6 @@ namespace ET {
             AOutCandidate.OriginalIndices = Indices;
             AOutCandidate.Transforms = std::move(Transforms);
             AOutCandidate.Confidence = 1.0;
-            AOutCandidate.ProxyContour = BuildProxyContour(AOriginalItems, AOutCandidate.Transforms);
-
-            if (!AOutCandidate.ProxyContour.empty()) {
-                AOutCandidate.ProxyContourNormalized = false;
-            }
 
             CetClusterGeometryHelper Geometry;
             if (!Geometry.FinalizeCandidate(AOriginalItems, AOptions, AOutCandidate)) {

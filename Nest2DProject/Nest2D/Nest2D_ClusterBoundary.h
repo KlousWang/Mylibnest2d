@@ -34,8 +34,6 @@ namespace ET {
             bool BuildBoundary(const CetTNestItemVector& AOriginalItems, const std::vector<TetItemTransform>& ATransforms, CetPath& AOutBoundary);
 
         protected:
-            CetPath _GetIdentityContour(const CetNestItem& AItem);
-            CetPath _TransformContour(const CetPath& AContour, double ARotation, double ATranslationX, double ATranslationY);
             bool _CollectTransformedContours(const CetTNestItemVector& AOriginalItems, const std::vector<TetItemTransform>& ATransforms, ClipperLib::Paths& AOutContours);
             bool _BuildUnionBoundary(const ClipperLib::Paths& AContours, CetPath& AOutBoundary);
             bool _BuildConvexHullBoundary(const ClipperLib::Paths& AContours, CetPath& AOutBoundary);

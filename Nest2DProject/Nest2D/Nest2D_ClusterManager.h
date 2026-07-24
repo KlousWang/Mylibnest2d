@@ -42,12 +42,9 @@ namespace ET {
             CetNestItem _MakeClusterProxyItem(const TetClusterCandidate& ACandidate);
             bool _AddClusterCandidate(const TetClusterCandidate& ACandidate, TetClusterBuildResult& AResult);
             void _ExpandClusterChildren(const CetNestItem& PackedItem, const TetMetaItem& Meta, CetTNestItemVector& AOutOriginalItems);
-            bool _NearlyEqual(double A, double B, double RelTol);
             double _GetItemWidth(const CetNestItem& AItem);
             double _GetItemHeight(const CetNestItem& AItem);
-            CetNestItem _MakeRectangleNestItemByNestCoord(double AW, double AH);
             TetClusterBuildResult _BuildAutoPairClusters(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions);
-            CetPath _GetItemIdentityContour(const CetNestItem& AItem);
             bool _TryFindBestEdgePairCandidate(const CetTNestItemVector& AOriginalItems, int AIndex, int BIndex, const TetNestOptions& AOptions, TetAutoPairCandidate& ABestCandidate);
             bool _TryFindBestAutoPairCandidate(const CetTNestItemVector& AOriginalItems, int AIndex, int BIndex, const TetNestOptions& AOptions, TetAutoPairCandidate& ABestCandidate);
             bool _TryBuildAutoPairAt(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const TetAutoPairBuildInput& AInput, TetAutoPairCandidate& ACandidate);
@@ -55,7 +52,6 @@ namespace ET {
             double _CalcAutoPairScore(double ABeforeBBoxArea, double AAfterBBoxArea, double ARealArea, double AClusterW, double AClusterH);
             bool _RunAutoPairGridSearch(const CetTNestItemVector& AOriginalItems, int AIndex, int BIndex, const TetNestOptions& AOptions, const TetAutoPairGridConfig& AConfig, TetAutoPairCandidate& OutBest);
             CetNestItem _MakeUnionNestItemFromCandidate(const CetTNestItemVector& AOriginalItems, const TetAutoPairCandidate& ACandidate);
-            void _AddTransformedItemPathToSubject(const CetNestItem& AItem, double AOffsetX, double AOffsetY, double ARotation, ClipperLib::Paths& ASubject);
             double _CalcEdgeLength(const ClipperLib::IntPoint& A, const ClipperLib::IntPoint& B);
             std::vector<TetEdgeInfo> _CollectEdges(const ClipperLib::Path& AContour);
             bool _IsSimilarTriangleByEdges(std::vector<TetEdgeInfo> AEdges, std::vector<TetEdgeInfo> BEdges);
