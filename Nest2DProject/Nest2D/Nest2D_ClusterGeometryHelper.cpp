@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "Nest2D_ClusterBoundary.h"
 #include "Nest2D_ClusterGeometryHelper.h"
 #include "NestUtils.h"
 
@@ -226,6 +227,13 @@ namespace ET {
                 MaxX = std::max(MaxX, ChildMaxX); MaxY = std::max(MaxY, ChildMaxY);
                 ACandidate.RealArea += std::abs(static_cast<double>(Original.area()));
                 ACandidate.BaselineArea += (ChildMaxX - ChildMinX) * (ChildMaxY - ChildMinY);
+            }
+
+            CetClusterBoundary BoundaryBuilder;
+            CetPath RealBoundary;
+            if (BoundaryBuilder.BuildBoundary(AOriginalItems, ACandidate.Transforms, RealBoundary)) {
+                ACandidate.ProxyContour = std::move(RealBoundary);
+                ACandidate.ProxyContourNormalized = false;
             }
 
             for (auto& Transform : ACandidate.Transforms) {
