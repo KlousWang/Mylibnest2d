@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Nest2D_EllipseClusterBuilder.h"
 #include "Nest2D_ClusterGeometryHelper.h"
+#include "Nest2D_RotationUtils.h"
 #include "NestUtils.h"
 
 #include <algorithm>
@@ -55,7 +56,8 @@ namespace ET {
                 }
 
                 const bool Normal = Width <= BinWidth && Height <= BinHeight;
-                const bool Rotated = Options.Rotations > 1 && Height <= BinWidth && Width <= BinHeight;
+                const bool QuarterTurnAllowed = CetRotationUtils::IsAllowedRotation(CET_CLUSTER_HALF_PI, Options.Rotations, 1e-9);
+                const bool Rotated = QuarterTurnAllowed && Height <= BinWidth && Width <= BinHeight;
                 return Normal || Rotated;
             }
 
@@ -132,10 +134,12 @@ namespace ET {
                 return Groups;
             }
 
-            bool GetOrientedBounds(const CetNestItem& Item, const TetShapeFeature& Feature, bool RotateToVertical, const CetClusterGeometryHelper& Geometry, double& OutRotation, double& OutMinX, double& OutMinY, double& OutWidth, double& OutHeight)
+            bool GetOrientedBounds(const CetNestItem& Item, const TetShapeFeature& Feature, bool RotateToVertical, const TetNestOptions& Options, const CetClusterGeometryHelper& Geometry, double& OutRotation, double& OutMinX, double& OutMinY, double& OutWidth, double& OutHeight)
             {
                 const double TargetAngle = RotateToVertical ? CET_CLUSTER_HALF_PI : 0.0;
-                OutRotation = TargetAngle - Feature.EllipseAngle;
+                if (!CetRotationUtils::SnapToNearestAllowedRotation(TargetAngle - Feature.EllipseAngle, Options.Rotations, OutRotation)) {
+                    return false;
+                }
 
                 const CetPath Contour = Geometry.TransformContour(Geometry.GetIdentityContour(Item), OutRotation, 0.0, 0.0);
                 double MaxX = 0.0;
@@ -361,7 +365,7 @@ namespace ET {
             double HorizontalMinY = 0.0;
             double HorizontalWidth = 0.0;
             double HorizontalHeight = 0.0;
-            if (!GetOrientedBounds(AItems[Indices.front()], BaseFeature, false, Geometry, HorizontalRotation, HorizontalMinX, HorizontalMinY, HorizontalWidth, HorizontalHeight)) {
+            if (!GetOrientedBounds(AItems[Indices.front()], BaseFeature, false, AOptions, Geometry, HorizontalRotation, HorizontalMinX, HorizontalMinY, HorizontalWidth, HorizontalHeight)) {
                 return false;
             }
 
@@ -370,7 +374,7 @@ namespace ET {
             double VerticalMinY = 0.0;
             double VerticalWidth = 0.0;
             double VerticalHeight = 0.0;
-            if (!GetOrientedBounds(AItems[Indices.front()], BaseFeature, true, Geometry, VerticalRotation, VerticalMinX, VerticalMinY, VerticalWidth, VerticalHeight)) {
+            if (!GetOrientedBounds(AItems[Indices.front()], BaseFeature, true, AOptions, Geometry, VerticalRotation, VerticalMinX, VerticalMinY, VerticalWidth, VerticalHeight)) {
                 return false;
             }
 
@@ -419,7 +423,7 @@ namespace ET {
                     double MinY = 0.0;
                     double Width = 0.0;
                     double Height = 0.0;
-                    if (!GetOrientedBounds(AItems[Index], Feature, Slot.RotateToVertical, Geometry, Rotation, MinX, MinY, Width, Height)) {
+                    if (!GetOrientedBounds(AItems[Index], Feature, Slot.RotateToVertical, AOptions, Geometry, Rotation, MinX, MinY, Width, Height)) {
                         TransformValid = false;
                         break;
                     }

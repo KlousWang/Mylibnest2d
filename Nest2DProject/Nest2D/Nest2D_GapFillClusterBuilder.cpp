@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Nest2D_GapFillClusterBuilder.h"
 #include "Nest2D_ClusterGeometryHelper.h"
+#include "Nest2D_RotationUtils.h"
 #include "NestUtils.h"
 
 #include <algorithm>
@@ -29,10 +30,7 @@ namespace ET {
             {
                 const std::string Marker = "_GapFill";
                 const std::size_t MarkerPos = ACurrentType.find(Marker);
-                const std::string BaseType = MarkerPos == std::string::npos
-                    ? ACurrentType
-                    : ACurrentType.substr(0, MarkerPos);
-
+                const std::string BaseType = MarkerPos == std::string::npos? ACurrentType: ACurrentType.substr(0, MarkerPos);
                 int NextFillCount = 1;
                 if (MarkerPos != std::string::npos) {
                     const std::size_t NumberPos = MarkerPos + Marker.size();
@@ -263,7 +261,7 @@ namespace ET {
 
             for (const TetClusterCandidate& BaseCandidate : ABaseCandidates) {
                 TetClusterCandidate Candidate;
-                if (!_BuildGapFillCandidate(AOriginalItems, AFeatures, BaseCandidate, AOptions, Candidate)) {
+                if (!_BuildGapFillCandidate(AOriginalItems, AFeatures, BaseCandidate, AOptions, nullptr, Candidate)) {
                     continue;
                 }
 
@@ -277,7 +275,15 @@ namespace ET {
                 << ", NewCandidateCount = " << AOutCandidates.size() - OldCandidateCount << std::endl;
         }
 
-        bool CetGapFillClusterBuilder::_BuildGapFillCandidate(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetClusterCandidate& ABaseCandidate, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate)
+        bool CetGapFillClusterBuilder::BuildCandidateForBase(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetClusterCandidate& ABaseCandidate, const TetNestOptions& AOptions, const std::vector<bool>& AUsed, TetClusterCandidate& AOutCandidate)
+        {
+            AOutCandidate = TetClusterCandidate{};
+            if (AOriginalItems.empty() || AFeatures.size() != AOriginalItems.size() || AUsed.size() != AOriginalItems.size()) {
+                return false;
+            }
+            return _BuildGapFillCandidate(AOriginalItems, AFeatures, ABaseCandidate, AOptions, &AUsed, AOutCandidate);
+        }
+        bool CetGapFillClusterBuilder::_BuildGapFillCandidate(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetClusterCandidate& ABaseCandidate, const TetNestOptions& AOptions, const std::vector<bool>* AUsed, TetClusterCandidate& AOutCandidate)
         {
             AOutCandidate = TetClusterCandidate{};
 
@@ -293,6 +299,12 @@ namespace ET {
                 TetClusterCandidate BestNextCandidate;
 
                 for (int Index = 0; Index < static_cast<int>(AFeatures.size()); ++Index) {
+                    if (AUsed != nullptr) {
+                        if (Index >= static_cast<int>(AUsed->size()) || (*AUsed)[Index]) {
+                            continue;
+                        }
+                    }
+
                     if (_ContainsOriginalIndex(CurrentCandidate, Index)) {
                         continue;
                     }
@@ -345,9 +357,7 @@ namespace ET {
             const double RequiredGap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
             const double DimensionTolerance = std::max(1.0, RequiredGap * 0.001);
 
-            const std::vector<double> Rotations = AOptions.Rotations >= 4
-                ? std::vector<double>{ 0.0, CET_CLUSTER_HALF_PI, CET_CLUSTER_PI, CET_CLUSTER_THREE_HALF_PI }
-                : std::vector<double>{ 0.0 };
+            const std::vector<double> Rotations = CetRotationUtils::BuildAllowedRotations(AOptions.Rotations);
 
             bool HasBest = false;
             TetClusterCandidate BestCandidate;

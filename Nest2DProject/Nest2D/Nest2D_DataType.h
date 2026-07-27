@@ -80,6 +80,33 @@ enum class MetClusterStrategy
 	TemplateCluster = 3
 };
 
+enum class MetClusterProxyMode
+{
+	Unknown = 0,
+	ExactUnion,
+	OffsetUnion,
+	ConvexHull,
+	RectangleFallback
+};
+
+inline const char* ToString(MetClusterProxyMode AMode)
+{
+	switch (AMode)
+	{
+	case MetClusterProxyMode::ExactUnion:
+		return "ExactUnion";
+	case MetClusterProxyMode::OffsetUnion:
+		return "OffsetUnion";
+	case MetClusterProxyMode::ConvexHull:
+		return "ConvexHull";
+	case MetClusterProxyMode::RectangleFallback:
+		return "RectangleFallback";
+	case MetClusterProxyMode::Unknown:
+	default:
+		return "Unknown";
+	}
+}
+
 enum class MetENestOrderStrategy
 {
 	LargeFirst = 0,
@@ -178,6 +205,14 @@ struct TetAutoPairContext {
 	const TetNestOptions& Options;
 };
 
+struct TetClusterBoundaryResult
+{
+	bool Success = false;
+	CetPath Boundary;
+	MetClusterProxyMode Mode = MetClusterProxyMode::Unknown;
+	double BoundaryArea = 0.0;
+};
+
 struct TetClusterCandidate
 {
 	bool Valid = false;
@@ -200,6 +235,12 @@ struct TetClusterCandidate
 	double RealArea = 0.0;
 	double ProxyArea = 0.0;
 	double FillRatio = 0.0;
+	MetClusterProxyMode ProxyMode = MetClusterProxyMode::Unknown;
+
+	double OccupiedArea = 0.0;
+	double ReservedArea = 0.0;
+	double ProxyWasteArea = 0.0;
+	double ProxyWasteRatio = 0.0;
 
 	// 各子件单独包围盒面积之和
 	double BaselineArea = 0.0;

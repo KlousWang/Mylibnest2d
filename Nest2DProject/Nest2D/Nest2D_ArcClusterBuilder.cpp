@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Nest2D_ArcClusterBuilder.h"
 #include "Nest2D_ClusterGeometryHelper.h"
+#include "Nest2D_RotationUtils.h"
 #include "NestUtils.h"
 
 #include <algorithm>
@@ -206,16 +207,18 @@ namespace ET {
                 }
 
                 const bool FitsNormally = ClusterWidth <= BinWidth && ClusterHeight <= BinHeight;
-                const bool FitsAfterRotation = Options.Rotations > 1 && ClusterHeight <= BinWidth && ClusterWidth <= BinHeight;
+                const bool QuarterTurnAllowed = CetRotationUtils::IsAllowedRotation(CET_CLUSTER_HALF_PI, Options.Rotations, 1e-9);
+                const bool FitsAfterRotation = QuarterTurnAllowed && ClusterHeight <= BinWidth && ClusterWidth <= BinHeight;
                 return FitsNormally || FitsAfterRotation;
             }
 
-            bool GetArcOrientationBounds(const CetNestItem& Item, const TetShapeFeature& Feature, bool ReverseChordDirection, const CetClusterGeometryHelper& Geometry, TetArcOrientationBounds& OutBounds)
+            bool GetArcOrientationBounds(const CetNestItem& Item, const TetShapeFeature& Feature, bool ReverseChordDirection, const TetNestOptions& Options, const CetClusterGeometryHelper& Geometry, TetArcOrientationBounds& OutBounds)
             {
                 OutBounds = TetArcOrientationBounds{};
-                OutBounds.Rotation = ReverseChordDirection
-                    ? CET_CLUSTER_PI - Feature.ArcChordAngle
-                    : -Feature.ArcChordAngle;
+                const double TargetRotation = ReverseChordDirection? CET_CLUSTER_PI - Feature.ArcChordAngle: -Feature.ArcChordAngle;
+                if (!CetRotationUtils::SnapToNearestAllowedRotation(TargetRotation, Options.Rotations, OutBounds.Rotation)) {
+                    return false;
+                }
 
                 const CetPath RotatedContour = Geometry.TransformContour(
                     Geometry.GetIdentityContour(Item),
@@ -346,7 +349,7 @@ namespace ET {
                     const TetArcLayoutSlot& Slot = Layout.Slots[ArcOffset];
 
                     TetArcOrientationBounds SlotBounds;
-                    if (!GetArcOrientationBounds(AOriginalItems[OriginalIndex], Feature, Slot.ReverseChordDirection, Geometry, SlotBounds)) {
+                    if (!GetArcOrientationBounds(AOriginalItems[OriginalIndex], Feature, Slot.ReverseChordDirection, AOptions, Geometry, SlotBounds)) {
                         return false;
                     }
 
@@ -470,8 +473,8 @@ namespace ET {
             CetClusterGeometryHelper Geometry;
             TetArcOrientationBounds ForwardBounds;
             TetArcOrientationBounds ReverseBounds;
-            if (!GetArcOrientationBounds(AOriginalItems[Indices.front()], BaseFeature, false, Geometry, ForwardBounds) ||
-                !GetArcOrientationBounds(AOriginalItems[Indices.front()], BaseFeature, true, Geometry, ReverseBounds))
+            if (!GetArcOrientationBounds(AOriginalItems[Indices.front()], BaseFeature, false, AOptions, Geometry, ForwardBounds) ||
+                !GetArcOrientationBounds(AOriginalItems[Indices.front()], BaseFeature, true, AOptions, Geometry, ReverseBounds))
             {
                 return false;
             }

@@ -40,7 +40,6 @@ namespace ET {
 		Reg_EtCore_Obj_Str(Nest2D_TriangleClusterBuilder, CetTriangleClusterBuilder)
 		Reg_EtCore_Obj_Str(Nest2D_CircleClusterBuilder, CetCircleClusterBuilder)
 		Reg_EtCore_Obj_Str(Nest2D_GapFillClusterBuilder, CetGapFillClusterBuilder)
-		
 		//Reg_EtCore_Obj_Str(File_Load, CetFile)
 	}
 

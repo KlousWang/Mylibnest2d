@@ -4,6 +4,7 @@
 #include "Nest2D_DataConst.h"
 #include "Nest2D_PolygonBoardRepairer.h"
 #include "Nest2D_PrivateDataType.h"
+#include "Nest2D_RotationUtils.h"
 #include "NestUtils.h"
 #include "Nest2D_SelfFunction.h"
 #include"Nest2D_ClusterManager.h"
@@ -30,18 +31,7 @@ namespace ET {
 		}
 		static void FillRotations(std::vector<libnest2d::Radians>& ARotations, int ARotationCount)
 		{
-			ARotations.clear();
-
-			if (ARotationCount > 0) {
-				double AngleStep = CET_CLUSTER_TWO_PI / ARotationCount;
-
-				for (int i = 0; i < ARotationCount; ++i) {
-					ARotations.push_back(libnest2d::Radians(i * AngleStep));
-				}
-			}
-			else {
-				ARotations.push_back(libnest2d::Radians(0.0));
-			}
+			ARotations = CetRotationUtils::BuildAllowedLibRotations(ARotationCount);
 		}
 		static placers::NfpPConfig<PolygonImpl>::Alignment ToLibNestAlignment(MetNestAlignment AAlignment)
 		{
@@ -143,7 +133,7 @@ namespace ET {
 					BestEval = LocalResult.Eval;
 					BestLayers = LocalResult.Layers;
 					BestItems = std::move(LocalResult.Items);
-					BestMetaItems = ClusterResult.MetaItems;
+					BestMetaItems = std::move(LocalResult.MetaItems);
 					BestHasCluster = LocalResult.HasCluster;
 
 					std::cout << "[POLYGON][GLOBAL BEST UPDATE] HasCluster = "
@@ -294,7 +284,7 @@ namespace ET {
 					BestLayers = LocalResult.Layers;
 					// 将局部最优数据转移给全局最优
 					BestItems = std::move(LocalResult.Items);
-					BestMetaItems = ClusterResult.MetaItems;
+					BestMetaItems = std::move(LocalResult.MetaItems);
 					BestHasCluster = LocalResult.HasCluster;
 					std::cout << "[NEST][GLOBAL BEST UPDATE] HasCluster = " << BestHasCluster
 						<< ", count = " << BestEval.FirstBinCount
@@ -367,7 +357,7 @@ namespace ET {
 			cfg.placer_config.epsilon = 1;
 
 			// BottomLeftPlacer 只支持“不旋转 / 失败后尝试 90 度”这种简单旋转
-			cfg.placer_config.allow_rotations = (AOptions.Rotations > 1);
+			cfg.placer_config.allow_rotations = CetRotationUtils::IsAllowedRotation(CET_CLUSTER_HALF_PI, AOptions.Rotations, 1e-9);
 
 			////DJD配置
 			//cfg.selector_config.try_pairs = true;
@@ -409,11 +399,9 @@ namespace ET {
 
 		TetLocalBestResult CetNest2DEngine::EvaluateSortingStrategies(const TetClusterBuildResult& AClusterResult, const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker)
 		{
-			// 初始化局部最优解状态
 			TetLocalBestResult LocalBest;
 
 			const bool UsePolygonBoard = AOptions.Board.Enabled && AOptions.Board.Vertices.size() >= 3;
-			// 检查当前的 Cluster 结果中是否真的包含组合件
 			bool CurrentHasCluster = false;
 			for (const auto& Meta : AClusterResult.MetaItems) {
 				if (Meta.IsCluster) {
@@ -421,30 +409,54 @@ namespace ET {
 					break;
 				}
 			}
-			// 有组合件时，不能随便排序 NestItems。
-	        // 因为 NestItems 和 MetaItems 是一一对应关系，
-	        // 如果只排序 NestItems，不同步排序 MetaItems，后面展开会错位。
-			std::vector<MetENestOrderStrategy> Strategies;
 
-			if (CurrentHasCluster) {
-				Strategies = { MetENestOrderStrategy::LargeFirst };
+			if (AClusterResult.NestItems.size() != AClusterResult.MetaItems.size()) {
+				std::cout << "[NEST][EVAL][ERROR] Cluster NestItems size != MetaItems size. "
+					<< "NestItems = " << AClusterResult.NestItems.size()
+					<< ", MetaItems = " << AClusterResult.MetaItems.size()
+					<< std::endl;
+				return LocalBest;
 			}
-			else {
-				Strategies = {
-					MetENestOrderStrategy::LargeFirst,
-					MetENestOrderStrategy::SmallFirst,
-					MetENestOrderStrategy::LongSideFirst,
-					MetENestOrderStrategy::ThinFirst
-				};
-			}
+
+			const std::vector<MetENestOrderStrategy> Strategies = {
+				MetENestOrderStrategy::LargeFirst,
+				MetENestOrderStrategy::SmallFirst,
+				MetENestOrderStrategy::LongSideFirst,
+				MetENestOrderStrategy::ThinFirst
+			};
 		
-			// 遍历所有排序策略打擂台
 			for (MetENestOrderStrategy Strategy : Strategies) {
-				// 准备测试数据（拷贝一份，避免相互污染）
-				CetTNestItemVector TestItems = AClusterResult.NestItems;
-				//  应用排序策略
-				Nest2DUtils->Nest2DStrategy->ApplyNestPriorityStrategy(TestItems, Strategy);
-				// 执行单次排版（调用底层引擎）
+				CetTNestItemVector PriorityItems = AClusterResult.NestItems;
+				Nest2DUtils->Nest2DStrategy->ApplyNestPriorityStrategy(PriorityItems, Strategy);
+
+				std::vector<std::size_t> SortedIndices(PriorityItems.size());
+				std::iota(SortedIndices.begin(), SortedIndices.end(), 0);
+				std::stable_sort(SortedIndices.begin(), SortedIndices.end(), [&](std::size_t A, std::size_t B) {
+					const int PriorityA = PriorityItems[A].priority();
+					const int PriorityB = PriorityItems[B].priority();
+					if (PriorityA != PriorityB) {
+						return PriorityA > PriorityB;
+					}
+
+					const double AreaA = std::abs(static_cast<double>(PriorityItems[A].area()));
+					const double AreaB = std::abs(static_cast<double>(PriorityItems[B].area()));
+					if (std::abs(AreaA - AreaB) > 1e-6) {
+						return AreaA > AreaB;
+					}
+
+					return A < B;
+				});
+
+				CetTNestItemVector TestItems;
+				TestItems.reserve(PriorityItems.size());
+				std::vector<TetMetaItem> TestMetaItems;
+				TestMetaItems.reserve(AClusterResult.MetaItems.size());
+				for (std::size_t SortedIndex : SortedIndices) {
+					TestItems.push_back(std::move(PriorityItems[SortedIndex]));
+					TestMetaItems.push_back(AClusterResult.MetaItems[SortedIndex]);
+					TestMetaItems.back().PackedItemIndex = static_cast<int>(TestMetaItems.size() - 1);
+				}
+
 				std::size_t Layers = 0;
 				if (UsePolygonBoard) {
 					 Layers = RunPolygonNestOnce(TestItems, AOptions, ATracker);
@@ -453,8 +465,7 @@ namespace ET {
 					 Layers = RunRectangleNestOnce(TestItems, AOptions, ATracker);
 				}	
 
-				//  评估本次排版结果
-				TetTNestEvalResult Eval = Nest2DUtils->Nest2DStrategy->EvaluatePackedResultWithMeta(TestItems,AClusterResult.MetaItems,AOriginalItems,Layers);
+				TetTNestEvalResult Eval = Nest2DUtils->Nest2DStrategy->EvaluatePackedResultWithMeta(TestItems,TestMetaItems,AOriginalItems,Layers);
 
 				std::cout << "[NEST][EVAL] Strategy = " << static_cast<int>(Strategy)
 					<< ", HasCluster = " << CurrentHasCluster
@@ -466,18 +477,14 @@ namespace ET {
 					<< ", LocalBest.Layers = " << LocalBest.Eval.Layers
 					<< std::endl;
 
-				//  比较是否是更好的结果
 				bool Better = false;
 				if (!LocalBest.HasBest) {
-					// 如果这是第一个跑出来的结果，直接当擂主
 					Better = true;
 				}
 				else if (Nest2DUtils->Nest2DStrategy->IsBetterNestResult(Eval, LocalBest.Eval)) {
-					// 如果按照评估标准，当前分数更高，踢馆成功
 					Better = true;
 				}
 				else {
-					// 如果主要分数相同，进入“抢七”断路器规则（优先选择带组合件的方案）
 					bool SameCount = (Eval.FirstBinCount == LocalBest.Eval.FirstBinCount);
 					bool SameLayers = (Eval.Layers == LocalBest.Eval.Layers);
 					bool SameArea = std::abs(Eval.FirstBinArea - LocalBest.Eval.FirstBinArea) <= 1e-6;
@@ -489,14 +496,12 @@ namespace ET {
 					}
 				}
 
-				//  如果更好，更新局部最优解状态
 				if (Better) {
 					LocalBest.HasBest = true;
 					LocalBest.Eval = Eval;
 					LocalBest.Layers = Layers;
-
-					// 安全使用 std::move，因为 TestItems 的生命周期仅在当前单次循环内
 					LocalBest.Items = std::move(TestItems);
+					LocalBest.MetaItems = std::move(TestMetaItems);
 					LocalBest.HasCluster = CurrentHasCluster;
 
 					std::cout << "[NEST][LOCAL BEST UPDATE] HasCluster = " << LocalBest.HasCluster
@@ -508,12 +513,14 @@ namespace ET {
 				}
 			}
 
-			// 将这一批测试中的最高分返回给外层主函数
 			return LocalBest;
 		}
-
 		bool CetNest2DEngine::ShoouldUpdateGlobalBest(const TetLocalBestResult& ALocalResult, bool AHasBest, const TetTNestEvalResult& ABestEval, std::size_t ABestLayers, bool ABestHasCluster)
 		{
+			if (!ALocalResult.HasBest) {
+				return false;
+			}
+
 			// 还没有全局最优，当前局部结果直接成为全局最优
 			if (!AHasBest) {
 				return true;

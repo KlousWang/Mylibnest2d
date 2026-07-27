@@ -81,22 +81,38 @@ namespace ET {
 			if (NestItemsPtr == nullptr)return NEST2D_ERR_CORE_NESTING_FAILED;
 			CetTNestItemVector& NestItems = *NestItemsPtr;
 			NestItems.clear();
-
 			// ==================== 对源数据进行排序 ====================
-			std::cout << "[NEST] Sorting original AItems by Bounding Box Area (Descending)..." << std::endl;
-			//bool isSort = Nest2DUtils->CalcBoardBoundsLocal(AOptions.Board).Valid;
-		/*	std::sort(AItems.begin(), AItems.end(), [&](const TetNestPolygon& ADataa, const TetNestPolygon& ADatab) {
-				return Nest2DUtils->ComparePolygonAreaDesc(ADataa, ADatab);
-				});*/
-			SortItemsByAreaDesc(AItems);
+			std::cout << "[NEST] Sorting working copy by Bounding Box Area (Descending)..." << std::endl;
+			std::vector<std::pair<std::size_t, TetNestPolygon>> SortedPairs;
+			SortedPairs.reserve(AItems.size());
+			for (std::size_t ItemIndex = 0; ItemIndex < AItems.size(); ++ItemIndex) {
+				SortedPairs.push_back({ ItemIndex, AItems[ItemIndex] });
+			}
+			std::stable_sort(SortedPairs.begin(), SortedPairs.end(), [&](const auto& Left, const auto& Right) {
+				const bool LeftBeforeRight = Nest2DUtils->Nest2DGeometryUtils->ComparePolygonAreaDesc(Left.second, Right.second);
+				const bool RightBeforeLeft = Nest2DUtils->Nest2DGeometryUtils->ComparePolygonAreaDesc(Right.second, Left.second);
+				if (LeftBeforeRight != RightBeforeLeft) {
+					return LeftBeforeRight;
+				}
+				return Left.first < Right.first;
+				});
+
+			std::vector<TetNestPolygon> SortedItems;
+			std::vector<std::size_t> SortedToOriginal;
+			SortedItems.reserve(SortedPairs.size());
+			SortedToOriginal.reserve(SortedPairs.size());
+			for (const auto& Entry : SortedPairs) {
+				SortedToOriginal.push_back(Entry.first);
+				SortedItems.push_back(Entry.second);
+			}
 			// ==========================================================================
 
-			Nest2DUtils->NestDataMapperIns->BuildNestItems(AItems,NestItems);
-            std::cout << "[DEBUG] AItems.size = " << AItems.size()
+			Nest2DUtils->NestDataMapperIns->BuildNestItems(SortedItems,NestItems);
+            std::cout << "[DEBUG] SortedItems.size = " << SortedItems.size()
                 << ", NestItems.size = " << NestItems.size()
                 << std::endl;
 
-            if (NestItems.size() != AItems.size()) {
+            if (NestItems.size() != SortedItems.size()) {
                 if (AResult) {
                     AResult->Code = NEST2D_ERR_CORE_NESTING_FAILED;
                     AResult->Message = "BuildNestItems size mismatch.";
@@ -110,10 +126,19 @@ namespace ET {
 			int NestCode = Nest2DUtils->PerformNestingEx(NestItems, AOptions, &UsedBins);
 			
 			//int NestCode = Nest2DUtils->RunNestingFunctor(NestItems, AOptions, &UsedBins);
-
 			if (NestCode != Nest2D_Success)return NestCode;
 
-			Nest2DUtils->NestDataMapperIns->ApplyResults(NestItems, AItems);
+			Nest2DUtils->NestDataMapperIns->ApplyResults(NestItems, SortedItems);
+			for (std::size_t SortedIndex = 0; SortedIndex < SortedItems.size() && SortedIndex < SortedToOriginal.size(); ++SortedIndex) {
+				const std::size_t OriginalIndex = SortedToOriginal[SortedIndex];
+				if (OriginalIndex >= AItems.size()) {
+					continue;
+				}
+				AItems[OriginalIndex].Out_bin = SortedItems[SortedIndex].Out_bin;
+				AItems[OriginalIndex].Out_x = SortedItems[SortedIndex].Out_x;
+				AItems[OriginalIndex].Out_y = SortedItems[SortedIndex].Out_y;
+				AItems[OriginalIndex].Out_angle = SortedItems[SortedIndex].Out_angle;
+			}
             for (const auto& Item : AItems) {  
                 std::cout << "[RESULT] item id = " << Item.Id
                     << ", bin = " << Item.Out_bin

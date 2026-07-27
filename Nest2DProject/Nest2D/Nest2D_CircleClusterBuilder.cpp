@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Nest2D_CircleClusterBuilder.h"
 #include "Nest2D_ClusterGeometryHelper.h"
+#include "Nest2D_RotationUtils.h"
 #include "NestUtils.h"
 
 #include <algorithm>
@@ -119,7 +120,8 @@ namespace ET {
                 }
 
                 const bool FitsNormally = AClusterWidth <= BinWidth && AClusterHeight <= BinHeight;
-                const bool FitsAfterRotation = AOptions.Rotations > 1 && AClusterHeight <= BinWidth && AClusterWidth <= BinHeight;
+                const bool QuarterTurnAllowed = CetRotationUtils::IsAllowedRotation(CET_CLUSTER_HALF_PI, AOptions.Rotations, 1e-9);
+                const bool FitsAfterRotation = QuarterTurnAllowed && AClusterHeight <= BinWidth && AClusterWidth <= BinHeight;
                 return FitsNormally || FitsAfterRotation;
             }
 

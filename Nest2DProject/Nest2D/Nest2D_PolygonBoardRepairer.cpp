@@ -1,6 +1,8 @@
 #include "pch.h"
 #include "Nest2D_PolygonBoardRepairer.h"
 
+#include "Nest2D_RotationUtils.h"
+
 #include "NestUtils.h"
 
 #include <algorithm>
@@ -168,23 +170,8 @@ namespace ET {
 
         void CetPolygonBoardRepairer::_BuildRotations()
         {
-            m_Rotations.clear();
-
-            if (_Options == nullptr) {
-                m_Rotations.push_back(libnest2d::Radians(0.0));
-                return;
-            }
-
-            if (_Options->Rotations > 0) {
-                const double AngleStep = CET_CLUSTER_TWO_PI / _Options->Rotations;
-
-                for (int i = 0; i < _Options->Rotations; ++i) {
-                    m_Rotations.push_back(libnest2d::Radians(i * AngleStep));
-                }
-            }
-            else {
-                m_Rotations.push_back(libnest2d::Radians(0.0));
-            }
+            const int RotationCount = _Options == nullptr ? 0 : _Options->Rotations;
+            m_Rotations = CetRotationUtils::BuildAllowedLibRotations(RotationCount);
         }
 
         std::size_t CetPolygonBoardRepairer::_CompactItemBins()

@@ -32,9 +32,10 @@ namespace ET {
 
         public:
             void BuildCandidates(const CetTNestItemVector& AOriginalItems,const std::vector<TetShapeFeature>& AFeatures,const std::vector<TetClusterCandidate>& ABaseCandidates,const TetNestOptions& AOptions,std::vector<TetClusterCandidate>& AOutCandidates);
+            bool BuildCandidateForBase(const CetTNestItemVector& AOriginalItems,const std::vector<TetShapeFeature>& AFeatures,const TetClusterCandidate& ABaseCandidate,const TetNestOptions& AOptions,const std::vector<bool>& AUsed,TetClusterCandidate& AOutCandidate);
 
         protected:
-            bool _BuildGapFillCandidate(const CetTNestItemVector& AOriginalItems,const std::vector<TetShapeFeature>& AFeatures,const TetClusterCandidate& ABaseCandidate,const TetNestOptions& AOptions,TetClusterCandidate& AOutCandidate);
+            bool _BuildGapFillCandidate(const CetTNestItemVector& AOriginalItems,const std::vector<TetShapeFeature>& AFeatures,const TetClusterCandidate& ABaseCandidate,const TetNestOptions& AOptions,const std::vector<bool>* AUsed,TetClusterCandidate& AOutCandidate);
             bool _TryAddFiller(const CetTNestItemVector& AOriginalItems,const std::vector<TetShapeFeature>& AFeatures,const TetClusterCandidate& ABaseCandidate,int AFillerIndex,const TetNestOptions& AOptions,TetClusterCandidate& AOutCandidate);
             bool _IsSupportedBaseCandidate(const TetClusterCandidate& ACandidate);
             bool _CanUseAsFiller(const TetShapeFeature& AFeature,const TetClusterCandidate& ABaseCandidate);

@@ -111,6 +111,9 @@
     <ClInclude Include="Nest2D_ClusterManager.h">
       <Filter>头文件\Cluster</Filter>
     </ClInclude>
+    <ClInclude Include="Nest2D_RotationUtils.h">
+      <Filter>头文件\Cluster</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
@@ -195,6 +198,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Nest2D_GapFillClusterBuilder.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Nest2D_RotationUtils.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

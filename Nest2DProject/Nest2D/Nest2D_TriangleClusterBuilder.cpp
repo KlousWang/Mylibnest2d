@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Nest2D_TriangleClusterBuilder.h"
 #include"Nest2D_ClusterGeometryHelper.h"
+#include"Nest2D_RotationUtils.h"
 #include"NestUtils.h"
 
 #include <algorithm>
@@ -60,6 +61,12 @@ namespace ET {
                 return false;
             }
 
+            double AllowedHalfTurn = 0.0;
+
+            if (!CetRotationUtils::SnapToAllowedRotation(CET_CLUSTER_PI, AOptions.Rotations, AllowedHalfTurn, 1e-9)) {
+                return false;
+            }
+
             double InternalSpacing = static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing));
             double AxisGap = _CalcTrianglePairAxisGap(W, H, InternalSpacing);
             double ClusterW = W + AxisGap;
@@ -102,7 +109,7 @@ namespace ET {
             TransformB.OriginalId = ABIndex;
             TransformB.RelativeX = ClusterW;
             TransformB.RelativeY = ClusterH;
-            TransformB.RelativeRotation = CET_CLUSTER_PI;
+            TransformB.RelativeRotation = AllowedHalfTurn;
             Meta.TransformData.push_back(TransformB);
 
             AResult.MetaItems.push_back(Meta);
@@ -143,8 +150,7 @@ namespace ET {
 
                     if (FeatureA.ShapeType != MetShapeType::TriangleLike || FeatureB.ShapeType != MetShapeType::TriangleLike) { continue; }
 
-                    
-                     //第一版先只处理全等或近似全等三角形。
+//第一版先只处理全等或近似全等三角形。
                      //注意：这里不再要求 RightTriangle。
                      
                     if (!_AreCongruentTriangles(FeatureA, FeatureB)) {
@@ -288,6 +294,12 @@ namespace ET {
                 return false;
             }
 
+            double AllowedHalfTurn = 0.0;
+
+            if (!CetRotationUtils::SnapToAllowedRotation(CET_CLUSTER_PI, AOptions.Rotations, AllowedHalfTurn, 1e-9)) {
+                return false;
+            }
+
             const double Gap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
 
             AOutCandidate = TetClusterCandidate{};
@@ -302,7 +314,7 @@ namespace ET {
 
             TetItemTransform TB;
             TB.OriginalId = ABIndex;
-            TB.RelativeRotation = CET_CLUSTER_PI;
+            TB.RelativeRotation = AllowedHalfTurn;
             // 旋转180度后放到右上角，随后由 GeometryHelper 精确归一化和校验。
             TB.RelativeX = FA.Width + Gap - FB.MinX;
             TB.RelativeY = FA.Height + Gap - FB.MinY;
@@ -426,7 +438,13 @@ namespace ET {
             }
 
             /* 让 B 的匹配边和 A 的匹配边反向平行。 */
-            const double RotationB = _NormalizeAngle(EdgeA.Angle + CET_CLUSTER_PI - EdgeB.Angle);
+            const double TargetRotationB = EdgeA.Angle + CET_CLUSTER_PI - EdgeB.Angle;
+
+            double RotationB = 0.0;
+
+            if (!CetRotationUtils::SnapToAllowedRotation(TargetRotationB, AOptions.Rotations, RotationB, 0.0523598775598299)) {
+                return false;
+            }
 
             double AMinX = 0.0, AMinY = 0.0, AMaxX = 0.0, AMaxY = 0.0;
             if (!Geometry.GetBounds(ContourA, AMinX, AMinY, AMaxX, AMaxY)) {
@@ -582,13 +600,7 @@ namespace ET {
         }
         double CetTriangleClusterBuilder::_NormalizeAngle(double AAngle)
         {
-            while (AAngle > CET_CLUSTER_PI) {
-                AAngle -= CET_CLUSTER_TWO_PI;
-            }
-            while (AAngle <= -CET_CLUSTER_PI) {
-                AAngle += CET_CLUSTER_TWO_PI;
-            }
-            return AAngle;
+            return CetRotationUtils::NormalizeAngle(AAngle);
         }
         CetInpoint CetTriangleClusterBuilder::_RotatePoint(const CetInpoint& APoint, double ARotation)
         {
@@ -629,9 +641,17 @@ namespace ET {
                 return false;
             }
 
+            double AllowedHalfTurn = 0.0;
+
+            if (!CetRotationUtils::SnapToAllowedRotation(CET_CLUSTER_PI, AOptions.Rotations, AllowedHalfTurn, 1e-9)) {
+                return false;
+            }
+
             CetClusterGeometryHelper Geometry;
+
             CetPath PathA = Geometry.GetIdentityContour(AOriginalItems[AAIndex]);
-            CetPath PathB = Geometry.TransformContour(Geometry.GetIdentityContour(AOriginalItems[ABIndex]), CET_CLUSTER_PI, 0.0, 0.0);
+
+            CetPath PathB = Geometry.TransformContour(Geometry.GetIdentityContour(AOriginalItems[ABIndex]), AllowedHalfTurn, 0.0, 0.0);
 
             double AMinX = 0.0, AMinY = 0.0, AMaxX = 0.0, AMaxY = 0.0;
             double BMinX = 0.0, BMinY = 0.0, BMaxX = 0.0, BMaxY = 0.0;
@@ -653,7 +673,7 @@ namespace ET {
             // B 旋转 180 度，放到 A 上方：A 的最高点 + Gap 对齐 B 旋转后的最低点
             TetItemTransform TransformB;
             TransformB.OriginalId = ABIndex;
-            TransformB.RelativeRotation = CET_CLUSTER_PI;
+            TransformB.RelativeRotation = AllowedHalfTurn;
 
             // X 方向居中对齐
             const double ACenterX = (AMaxX - AMinX) * 0.5;

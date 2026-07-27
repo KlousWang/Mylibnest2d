@@ -184,6 +184,7 @@
     <ClInclude Include="Nest2D_InvokeFunctor.h" />
     <ClInclude Include="Nest2D_PolygonBoardRepairer.h" />
     <ClInclude Include="Nest2D_RectangleClusterBuilder.h" />
+    <ClInclude Include="Nest2D_RotationUtils.h" />
     <ClInclude Include="Nest2D_SelfFunction.h" />
     <ClInclude Include="Nest2D_DataConst.h" />
     <ClInclude Include="Nest2D_Sort.h" />
@@ -222,6 +223,7 @@
     <ClCompile Include="Nest2D_PrivateDataType.h" />
     <ClCompile Include="Nest2D_RectangleClusterBuilder.cpp" />
     <ClCompile Include="Nest2D_Reg.cpp" />
+    <ClCompile Include="Nest2D_RotationUtils.cpp" />
     <ClCompile Include="Nest2d_Sort.cpp" />
     <ClCompile Include="Nest2D_StrategyManager.cpp" />
     <ClCompile Include="Nest2D_SvgUtils.cpp" />

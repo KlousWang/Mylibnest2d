@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Nest2D_RectangleClusterBuilder.h"
 #include "Nest2D_ClusterGeometryHelper.h"
+#include "Nest2D_RotationUtils.h"
 #include "NestUtils.h"
 #include "Nest2D_PrivateDataType.h"
 
@@ -35,7 +36,7 @@ namespace ET {
                 AOutShortSide = std::min(AFeature.OrientedWidth, AFeature.OrientedHeight);
                 AOutLongSide = std::max(AFeature.OrientedWidth, AFeature.OrientedHeight);
             }
-            bool _MakePose(const CetNestItem& AItem, const TetShapeFeature& AFeature, bool ARotate90, const CetClusterGeometryHelper& AGeometry, TetRectanglePose& AOutPose)
+            bool _MakePose(const CetNestItem& AItem, const TetShapeFeature& AFeature, bool ARotate90, const TetNestOptions& AOptions, const CetClusterGeometryHelper& AGeometry, TetRectanglePose& AOutPose)
             {
                 AOutPose = TetRectanglePose{};
 
@@ -46,7 +47,10 @@ namespace ET {
                  * 如果 ARotate90 为 true，
                  * 再额外旋转 90°。
                  */
-                AOutPose.Rotation = -AFeature.OrientedAngle + (ARotate90 ? CET_CLUSTER_HALF_PI : 0.0);
+                const double TargetRotation = -AFeature.OrientedAngle + (ARotate90 ? CET_CLUSTER_HALF_PI : 0.0);
+                if (!CetRotationUtils::SnapToNearestAllowedRotation(TargetRotation, AOptions.Rotations, AOutPose.Rotation)) {
+                    return false;
+                }
                 const CetPath Contour = AGeometry.TransformContour(AGeometry.GetIdentityContour(AItem), AOutPose.Rotation, 0.0, 0.0);
                 double MaxX = 0.0;
                 double MaxY = 0.0;
@@ -72,15 +76,6 @@ namespace ET {
 
             if (AIndices.size() < 2) { return; }
 
-            /*
-             * 先过滤掉：
-             *
-             * 1. 越界索引；
-             * 2. 非矩形；
-             * 3. 带孔矩形；
-             * 4. 未成功识别方向的矩形；
-             * 5. 面积或尺寸无效的矩形。
-             */
             std::vector<int> ValidIndices;
             ValidIndices.reserve(AIndices.size());
             for (int Index : AIndices) {
@@ -89,63 +84,60 @@ namespace ET {
                     ValidIndices.push_back(Index);
                 }
             }
-            /*
-             * 保证同一个原始零件索引只出现一次。
-             */
+
             std::sort(ValidIndices.begin(), ValidIndices.end());
             ValidIndices.erase(std::unique(ValidIndices.begin(), ValidIndices.end()), ValidIndices.end());
             if (ValidIndices.size() < 2) { return; }
+
             const std::size_t OldCandidateCount = AOut.size();
             const bool AllowQuarterTurn = _IsQuarterTurnAllowed(AOptions);
-            /*
-             * 第一阶段采用两两组合。
-             *
-             * 后续如果实现四矩形块、多层组合或组合件再组合，
-             * 可以在这里继续添加新的候选生成入口。
-             */
-            for (std::size_t i = 0; i < ValidIndices.size(); ++i) {
-                for (std::size_t j = i + 1; j < ValidIndices.size(); ++j) {
-                    const int IndexA = ValidIndices[i];
-                    const int IndexB = ValidIndices[j];
-                    /*
-                     * 第一阶段只处理长短边尺寸相近的矩形。
-                     * 不直接组合任意大小矩形，避免产生大量低质量候选。
-                     */
-                    if (!_AreCompatible(AFeatures[IndexA], AFeatures[IndexB])) { continue; }
-                    /*
-                     * LayoutMode == 0：横排
-                     * LayoutMode == 1：竖排
-                     */
-                    for (int LayoutMode = 0; LayoutMode < 2; ++LayoutMode) {
-                        const bool Horizontal = LayoutMode == 0;
-                        TetClusterCandidate Candidate;
+            std::vector<int> Remaining = ValidIndices;
 
-                        /*
-                         * 候选一：
-                         * 两个矩形均按照自身方向校正后排列。
-                         */
-                        if (_MakePairCandidate(AItems, AFeatures, IndexA, IndexB, Horizontal, false, AOptions, Candidate)) {
-                            AOut.push_back(std::move(Candidate));
-                        }
-                        /*
-                         * 如果旋转设置包含 90°，继续生成：
-                         *
-                         * A 保持校正方向；
-                         * B 在校正方向基础上额外旋转 90°。
-                         *
-                         * 正方形旋转 90° 不会形成新布局，因此跳过。
-                         */
-                        if (!AllowQuarterTurn || _IsSquareLike(AFeatures[IndexB])) { continue; }
-                        TetClusterCandidate RotatedCandidate;
-                        if (_MakePairCandidate(AItems, AFeatures, IndexA, IndexB, Horizontal, true, AOptions, RotatedCandidate)) {
-                            AOut.push_back(std::move(RotatedCandidate));
-                        }
+            while (Remaining.size() >= 2) {
+                const int IndexA = Remaining.front();
+                auto PairIt = std::find_if(Remaining.begin() + 1, Remaining.end(), [&](int IndexB) {
+                    return _AreCompatible(AFeatures[IndexA], AFeatures[IndexB]);
+                    });
+
+                if (PairIt == Remaining.end()) {
+                    Remaining.erase(Remaining.begin());
+                    continue;
+                }
+
+                const int IndexB = *PairIt;
+                bool HasBestCandidate = false;
+                TetClusterCandidate BestCandidate;
+                auto TryLayout = [&](bool AHorizontal, bool ARotateB90) {
+                    TetClusterCandidate Candidate;
+                    if (!_MakePairCandidate(AItems, AFeatures, IndexA, IndexB, AHorizontal, ARotateB90, AOptions, Candidate)) {
+                        return;
                     }
+                    if (!HasBestCandidate || Candidate.Score > BestCandidate.Score) {
+                        HasBestCandidate = true;
+                        BestCandidate = std::move(Candidate);
+                    }
+                    };
+
+                TryLayout(true, false);
+                TryLayout(false, false);
+                if (AllowQuarterTurn && !_IsSquareLike(AFeatures[IndexB])) {
+                    TryLayout(true, true);
+                    TryLayout(false, true);
+                }
+
+                const auto PairOffset = static_cast<std::vector<int>::difference_type>(std::distance(Remaining.begin(), PairIt));
+                if (HasBestCandidate) {
+                    AOut.push_back(std::move(BestCandidate));
+                    Remaining.erase(Remaining.begin() + PairOffset);
+                    Remaining.erase(Remaining.begin());
+                }
+                else {
+                    Remaining.erase(Remaining.begin());
                 }
             }
+
             std::cout << "[RECTANGLE][BUILD CANDIDATES] " << "IndexCount=" << ValidIndices.size() << ", NewCandidateCount=" << AOut.size() - OldCandidateCount << std::endl;
         }
-
         bool CetRectangleClusterBuilder::_IsValidRectangle(const TetShapeFeature& AFeature)
         {
             return AFeature.ShapeType == MetShapeType::RectangleLike && AFeature.IsRotatedRectangle && !AFeature.HasHoles && AFeature.Area > 0.0 && AFeature.OrientedWidth > 0.0 && AFeature.OrientedHeight > 0.0;
@@ -171,22 +163,8 @@ namespace ET {
 
         bool CetRectangleClusterBuilder::_IsQuarterTurnAllowed(const TetNestOptions& AOptions)
         {
-            /*
-                 * Rotations 表示整圆离散角度数量。
-                 *
-                 * Rotations = 1：
-                 * 只有 0°
-                 *
-                 * Rotations = 2：
-                 * 0°、180°
-                 *
-                 * Rotations = 4：
-                 * 0°、90°、180°、270°
-                 *
-                 * 因此只有 Rotations 是 4 的倍数时，
-                 * 离散旋转集合中才精确包含 90°。
-                 */
-            return AOptions.Rotations >= 4 && AOptions.Rotations % 4 == 0;
+            constexpr double RotationTolerance = 1e-9;
+            return CetRotationUtils::IsAllowedRotation(CET_CLUSTER_HALF_PI, AOptions.Rotations, RotationTolerance);
         }
 
         bool CetRectangleClusterBuilder::_MakePairCandidate(const CetTNestItemVector& AItems, const std::vector<TetShapeFeature>& AFeatures, int AIndexA, int AIndexB, bool AHorizontal, bool ARotateB90, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate)
@@ -205,7 +183,7 @@ namespace ET {
             TetRectanglePose PoseA;
             TetRectanglePose PoseB;
 
-            if (!_MakePose(AItems[AIndexA], FeatureA, false, Geometry, PoseA) || !_MakePose(AItems[AIndexB], FeatureB, ARotateB90, Geometry, PoseB)) { return false; }
+            if (!_MakePose(AItems[AIndexA], FeatureA, false, AOptions, Geometry, PoseA) || !_MakePose(AItems[AIndexB], FeatureB, ARotateB90, AOptions, Geometry, PoseB)) { return false; }
 
             /*
              * Spacing 转换为排样内部坐标。
