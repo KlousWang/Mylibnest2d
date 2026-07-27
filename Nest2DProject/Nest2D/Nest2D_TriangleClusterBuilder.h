@@ -3,6 +3,7 @@
 #include"Nest2D_PrivateDataType.h"
 #include"Nest2D_DataType.h"
 #include<vector>
+#include<set>
 namespace ET {
 	namespace NEST2DMANAGERLIB
 	{
@@ -35,6 +36,10 @@ namespace ET {
 			CetNestItem _MakeRectangleNestItem(double AWidth,double AHeight);
 
 			bool _BuildRightTrianglePairCandidate(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, int AAIndex, int ABIndex, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate);
+			void _BuildRightTriangleRectangleClusterCandidates(const CetTNestItemVector& AOriginalItems,const std::vector<TetShapeFeature>& AFeatures,const std::vector<int>& AIndices,const TetNestOptions& AOptions,std::vector<TetClusterCandidate>& AOutCandidates,std::set<int>& AOutHandledIndices);
+			bool _BuildRightTriangleRectangleClusterCandidate(const CetTNestItemVector& AOriginalItems,const std::vector<TetShapeFeature>& AFeatures,const std::vector<int>& AIndices,const TetNestOptions& AOptions,TetClusterCandidate& AOutCandidate);
+			bool _BuildRightTriangleRectangleLayoutCandidate(const CetTNestItemVector& AOriginalItems,const std::vector<TetShapeFeature>& AFeatures,const std::vector<int>& AIndices,const TetNestOptions& AOptions,int ACellRows,int ACellCols,double ACellWidth,double ACellHeight,double AAxisGap,double ACellGap,double AHalfTurn,TetClusterCandidate& AOutCandidate);
+			double _CalculateRightTriangleRectangleScore(const TetClusterCandidate& ACandidate,int APairCount,int ACellRows,int ACellCols);
 			bool _AreCongruentTriangles(const TetShapeFeature& AA, const TetShapeFeature& AB);
 			
 			bool _BuildAnyTrianglePairCandidate(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, int AAIndex, int ABIndex, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate);
