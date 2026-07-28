@@ -120,10 +120,7 @@ TetTNestEvalResult ET::NEST2DMANAGERLIB::CetStrategyManager::EvaluatePackedResul
 	TetTNestEvalResult Result{};
 	Result.Layers = ALayers;
 	if(AItems.size() != AMetaItems.size()){
-		std::cout << "[NEST][EVAL][ERROR] PackedItems size != MetaItems size. "
-			<< "PackedItems = " << AItems.size()
-			<< ", MetaItems = " << AMetaItems.size()
-			<< std::endl;
+		std::cout << "[NEST][EVAL][ERROR] PackedItems size != MetaItems size. "<< "PackedItems = " << AItems.size()<< ", MetaItems = " << AMetaItems.size()<< std::endl;
 		return Result;
 	}
 

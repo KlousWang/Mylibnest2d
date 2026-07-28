@@ -7,10 +7,101 @@
 //#include<libnest2d/backends/clipper/geometries.hpp>
 //#include<libnest2d/libnest2d.hpp>
 #include <libnest2d/utils/svgtools.hpp>
+#include <algorithm>
+#include <cmath>
+#include <iomanip>
+#include <sstream>
 //#include"EtTechCore_Object.h"
 
 using namespace libnest2d;
 using namespace ClipperLib;
+
+namespace {
+    double CalcSignedArea(const std::vector<TetNestPoint>& APoints)
+    {
+        if (APoints.size() < 3) {
+            return 0.0;
+        }
+
+        double Area = 0.0;
+
+        for (std::size_t i = 0, j = APoints.size() - 1; i < APoints.size(); j = i++) {
+            Area += APoints[j].X * APoints[i].Y - APoints[i].X * APoints[j].Y;
+        }
+
+        return Area * 0.5;
+    }
+
+    double CalcNetPolygonArea(const std::vector<TetNestPoint>& AOuter, const std::vector<std::vector<TetNestPoint>>& AHoles)
+    {
+        double Area = std::abs(CalcSignedArea(AOuter));
+
+        for (const auto& Hole : AHoles) {
+            Area -= std::abs(CalcSignedArea(Hole));
+        }
+
+        return std::max(0.0, Area);
+    }
+
+    double CalcItemArea(const TetNestPolygon& AItem)
+    {
+        return CalcNetPolygonArea(AItem.Vertices, AItem.Holes);
+    }
+
+    double CalcBoardArea(const TetNestOptions& AOptions)
+    {
+        if (AOptions.Board.Enabled && AOptions.Board.Vertices.size() >= 3) {
+            return CalcNetPolygonArea(AOptions.Board.Vertices, AOptions.Board.Holes);
+        }
+
+        return std::max(0.0, AOptions.BinWidth) * std::max(0.0, AOptions.BinHeight);
+    }
+
+    double CalcBinUsedArea(const std::vector<TetNestPolygon>& AItems, int ABin)
+    {
+        double UsedArea = 0.0;
+
+        for (const auto& Item : AItems) {
+            if (Item.Out_bin == ABin) {
+                UsedArea += CalcItemArea(Item);
+            }
+        }
+
+        return UsedArea;
+    }
+
+    std::string MakeUtilizationSvgText(double AUsedArea, double ABoardArea, double ASvgWidth, double ASvgHeight)
+    {
+        if (ABoardArea <= 0.0 || ASvgWidth <= 0.0 || ASvgHeight <= 0.0) {
+            return "";
+        }
+
+        double Percent = (AUsedArea / ABoardArea) * 100.0;
+
+        if (!std::isfinite(Percent)) {
+            return "";
+        }
+
+        Percent = std::max(0.0, Percent);
+
+        const double FontSize = std::clamp(std::min(ASvgWidth, ASvgHeight) * 0.025, 3.0, 12.0);
+        const double Margin = std::max(2.0, FontSize * 0.6);
+
+        std::ostringstream ss;
+        ss << std::fixed << std::setprecision(2);
+        ss << "<text x=\"" << Margin
+            << "\" y=\"" << (Margin + FontSize)
+            << "\" font-family=\"Arial, Helvetica, sans-serif\""
+            << " font-size=\"" << FontSize
+            << "\" fill=\"#111111\""
+            << " fill-opacity=\"0.85\">Usage: "
+            << Percent
+            << "%</text>\n";
+
+        return ss.str();
+    }
+}
+
 namespace ET {
 	namespace NEST2DMANAGERLIB {
 		CetExportPhoto::CetExportPhoto() :CetCoreObject()
@@ -40,6 +131,7 @@ namespace ET {
 			if (AOptions.SvgPath.empty()) return NEST2D_ERR_EXPORT_NO_PATH;
 
 			Box binSize(NestUtils::ToNestCoord(AOptions.BinWidth), NestUtils::ToNestCoord(AOptions.BinHeight));
+            const double BoardArea = CalcBoardArea(AOptions);
 
 			using SvgWriter = svg::SVGWriter<PolygonImpl>;
 			SvgWriter::Config conf;
@@ -131,10 +223,19 @@ namespace ET {
                 }
                 else {testFile.close();}
                 std::cout << "[SVG] realSvgPath = " << realSvgPath << std::endl;
+                std::string ExtraSvg;
                 if (AOptions.Board.Enabled && AOptions.Board.Vertices.size() >= 3) {
                     std::string boardPath = Nest2DUtils->Nest2DSvgUtils->MakeBoardSvgPath(AOptions.Board,AOptions.BinHeight);
-                   Nest2DUtils->Nest2DSvgUtils->InsertTextBeforeSvgEnd(realSvgPath, boardPath);
+                    ExtraSvg += boardPath;
                 }
+                ExtraSvg += MakeUtilizationSvgText(
+                    CalcBinUsedArea(AItems, currentBin),
+                    BoardArea,
+                    AOptions.BinWidth,
+                    AOptions.BinHeight
+                );
+
+                Nest2DUtils->Nest2DSvgUtils->InsertTextBeforeSvgEnd(realSvgPath, ExtraSvg);
             }
 
 			return 0;

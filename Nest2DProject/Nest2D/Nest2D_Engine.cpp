@@ -272,7 +272,7 @@ namespace ET {
 					<< ", OriginalItems = " << OriginalItems.size()
 					<< ", PackedItems = " << ClusterResult.NestItems.size()
 					<< ", MetaItems = " << ClusterResult.MetaItems.size()
-					<< ", ClusterCount = " << ClusterCount << std::endl;
+					<< ", ClusterCount = " << ClusterCount << std::endl;  
 
 				// 调用抽离的内层函数，获取该 Cluster 策略下的局部最优解
 				TetLocalBestResult LocalResult = EvaluateSortingStrategies(ClusterResult, OriginalItems, AOptions, Tracker);

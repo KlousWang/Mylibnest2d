@@ -356,27 +356,45 @@ namespace ET {
                     continue;
                 }
 
-                const std::size_t EvenCount = Group.size() - (Group.size() % 2);
-                if (EvenCount < 2) {
-                    continue;
-                }
+                std::size_t GroupOffset = 0;
+                while (GroupOffset + 1 < Group.size()) {
+                    const std::size_t RemainingCount = Group.size() - GroupOffset;
+                    std::size_t TrialCount = RemainingCount - (RemainingCount % 2);
+                    bool BuiltChunk = false;
 
-                std::vector<int> ClusterIndices(Group.begin(), Group.begin() + static_cast<std::vector<int>::difference_type>(EvenCount));
-                TetClusterCandidate Candidate;
-                if (!_BuildRightTriangleRectangleClusterCandidate(AOriginalItems, AFeatures, ClusterIndices, AOptions, Candidate)) {
-                    std::cout << "[TRIANGLE][RECTANGLE][REJECT] GroupSize=" << Group.size() << ", EvenCount=" << EvenCount << std::endl;
-                    continue;
-                }
+                    while (TrialCount >= 2) {
+                        std::vector<int> ClusterIndices(
+                            Group.begin() + static_cast<std::vector<int>::difference_type>(GroupOffset),
+                            Group.begin() + static_cast<std::vector<int>::difference_type>(GroupOffset + TrialCount));
 
-                for (int OriginalIndex : Candidate.OriginalIndices) {
-                    AOutHandledIndices.insert(OriginalIndex);
-                }
+                        TetClusterCandidate Candidate;
+                        if (_BuildRightTriangleRectangleClusterCandidate(AOriginalItems, AFeatures, ClusterIndices, AOptions, Candidate)) {
+                            for (int OriginalIndex : Candidate.OriginalIndices) {
+                                AOutHandledIndices.insert(OriginalIndex);
+                            }
 
-                AOutCandidates.push_back(std::move(Candidate));
-                std::cout << "[TRIANGLE][RECTANGLE][CANDIDATE] GroupSize=" << Group.size()
-                    << ", UsedCount=" << AOutCandidates.back().OriginalIndices.size()
-                    << ", Type=" << AOutCandidates.back().ClusterType
-                    << ", Score=" << AOutCandidates.back().Score << std::endl;
+                            AOutCandidates.push_back(std::move(Candidate));
+                            std::cout << "[TRIANGLE][RECTANGLE][CANDIDATE] GroupSize=" << Group.size()
+                                << ", Offset=" << GroupOffset
+                                << ", UsedCount=" << AOutCandidates.back().OriginalIndices.size()
+                                << ", Type=" << AOutCandidates.back().ClusterType
+                                << ", Score=" << AOutCandidates.back().Score << std::endl;
+
+                            GroupOffset += TrialCount;
+                            BuiltChunk = true;
+                            break;
+                        }
+
+                        TrialCount -= 2;
+                    }
+
+                    if (!BuiltChunk) {
+                        std::cout << "[TRIANGLE][RECTANGLE][REJECT] GroupSize=" << Group.size()
+                            << ", Offset=" << GroupOffset
+                            << ", RemainingCount=" << RemainingCount << std::endl;
+                        break;
+                    }
+                }
             }
 
             std::cout << "[TRIANGLE][RECTANGLE][BUILD] GroupCount=" << Groups.size()
