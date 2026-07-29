@@ -34,9 +34,9 @@ namespace ET {
 		{
 			ARotations = CetRotationUtils::BuildAllowedLibRotations(ARotationCount);
 		}
-		static placers::NfpPConfig<CetCetPolygonImpl>::Alignment ToLibNestAlignment(MetNestAlignment AAlignment)
+		static placers::NfpPConfig<CetPolygonImpl>::Alignment ToLibNestAlignment(MetNestAlignment AAlignment)
 		{
-			using CetAlignment = placers::NfpPConfig<CetCetPolygonImpl>::Alignment;
+			using CetAlignment = placers::NfpPConfig<CetPolygonImpl>::Alignment;
 
 			switch (AAlignment){
 			case MetNestAlignment::DontAlign:
@@ -161,7 +161,7 @@ namespace ET {
 			
 			double BoardBinWidth = AOptions.BinWidth;
 			double BoardBinHeight = AOptions.BinHeight;
-			CetCetPolygonImpl BinPoly = Nest2DUtils->Nest2DBord->BuildBinPolygonFromOptions(AOptions,BoardBinWidth,BoardBinHeight);
+			CetPolygonImpl BinPoly = Nest2DUtils->Nest2DBord->BuildBinPolygonFromOptions(AOptions,BoardBinWidth,BoardBinHeight);
 
 			Nest2DUtils->Nest2DPolygonBord->SetContext(ANestItems,AOptions,BinPoly,BoardBinWidth,BoardBinHeight);
 			Nest2DUtils->Nest2DPolygonBord->Repair(BestLayers);
@@ -179,18 +179,18 @@ namespace ET {
 			double BoardBinWidth = AOptions.BinWidth;
 			double BoardBinHeight = AOptions.BinHeight;
 
-			CetCetPolygonImpl BinPoly = Nest2DUtils->Nest2DBord->BuildBinPolygonFromOptions(AOptions,BoardBinWidth,BoardBinHeight);
+			CetPolygonImpl BinPoly = Nest2DUtils->Nest2DBord->BuildBinPolygonFromOptions(AOptions,BoardBinWidth,BoardBinHeight);
 
-			using CetMyPlacer = placers::_NofitPolyPlacer<CetCetPolygonImpl, CetCetPolygonImpl>;
-			using CetMySelector = selections::_FirstFitSelection<CetCetPolygonImpl>;
+			using CetMyPlacer = placers::_NofitPolyPlacer<CetPolygonImpl, CetPolygonImpl>;
+			using CetMySelector = selections::_FirstFitSelection<CetPolygonImpl>;
 
 			NestConfig<CetMyPlacer, CetMySelector> cfg;
 
 			cfg.placer_config.alignment =
-				placers::NfpPConfig<CetCetPolygonImpl>::Alignment::DONT_ALIGN;
+				placers::NfpPConfig<CetPolygonImpl>::Alignment::DONT_ALIGN;
 
 			cfg.placer_config.starting_point =
-				placers::NfpPConfig<CetCetPolygonImpl>::Alignment::BOTTOM_LEFT;
+				placers::NfpPConfig<CetPolygonImpl>::Alignment::BOTTOM_LEFT;
 
 			cfg.placer_config.accuracy = 1.0f;
 			cfg.placer_config.parallel = true;
@@ -289,7 +289,7 @@ namespace ET {
 				Nest2DUtils->Nest2DCluster->ExpandClusterResultToOriginalItems(OriginalItems, BestItems, BestMetaItems, ANestItems);
 			}
 			//if(BestLayers > 0) {
-			//	CetCetPolygonImpl RectBinPoly = Nest2DUtils->Nest2DBord->BuildRectangleBinPolygon(AOptions.BinWidth, AOptions.BinHeight);
+			//	CetPolygonImpl RectBinPoly = Nest2DUtils->Nest2DBord->BuildRectangleBinPolygon(AOptions.BinWidth, AOptions.BinHeight);
 			
 			//	Nest2DUtils->Nest2DPolygonBord->SetContext(ANestItems, AOptions, RectBinPoly, AOptions.BinWidth, AOptions.BinHeight);
 			//	Nest2DUtils->Nest2DPolygonBord->Repair(BestLayers);
@@ -314,15 +314,15 @@ namespace ET {
 			//Box Bin(width, height);
 
 			//using CetMyPlacer = placers::_NofitPolyPlacer<CetPolygonImpl, Box>;
-			using CetMyPlacer = placers::_BottomLeftPlacer<CetCetPolygonImpl>;
-			using CetMySelector = selections::_FirstFitSelection<CetCetPolygonImpl>;
+			using CetMyPlacer = placers::_BottomLeftPlacer<CetPolygonImpl>;
+			using CetMySelector = selections::_FirstFitSelection<CetPolygonImpl>;
 			//using CetMySelector = selections::_FillerSelection<CetPolygonImpl>;
 			//using CetMySelector = selections::_DJDHeuristic<CetPolygonImpl>;
 
 			NestConfig<CetMyPlacer, CetMySelector> cfg;
 			
 			//cfg.placer_config.accuracy = AOptions.Placer.Accuracy;
-			////cfg.placer_config.alignment = placers::NfpPConfig<CetCetPolygonImpl>::Alignment::DONT_ALIGN;
+			////cfg.placer_config.alignment = placers::NfpPConfig<CetPolygonImpl>::Alignment::DONT_ALIGN;
 			//cfg.placer_config.alignment = ToLibNestAlignment(AOptions.Placer.Alignment);
 			//cfg.placer_config.starting_point = ToLibNestAlignment(AOptions.Placer.StartingPoint);
 			//cfg.placer_config.parallel = AOptions.Placer.Parallel;
@@ -356,7 +356,7 @@ namespace ET {
 
 			std::cout << "[NEST] Layers = " << Layers << std::endl;
 		/*	if (Layers > 0) {
-				CetCetPolygonImpl RectBinPoly = Nest2DUtils->Nest2DBord->BuildRectangleBinPolygon(BinWidth, BinHeight);
+				CetPolygonImpl RectBinPoly = Nest2DUtils->Nest2DBord->BuildRectangleBinPolygon(BinWidth, BinHeight);
 
 				Nest2DUtils->Nest2DPolygonBord->SetContext(ATestItems, AOptions, RectBinPoly, BinWidth, BinHeight);
 				Nest2DUtils->Nest2DPolygonBord->Repair(Layers);
