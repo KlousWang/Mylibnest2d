@@ -19,6 +19,7 @@ namespace ET {
             constexpr double CET_ARC_SIZE_TOLERANCE = 0.05;
             constexpr double CET_ARC_SWEEP_TOLERANCE = CET_CLUSTER_PI / 36.0;
             constexpr double CET_ARC_SAFETY_GAP_RATIO = 0.05;
+            constexpr std::size_t CET_ARC_MAX_CLUSTER_CHILDREN = 32;
 
             bool NearlyEqual(double FirstValue, double SecondValue, double RelativeTolerance)
             {
@@ -299,6 +300,9 @@ namespace ET {
                 }
 
                 const int ColumnCount = static_cast<int>((ArcCount + static_cast<std::size_t>(RowCount) - 1) / static_cast<std::size_t>(RowCount));
+                if (ColumnCount < 2) {
+                    return Layout;
+                }
                 const double CellWidth = AlternateDirection ? std::max(ForwardBounds.Width, ReverseBounds.Width) : ForwardBounds.Width;
                 const double CellHeight = AlternateDirection ? std::max(ForwardBounds.Height, ReverseBounds.Height) : ForwardBounds.Height;
 
@@ -399,26 +403,73 @@ namespace ET {
             std::sort(RemainingIndices.begin(), RemainingIndices.end());
             RemainingIndices.erase(std::unique(RemainingIndices.begin(), RemainingIndices.end()), RemainingIndices.end());
 
-            while (RemainingIndices.size() >= 2) {
+            if (RemainingIndices.size() < 2) {
+                return;
+            }
+
+            CetClusterGeometryHelper Geometry;
+            const std::size_t MaxTrialCount = std::min(RemainingIndices.size(), CET_ARC_MAX_CLUSTER_CHILDREN);
+            std::size_t PreferredCount = 0;
+            TetClusterCandidate FirstCandidate;
+            for (std::size_t TrialCount = MaxTrialCount; TrialCount >= 2; --TrialCount) {
+                std::vector<int> TrialIndices(
+                    RemainingIndices.begin(),
+                    RemainingIndices.begin() + static_cast<std::vector<int>::difference_type>(TrialCount));
+
+                TetClusterCandidate Candidate;
+                if (!_BuildClusterCandidate(AOriginalItems, AFeatures, TrialIndices, AOptions, Candidate)) {
+                    continue;
+                }
+
+                const std::size_t RequiredCopies = std::min(
+                    CET_CLUSTER_TARGET_COPIES_PER_BOARD,
+                    RemainingIndices.size() / TrialCount);
+                if (!Geometry.CanPlaceCandidateCopiesOnBoard(Candidate, AOptions, RequiredCopies)) {
+                    continue;
+                }
+
+                PreferredCount = TrialCount;
+                FirstCandidate = std::move(Candidate);
+                break;
+            }
+
+            if (PreferredCount < 2) {
+                std::cout << "[ARC][REJECT] No practical board-fitting compatible cluster can be built. Count = "
+                    << RemainingIndices.size() << std::endl;
+                return;
+            }
+
+            std::size_t GroupOffset = 0;
+            while (GroupOffset + 1 < RemainingIndices.size()) {
+                const std::size_t RemainingCount = RemainingIndices.size() - GroupOffset;
+                std::size_t TrialCount = std::min(RemainingCount, PreferredCount);
                 std::size_t BestCount = 0;
                 TetClusterCandidate BestCandidate;
 
-                for (std::size_t TrialCount = RemainingIndices.size(); TrialCount >= 2; --TrialCount) {
+                while (TrialCount >= 2) {
                     std::vector<int> TrialIndices(
-                        RemainingIndices.begin(),
-                        RemainingIndices.begin() + static_cast<std::vector<int>::difference_type>(TrialCount));
+                        RemainingIndices.begin() + static_cast<std::vector<int>::difference_type>(GroupOffset),
+                        RemainingIndices.begin() + static_cast<std::vector<int>::difference_type>(GroupOffset + TrialCount));
 
-                    TetClusterCandidate TrialCandidate;
-                    if (_BuildClusterCandidate(AOriginalItems, AFeatures, TrialIndices, AOptions, TrialCandidate)) {
+                    if (GroupOffset == 0 && TrialCount == PreferredCount) {
+                        BestCandidate = std::move(FirstCandidate);
                         BestCount = TrialCount;
-                        BestCandidate = std::move(TrialCandidate);
                         break;
                     }
+
+                    TetClusterCandidate Candidate;
+                    if (_BuildClusterCandidate(AOriginalItems, AFeatures, TrialIndices, AOptions, Candidate)) {
+                        BestCandidate = std::move(Candidate);
+                        BestCount = TrialCount;
+                        break;
+                    }
+
+                    --TrialCount;
                 }
 
                 if (BestCount < 2) {
                     std::cout << "[ARC][REJECT] No board-fitting compatible cluster can be built. RemainingCount = "
-                        << RemainingIndices.size() << std::endl;
+                        << RemainingCount << std::endl;
                     return;
                 }
 
@@ -427,9 +478,7 @@ namespace ET {
                     << ", Type = " << AOutCandidates.back().ClusterType
                     << ", Score = " << AOutCandidates.back().Score << std::endl;
 
-                RemainingIndices.erase(
-                    RemainingIndices.begin(),
-                    RemainingIndices.begin() + static_cast<std::vector<int>::difference_type>(BestCount));
+                GroupOffset += BestCount;
             }
         }
 
@@ -437,7 +486,8 @@ namespace ET {
         {
             AOutCandidate = TetClusterCandidate{};
 
-            if (AOriginalItems.size() != AFeatures.size() || AIndices.size() < 2) {
+            if (AOriginalItems.size() != AFeatures.size() || AIndices.size() < 2 ||
+                AIndices.size() > CET_ARC_MAX_CLUSTER_CHILDREN) {
                 return false;
             }
 
@@ -490,7 +540,8 @@ namespace ET {
             Layouts.push_back(MakeLineLayout(Indices.size(), ForwardBounds, ReverseBounds, Gap, false, true, StyleName));
             Layouts.push_back(MakeLineLayout(Indices.size(), ForwardBounds, ReverseBounds, Gap, true, true, StyleName));
 
-            for (int RowCount = 2; RowCount <= static_cast<int>(Indices.size()); ++RowCount) {
+            const int MaxGridRowCount = static_cast<int>((Indices.size() + 1) / 2);
+            for (int RowCount = 2; RowCount <= MaxGridRowCount; ++RowCount) {
                 Layouts.push_back(MakeGridLayout(Indices.size(), RowCount, ForwardBounds, ReverseBounds, Gap, false, StyleName));
                 Layouts.push_back(MakeGridLayout(Indices.size(), RowCount, ForwardBounds, ReverseBounds, Gap, true, StyleName));
             }

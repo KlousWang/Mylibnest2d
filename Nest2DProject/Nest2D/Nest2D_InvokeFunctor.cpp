@@ -38,6 +38,8 @@ namespace ET {
 			//if (!m_ClusterManager) return -1;
 
 			Nest2DStrategy =(decltype(Nest2DStrategy)) m_LibConfig->GetLocalCoreObjIns("l_StrategyManager");
+
+            Nest2DAreaUsage =(decltype(Nest2DAreaUsage)) m_LibConfig->GetLocalCoreObjIns("l_AreaUsageCalculator");
 		    
             Nest2DSortIns = (decltype(Nest2DSortIns))m_LibConfig->GetLocalCoreObjIns("l_Sort");
 

@@ -261,6 +261,47 @@ namespace ET {
             return Normal || Rotated;
         }
 
+        bool CetClusterGeometryHelper::CanPlaceCandidateCopiesOnBoard(const TetClusterCandidate& ACandidate, const TetNestOptions& AOptions, std::size_t ARequiredCopies) const
+        {
+            if (ARequiredCopies <= 1) {
+                return true;
+            }
+            if (!ACandidate.Valid || ACandidate.ClusterWidth <= 0.0 || ACandidate.ClusterHeight <= 0.0) {
+                return false;
+            }
+
+            const double BinWidth = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth));
+            const double BinHeight = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinHeight));
+            const double Gap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
+            if (BinWidth <= 0.0 || BinHeight <= 0.0) {
+                return false;
+            }
+
+            const double Width = ACandidate.ClusterWidth;
+            const double Height = ACandidate.ClusterHeight;
+            auto GetAxisCapacity = [Gap](double BinSize, double ItemSize) -> std::size_t {
+                if (BinSize <= 0.0 || ItemSize <= 0.0 || ItemSize > BinSize) {
+                    return 0;
+                }
+                return static_cast<std::size_t>(std::floor((BinSize + Gap) / (ItemSize + Gap)));
+                };
+            auto GetGridCapacity = [&](double ItemWidth, double ItemHeight) -> std::size_t {
+                const std::size_t Columns = GetAxisCapacity(BinWidth, ItemWidth);
+                const std::size_t Rows = GetAxisCapacity(BinHeight, ItemHeight);
+                if (Columns == 0 || Rows == 0 || Columns > ARequiredCopies / Rows) {
+                    return Columns > 0 && Rows > 0 ? ARequiredCopies : 0;
+                }
+                return Columns * Rows;
+                };
+
+            if (GetGridCapacity(Width, Height) >= ARequiredCopies) {
+                return true;
+            }
+
+            const bool QuarterTurnAllowed = CetRotationUtils::IsAllowedRotation(CET_CLUSTER_HALF_PI, AOptions.Rotations, 1e-9);
+            return QuarterTurnAllowed && GetGridCapacity(Height, Width) >= ARequiredCopies;
+        }
+
         bool CetClusterGeometryHelper::_ValidateChildContainment(const CetTNestItemVector& AOriginalItems, const TetClusterCandidate& ACandidate) const
         {
             if (ACandidate.ProxyContour.size() < 3 || ACandidate.ProxyArea <= 0.0 || !std::isfinite(ACandidate.ProxyArea)) {
@@ -368,6 +409,11 @@ namespace ET {
 
         bool CetClusterGeometryHelper::FinalizeCandidate(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetClusterCandidate& ACandidate) const
         {
+            return FinalizeCandidate(AOriginalItems, AOptions, ACandidate, false);
+        }
+
+        bool CetClusterGeometryHelper::FinalizeCandidate(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetClusterCandidate& ACandidate, bool AForceRectangleProxy) const
+        {
             ACandidate.Valid = false;
             ACandidate.ProxyContour.clear();
             ACandidate.ProxyContourNormalized = false;
@@ -423,12 +469,14 @@ namespace ET {
                 ACandidate.ReservedArea = ACandidate.OccupiedArea;
             }
 
-            CetClusterBoundary BoundaryBuilder;
-            TetClusterBoundaryResult BoundaryResult;
-            if (BoundaryBuilder.BuildBoundaryWithResult(AOriginalItems, ACandidate.Transforms, AOptions, BoundaryResult) && BoundaryResult.Mode != MetClusterProxyMode::Unknown) {
-                ACandidate.ProxyContour = std::move(BoundaryResult.Boundary);
-                ACandidate.ProxyMode = BoundaryResult.Mode;
-                ACandidate.ProxyContourNormalized = false;
+            if (!AForceRectangleProxy) {
+                CetClusterBoundary BoundaryBuilder;
+                TetClusterBoundaryResult BoundaryResult;
+                if (BoundaryBuilder.BuildBoundaryWithResult(AOriginalItems, ACandidate.Transforms, AOptions, BoundaryResult) && BoundaryResult.Mode != MetClusterProxyMode::Unknown) {
+                    ACandidate.ProxyContour = std::move(BoundaryResult.Boundary);
+                    ACandidate.ProxyMode = BoundaryResult.Mode;
+                    ACandidate.ProxyContourNormalized = false;
+                }
             }
 
             for (TetItemTransform& Transform : ACandidate.Transforms) {

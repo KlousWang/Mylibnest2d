@@ -25,6 +25,7 @@ namespace ET {
             bool _IsSquareLike(const TetShapeFeature& AFeature);
             bool _IsQuarterTurnAllowed(const TetNestOptions& AOptions);          
             bool _MakePairCandidate(const CetTNestItemVector& AItems, const std::vector<TetShapeFeature>& AFeatures, int AIndexA, int AIndexB, bool AHorizontal, bool ARotateB90, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate);
+            bool _MakeGridCandidate(const CetTNestItemVector& AItems,const std::vector<TetShapeFeature>& AFeatures,const std::vector<int>& AIndices,const TetNestOptions& AOptions,TetClusterCandidate& AOutCandidate);
 
         };
 

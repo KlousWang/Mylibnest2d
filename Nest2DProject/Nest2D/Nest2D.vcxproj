@@ -165,6 +165,7 @@
   <ItemGroup>
     <ClInclude Include="..\Third_party\clipper\clipper.hpp" />
     <ClInclude Include="Nest2D_ArcClusterBuilder.h" />
+    <ClInclude Include="Nest2D_AreaUsageCalculator.h" />
     <ClInclude Include="Nest2D_BoardUtils.h" />
     <ClInclude Include="Nest2D_CircleClusterBuilder.h" />
     <ClInclude Include="Nest2D_ClusterBoundary.h" />
@@ -208,6 +209,7 @@
     <ClCompile Include="File.cpp" />
     <ClCompile Include="Nest2DAPI.cpp" />
     <ClCompile Include="Nest2D_ArcClusterBuilder.cpp" />
+    <ClCompile Include="Nest2D_AreaUsageCalculator.cpp" />
     <ClCompile Include="Nest2D_BoardUtils.cpp" />
     <ClCompile Include="Nest2D_CircleClusterBuilder.cpp" />
     <ClCompile Include="Nest2D_ClusterBoundary.cpp" />

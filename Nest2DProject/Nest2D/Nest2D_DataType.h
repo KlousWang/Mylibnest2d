@@ -64,10 +64,20 @@ struct TetNestOptions
 	NestProgressCallback ProgressCallback = nullptr; // 回调函数，用来看当前的排序进度
 };
 
+struct TetBoardUsageResult
+{
+	int BinId = -1;
+	int PartCount = 0;
+	double BoardArea = 0.0;
+	double UsedArea = 0.0;
+	double UsagePercent = 0.0;
+};
+
 struct TetNestResult
 {
 	int Code = 0;
 	std::size_t UsedBins = 0;
+	std::vector<TetBoardUsageResult> BoardUsages;
 	std::string Message = "";
 };
 

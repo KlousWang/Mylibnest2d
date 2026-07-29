@@ -102,6 +102,9 @@
     <ClInclude Include="Nest2D_ArcClusterBuilder.h">
       <Filter>头文件\Cluster</Filter>
     </ClInclude>
+    <ClInclude Include="Nest2D_AreaUsageCalculator.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="Nest2D_RectangleClusterBuilder.h">
       <Filter>头文件\Cluster</Filter>
     </ClInclude>
@@ -195,6 +198,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Nest2D_ArcClusterBuilder.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Nest2D_AreaUsageCalculator.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Nest2D_GapFillClusterBuilder.cpp">

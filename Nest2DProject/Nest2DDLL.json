@@ -11,6 +11,7 @@
 	"Nest2D_ClusterManager,Nest2D_ClusterManager",
 	"Nest2D_StrategyManager,Nest2D_StrategyManager",
 	"Nest2D_Sort,Nest2D_Sort",
+	"Nest2D_AreaUsageCalculator,Nest2D_AreaUsageCalculator",
 	"Nest2D_ShapeAnalyzer,Nest2D_ShapeAnalyzer",
 	"Nest2D_TriangleClusterBuilder,Nest2D_TriangleClusterBuilder",
 	"Nest2D_ClusterInvokeFunctor,Nest2D_ClusterInvokeFunctor",
@@ -28,6 +29,7 @@
 	"l_ClusterManager,Nest2D_ClusterManager",
 	"l_StrategyManager,Nest2D_StrategyManager",
 	"l_Sort,Nest2D_Sort",
+	"l_AreaUsageCalculator,Nest2D_AreaUsageCalculator",
 	"l_ShapeAnalyzer,Nest2D_ShapeAnalyzer",
 	"l_TriangleClusterBuilder,Nest2D_TriangleClusterBuilder",
 	"l_CircleClusterBuilder,Nest2D_CircleClusterBuilder"

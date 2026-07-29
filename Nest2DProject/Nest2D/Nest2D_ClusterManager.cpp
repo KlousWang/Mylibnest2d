@@ -119,6 +119,43 @@ namespace ET {
 			std::cout << "[CLUSTER] ExpandClusterResultToOriginalItems done. Original count = " << AOutOriginalItems.size() << std::endl;
 		}
 
+		bool CetClusterManager::ValidatePackedResultNoOverlap(const CetTNestItemVector& AOriginalItems, const CetTNestItemVector& APackedItems, const std::vector<TetMetaItem>& AMetaItems)
+		{
+			if (APackedItems.size() != AMetaItems.size()) {
+				return false;
+			}
+
+			CetTNestItemVector ExpandedItems = AOriginalItems;
+			for (std::size_t PackedIndex = 0; PackedIndex < APackedItems.size(); ++PackedIndex) {
+				_ExpandClusterChildren(APackedItems[PackedIndex], AMetaItems[PackedIndex], ExpandedItems, false);
+			}
+
+			for (std::size_t FirstIndex = 0; FirstIndex < ExpandedItems.size(); ++FirstIndex) {
+				if (ExpandedItems[FirstIndex].binId() < 0) {
+					continue;
+				}
+
+				CetNestItem FirstItem = ExpandedItems[FirstIndex];
+				FirstItem.inflation(0);
+				for (std::size_t SecondIndex = FirstIndex + 1; SecondIndex < ExpandedItems.size(); ++SecondIndex) {
+					if (ExpandedItems[SecondIndex].binId() != FirstItem.binId()) {
+						continue;
+					}
+
+					CetNestItem SecondItem = ExpandedItems[SecondIndex];
+					SecondItem.inflation(0);
+					if (CetNestItem::intersects(FirstItem, SecondItem)) {
+						std::cout << "[CLUSTER][EXPANDED VALIDATION][REJECT] Overlap between original items "
+							<< FirstIndex << " and " << SecondIndex
+							<< " on bin " << FirstItem.binId() << std::endl;
+						return false;
+					}
+				}
+			}
+
+			return true;
+		}
+
 		void CetClusterManager::_AddSingleItem(const CetTNestItemVector& AOriginalItems, int AOriginalIndex, TetClusterBuildResult& AResult)
 		{
 			const int PackedIndex = static_cast<int>(AResult.NestItems.size());
@@ -146,7 +183,7 @@ namespace ET {
 			return static_cast<double>(AItem.boundingBox().height());
 		}
 
-		void CetClusterManager::_ExpandClusterChildren(const CetNestItem& APackedItem, const TetMetaItem& AMeta, CetTNestItemVector& AOutOriginalItems)
+		void CetClusterManager::_ExpandClusterChildren(const CetNestItem& APackedItem, const TetMetaItem& AMeta, CetTNestItemVector& AOutOriginalItems, bool ALog)
 		{
 			auto PackedTranslation = APackedItem.translation();
 			double PackedX = static_cast<double>(PackedTranslation.X);
@@ -155,7 +192,9 @@ namespace ET {
 			// 在处理子零件前计算一次三角函数，避免在内部循环中重复计算
 			double CosR = std::cos(PackedRotation);
 			double SinR = std::sin(PackedRotation);
-			std::cout << "[CLUSTER][EXPAND PACKED] IsCluster = " << AMeta.IsCluster << ", PackedBin = " << APackedItem.binId() << ", PackedX = " << PackedX << ", PackedY = " << PackedY << ", PackedRotation = " << PackedRotation << ", Children = " << AMeta.TransformData.size() << std::endl;
+			if (ALog) {
+				std::cout << "[CLUSTER][EXPAND PACKED] IsCluster = " << AMeta.IsCluster << ", PackedBin = " << APackedItem.binId() << ", PackedX = " << PackedX << ", PackedY = " << PackedY << ", PackedRotation = " << PackedRotation << ", Children = " << AMeta.TransformData.size() << std::endl;
+			}
 			for (const auto& Transform : AMeta.TransformData) {
 				int originalId = Transform.OriginalId;
 				if (originalId < 0 || originalId >= static_cast<int>(AOutOriginalItems.size())) {
@@ -175,7 +214,9 @@ namespace ET {
 				OriginalItem.binId(APackedItem.binId());
 				OriginalItem.translation(ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(FinalX), static_cast<ClipperLib::cInt>(FinalY)));
 				OriginalItem.rotation(FinalRotation);
-				std::cout << "[CLUSTER][EXPAND ITEM] OriginalId = " << originalId << ", Local = (" << LocalX << ", " << LocalY << ")" << ", Final = (" << FinalX << ", " << FinalY << ")" << ", FinalRotation = " << FinalRotation << ", Bin = " << APackedItem.binId() << std::endl;
+				if (ALog) {
+					std::cout << "[CLUSTER][EXPAND ITEM] OriginalId = " << originalId << ", Local = (" << LocalX << ", " << LocalY << ")" << ", Final = (" << FinalX << ", " << FinalY << ")" << ", FinalRotation = " << FinalRotation << ", Bin = " << APackedItem.binId() << std::endl;
+				}
 			}
 		}
 

@@ -41,9 +41,11 @@ namespace ET {
 			bool _BuildRightTriangleRectangleLayoutCandidate(const CetTNestItemVector& AOriginalItems,const std::vector<TetShapeFeature>& AFeatures,const std::vector<int>& AIndices,const TetNestOptions& AOptions,int ACellRows,int ACellCols,double ACellWidth,double ACellHeight,double AAxisGap,double ACellGap,double AHalfTurn,TetClusterCandidate& AOutCandidate);
 			double _CalculateRightTriangleRectangleScore(const TetClusterCandidate& ACandidate,int APairCount,int ACellRows,int ACellCols);
 			bool _AreCongruentTriangles(const TetShapeFeature& AA, const TetShapeFeature& AB);
+			void _BuildAnyTriangleClusterCandidates(const CetTNestItemVector& AOriginalItems,const std::vector<TetShapeFeature>& AFeatures,const std::vector<int>& AIndices,const TetNestOptions& AOptions,std::vector<TetClusterCandidate>& AOutCandidates);
+			bool _BuildAnyTriangleClusterCandidate(const CetTNestItemVector& AOriginalItems,const std::vector<TetShapeFeature>& AFeatures,const std::vector<int>& AIndices,const TetNestOptions& AOptions,TetClusterCandidate& AOutCandidate);
 			
 			bool _BuildAnyTrianglePairCandidate(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, int AAIndex, int ABIndex, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate);
-			bool _TryBuildTriangleEdgePairCandidate(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, int AAIndex, int ABIndex, int AEdgeIndex, int BEdgeIndex, int ANormalSide, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate);
+			bool _TryBuildTriangleEdgePairCandidate(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, int AAIndex, int ABIndex, int AEdgeIndex, int BEdgeIndex, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate);
 			bool _GetTriangleEdgePose(const CetPath& AContour, int AEdgeIndex, TetTriangleEdgePose& AOutEdge) ;
 			double _NormalizeAngle(double AAngle) ;
 			CetInpoint _RotatePoint(const CetInpoint& APoint, double ARotation) ;

@@ -15,6 +15,7 @@
 #include<limits>
 #include<cmath>
 #include<numeric>
+#include<set>
 
 //#include"libnest2d/optimizers/nlopt/subplex.hpp"
 
@@ -153,14 +154,14 @@ namespace ET {
 			}
 
 			if (!BestHasCluster) {
-				std::cout << "[POLYGON][FINAL BEST] Use normal items."
+				std::cout << "[POLYGON][FINAL BEST] Restore normal item order."
 					<< std::endl;
-				ANestItems = std::move(BestItems);
 			}
 			else {
 				std::cout << "[POLYGON][FINAL BEST] Use cluster expand."<< std::endl;
-				Nest2DUtils->Nest2DCluster->ExpandClusterResultToOriginalItems(OriginalItems,BestItems,BestMetaItems,ANestItems);
 			}
+			// Sorting strategies reorder packed items, so metadata restoration is required for singles and clusters.
+			Nest2DUtils->Nest2DCluster->ExpandClusterResultToOriginalItems(OriginalItems,BestItems,BestMetaItems,ANestItems);
 			// Cluster 展开后，必须再做一次不规则板材合法性修复。
 			double BoardBinWidth = AOptions.BinWidth;
 			double BoardBinHeight = AOptions.BinHeight;
@@ -300,13 +301,13 @@ namespace ET {
 					<< ", BestMetaItems.size = " << BestMetaItems.size() << std::endl;
 
 				if (!BestHasCluster) {
-					std::cout << "[NEST][FINAL BEST] Use normal items." << std::endl;
-					ANestItems = std::move(BestItems); // 最终交接给外部
+					std::cout << "[NEST][FINAL BEST] Restore normal item order." << std::endl;
 				}
 				else {
 					std::cout << "[NEST][FINAL BEST] Use cluster expand." << std::endl;
-					Nest2DUtils->Nest2DCluster->ExpandClusterResultToOriginalItems(OriginalItems, BestItems, BestMetaItems, ANestItems);
 				}
+				// Sorting strategies reorder packed items, so metadata restoration is required for singles and clusters.
+				Nest2DUtils->Nest2DCluster->ExpandClusterResultToOriginalItems(OriginalItems, BestItems, BestMetaItems, ANestItems);
 			}
 			//if(BestLayers > 0) {
 			//	PolygonImpl RectBinPoly = Nest2DUtils->Nest2DBord->BuildRectangleBinPolygon(AOptions.BinWidth, AOptions.BinHeight);
@@ -424,6 +425,7 @@ namespace ET {
 				MetENestOrderStrategy::LongSideFirst,
 				MetENestOrderStrategy::ThinFirst
 			};
+			std::set<std::vector<std::size_t>> EvaluatedOrders;
 		
 			for (MetENestOrderStrategy Strategy : Strategies) {
 				CetTNestItemVector PriorityItems = AClusterResult.NestItems;
@@ -446,6 +448,11 @@ namespace ET {
 
 					return A < B;
 				});
+				if (!EvaluatedOrders.insert(SortedIndices).second) {
+					std::cout << "[NEST][EVAL][SKIP] Strategy = " << static_cast<int>(Strategy)
+						<< ", reason = duplicate item order" << std::endl;
+					continue;
+				}
 
 				CetTNestItemVector TestItems;
 				TestItems.reserve(PriorityItems.size());
@@ -464,6 +471,15 @@ namespace ET {
 				else{
 					 Layers = RunRectangleNestOnce(TestItems, AOptions, ATracker);
 				}	
+
+				if (CurrentHasCluster && !Nest2DUtils->Nest2DCluster->ValidatePackedResultNoOverlap(
+					AOriginalItems,
+					TestItems,
+					TestMetaItems)) {
+					std::cout << "[NEST][EVAL][SKIP] Strategy = " << static_cast<int>(Strategy)
+						<< ", reason = expanded cluster overlap" << std::endl;
+					continue;
+				}
 
 				TetTNestEvalResult Eval = Nest2DUtils->Nest2DStrategy->EvaluatePackedResultWithMeta(TestItems,TestMetaItems,AOriginalItems,Layers);
 

@@ -6,6 +6,8 @@
 
 namespace ET {
     namespace NEST2DMANAGERLIB {
+        constexpr std::size_t CET_CLUSTER_TARGET_COPIES_PER_BOARD = 4;
+
         class CetClusterGeometryHelper : public ET::CORE::CetCoreObject {
             Inherit_Invoke_Hook(CetClusterGeometryHelper)
 
@@ -25,7 +27,9 @@ namespace ET {
             CetNestItem MakeNestItemFromProxyContour(const CetPath& AProxyContour) const;
             bool IsContourFullyContained(const CetPath& AChildContour, const CetPath& AProxyContour, double AAreaTolerance) const;
             bool FinalizeCandidate(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetClusterCandidate& ACandidate) const;
+            bool FinalizeCandidate(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetClusterCandidate& ACandidate, bool AForceRectangleProxy) const;
             bool ValidateCandidateGeometry(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const TetClusterCandidate& ACandidate) const;
+            bool CanPlaceCandidateCopiesOnBoard(const TetClusterCandidate& ACandidate, const TetNestOptions& AOptions, std::size_t ARequiredCopies) const;
 
         protected:
             bool _ValidateIndexAndTransforms(const CetTNestItemVector& AOriginalItems, const TetClusterCandidate& ACandidate) const;

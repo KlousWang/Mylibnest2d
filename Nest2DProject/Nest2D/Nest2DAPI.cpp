@@ -5,6 +5,7 @@
 #include"Nest2D_DataConst.h"
 
 #include"Nest2D_SelfFunction.h"
+#include"Nest2D_AreaUsageCalculator.h"
 
 #include <limits>
 #include <stdexcept>
@@ -70,6 +71,7 @@ namespace ET {
 			if (AResult) {
 				AResult->Code = 0;
 				AResult->UsedBins = 0;
+                AResult->BoardUsages.clear();
 				AResult->Message.clear();
 			}
 			
@@ -168,6 +170,11 @@ namespace ET {
 			   Nest2DUtils->Nest2DGeometryUtils->ValidateItemsInsideBoard(AItems, AOptions.Board);
                 UsedBins = RecalcUsedBinsFromItems(AItems);
 			}
+            CetAreaUsageCalculator LocalUsageCalculator;
+            CetAreaUsageCalculator* UsageCalculator = Nest2DUtils->Nest2DAreaUsage != nullptr ? Nest2DUtils->Nest2DAreaUsage : &LocalUsageCalculator;
+			//Nest2DUtils->Nest2DAreaUsage->CalculateBoardUsages(AItems, AOptions, static_cast<int>(UsedBins));
+            std::vector<TetBoardUsageResult> BoardUsages = UsageCalculator->CalculateBoardUsages(AItems, AOptions, static_cast<int>(UsedBins));
+
 			if (AOptions.ExportSvg) {
 				
 				//CetExportPhoto::ExportSvg(AItems, AOptions, static_cast<int>(layers)); // 调用我们之前拆出来的函数
@@ -176,6 +183,7 @@ namespace ET {
 
 			if (AResult) {
 				AResult->UsedBins = UsedBins;
+                AResult->BoardUsages = BoardUsages;
 				AResult->Message = "Nesting success.";
 			}
 			return 0;

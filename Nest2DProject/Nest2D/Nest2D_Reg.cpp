@@ -12,6 +12,7 @@
 #include"Nest2D_ClusterManager.h"
 #include"Nest2D_StrategyManager.h"
 #include"Nest2D_Sort.h"
+#include"Nest2D_AreaUsageCalculator.h"
 #include"Nest2D_ShapeAnalyzer.h"
 #include"Nest2D_TriangleClusterBuilder.h"
 //#include"Nest2D_ClusterInvokeFunctor.h"
@@ -34,6 +35,7 @@ namespace ET {
 		Reg_EtCore_Obj_Str(Nest2D_ClusterManager, CetClusterManager)
 		Reg_EtCore_Obj_Str(Nest2D_StrategyManager, CetStrategyManager)
 		Reg_EtCore_Obj_Str(Nest2D_Sort, CetSort)
+		Reg_EtCore_Obj_Str(Nest2D_AreaUsageCalculator, CetAreaUsageCalculator)
 
 			//Reg_EtCore_Obj_Str(Nest2D_ClusterInvokeFunctor, CetNest2DClusterInvokeFunctor)
 		Reg_EtCore_Obj_Str(Nest2D_ShapeAnalyzer, CetShapeAnalyzer)
