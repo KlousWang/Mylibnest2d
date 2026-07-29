@@ -21,34 +21,34 @@ namespace ET {
             constexpr double CET_ARC_SAFETY_GAP_RATIO = 0.05;
             constexpr std::size_t CET_ARC_MAX_CLUSTER_CHILDREN = 32;
 
-            bool NearlyEqual(double FirstValue, double SecondValue, double RelativeTolerance)
+            bool NearlyEqual(double AFirstValue, double ASecondValue, double ARelativeTolerance)
             {
-                const double Denominator = std::max(1.0, std::max(std::abs(FirstValue), std::abs(SecondValue)));
-                return std::abs(FirstValue - SecondValue) <= Denominator * RelativeTolerance;
+                const double Denominator = std::max(1.0, std::max(std::abs(AFirstValue), std::abs(ASecondValue)));
+                return std::abs(AFirstValue - ASecondValue) <= Denominator * ARelativeTolerance;
             }
 
-            int NormalizeBulgeSign(int BulgeSign)
+            int NormalizeBulgeSign(int ABulgeSign)
             {
-                return BulgeSign < 0 ? -1 : 1;
+                return ABulgeSign < 0 ? -1 : 1;
             }
 
-            double GetEffectiveSweepAngle(const TetShapeFeature& Feature)
+            double GetEffectiveSweepAngle(const TetShapeFeature& AFeature)
             {
-                if (std::isfinite(Feature.ArcSweepAngle) && Feature.ArcSweepAngle > 0.0) {
-                    return std::abs(Feature.ArcSweepAngle);
+                if (std::isfinite(AFeature.ArcSweepAngle) && AFeature.ArcSweepAngle > 0.0){
+                    return std::abs(AFeature.ArcSweepAngle);
                 }
 
-                return Feature.ArcType == MetArcType::SemiCircleLike ? CET_CLUSTER_PI : 0.0;
+                return AFeature.ArcType == MetArcType::SemiCircleLike ? CET_CLUSTER_PI : 0.0;
             }
 
-            MetArcSweepBucket GetSweepBucket(const TetShapeFeature& Feature)
+            MetArcSweepBucket GetSweepBucket(const TetShapeFeature& AFeature)
             {
-                const double SweepAngle = GetEffectiveSweepAngle(Feature);
-                if (SweepAngle <= 0.0) {
+                const double SweepAngle = GetEffectiveSweepAngle(AFeature);
+                if (SweepAngle <= 0.0){
                     return MetArcSweepBucket::Unknown;
                 }
 
-                if (std::abs(SweepAngle - CET_CLUSTER_PI) <= CET_ARC_SWEEP_TOLERANCE) {
+                if (std::abs(SweepAngle - CET_CLUSTER_PI) <= CET_ARC_SWEEP_TOLERANCE){
                     return MetArcSweepBucket::SemiCircle;
                 }
 
@@ -57,9 +57,9 @@ namespace ET {
                     : MetArcSweepBucket::MoreThanSemiCircle;
             }
 
-            const char* GetSweepBucketName(MetArcSweepBucket SweepBucket)
+            const char* GetSweepBucketName(MetArcSweepBucket ASweepBucket)
             {
-                switch (SweepBucket) {
+                switch (ASweepBucket){
                 case MetArcSweepBucket::LessThanSemiCircle:
                     return "Less180";
                 case MetArcSweepBucket::SemiCircle:
@@ -71,59 +71,56 @@ namespace ET {
                 }
             }
 
-            bool IsValidArcFeature(const TetShapeFeature& Feature)
+            bool IsValidArcFeature(const TetShapeFeature& AFeature)
             {
-                return Feature.ShapeType == MetShapeType::ArcLike &&
-                    Feature.ArcType != MetArcType::None &&
-                    GetSweepBucket(Feature) != MetArcSweepBucket::Unknown &&
-                    Feature.ArcRadius > 0.0 &&
-                    Feature.ArcChordLength > 0.0 &&
-                    Feature.Width > 0.0 &&
-                    Feature.Height > 0.0 &&
-                    Feature.Area > 0.0;
+                return AFeature.ShapeType == MetShapeType::ArcLike &&
+                    AFeature.ArcType != MetArcType::None &&
+                    GetSweepBucket(AFeature) != MetArcSweepBucket::Unknown &&
+                    AFeature.ArcRadius > 0.0 &&
+                    AFeature.ArcChordLength > 0.0 &&
+                    AFeature.Width > 0.0 &&
+                    AFeature.Height > 0.0 &&
+                    AFeature.Area > 0.0;
             }
 
-            TetArcIndexInfo MakeArcIndexInfo(int OriginalIndex, const TetShapeFeature& Feature)
+            TetArcIndexInfo MakeArcIndexInfo(int AOriginalIndex, const TetShapeFeature& AFeature)
             {
                 TetArcIndexInfo Info;
-                Info.Index = OriginalIndex;
-                Info.ArcType = Feature.ArcType;
-                Info.SweepBucket = GetSweepBucket(Feature);
-                Info.Radius = Feature.ArcRadius;
-                Info.ChordLength = Feature.ArcChordLength;
-                Info.SweepAngle = GetEffectiveSweepAngle(Feature);
-                Info.BulgeSign = NormalizeBulgeSign(Feature.ArcBulgeSign);
+                Info.Index = AOriginalIndex;
+                Info.ArcType = AFeature.ArcType;
+                Info.SweepBucket = GetSweepBucket(AFeature);
+                Info.Radius = AFeature.ArcRadius;
+                Info.ChordLength = AFeature.ArcChordLength;
+                Info.SweepAngle = GetEffectiveSweepAngle(AFeature);
+                Info.BulgeSign = NormalizeBulgeSign(AFeature.ArcBulgeSign);
                 return Info;
             }
 
-            bool AreCompatibleArcInfos(const TetArcIndexInfo& BaseInfo, const TetArcIndexInfo& TestInfo)
+            bool AreCompatibleArcInfos(const TetArcIndexInfo& ABaseInfo, const TetArcIndexInfo& ATestInfo)
             {
-                if (BaseInfo.ArcType != TestInfo.ArcType ||
-                    BaseInfo.SweepBucket != TestInfo.SweepBucket ||
-                    BaseInfo.BulgeSign != TestInfo.BulgeSign)
-                {
+                if (ABaseInfo.ArcType != ATestInfo.ArcType ||ABaseInfo.SweepBucket != ATestInfo.SweepBucket ||ABaseInfo.BulgeSign != ATestInfo.BulgeSign){
                     return false;
                 }
 
-                const bool RadiusMatches = NearlyEqual(BaseInfo.Radius, TestInfo.Radius, CET_ARC_SIZE_TOLERANCE);
-                const bool ChordMatches = NearlyEqual(BaseInfo.ChordLength, TestInfo.ChordLength, CET_ARC_SIZE_TOLERANCE);
-                const bool SweepMatches = std::abs(BaseInfo.SweepAngle - TestInfo.SweepAngle) <= CET_ARC_SWEEP_TOLERANCE ||
-                    NearlyEqual(BaseInfo.SweepAngle, TestInfo.SweepAngle, CET_ARC_SIZE_TOLERANCE);
+                const bool RadiusMatches = NearlyEqual(ABaseInfo.Radius, ATestInfo.Radius, CET_ARC_SIZE_TOLERANCE);
+                const bool ChordMatches = NearlyEqual(ABaseInfo.ChordLength, ATestInfo.ChordLength, CET_ARC_SIZE_TOLERANCE);
+                const bool SweepMatches = std::abs(ABaseInfo.SweepAngle - ATestInfo.SweepAngle) <= CET_ARC_SWEEP_TOLERANCE ||
+                    NearlyEqual(ABaseInfo.SweepAngle, ATestInfo.SweepAngle, CET_ARC_SIZE_TOLERANCE);
                 return RadiusMatches && ChordMatches && SweepMatches;
             }
 
-            std::vector<std::vector<int>> GroupCompatibleArcIndices(const std::vector<int>& Indices, const std::vector<TetShapeFeature>& Features)
+            std::vector<std::vector<int>> GroupCompatibleArcIndices(const std::vector<int>& AIndices, const std::vector<TetShapeFeature>& AFeatures)
             {
                 std::vector<TetArcIndexInfo> Infos;
-                Infos.reserve(Indices.size());
+                Infos.reserve(AIndices.size());
 
-                for (int OriginalIndex : Indices) {
-                    if (OriginalIndex < 0 || OriginalIndex >= static_cast<int>(Features.size())) {
+                for (int OriginalIndex : AIndices){
+                    if (OriginalIndex < 0 || OriginalIndex >= static_cast<int>(AFeatures.size())){
                         continue;
                     }
 
-                    const TetShapeFeature& Feature = Features[OriginalIndex];
-                    if (!IsValidArcFeature(Feature)) {
+                    const TetShapeFeature& Feature = AFeatures[OriginalIndex];
+                    if (!IsValidArcFeature(Feature)){
                         continue;
                     }
 
@@ -133,36 +130,36 @@ namespace ET {
                 std::sort(
                     Infos.begin(),
                     Infos.end(),
-                    [](const TetArcIndexInfo& FirstInfo, const TetArcIndexInfo& SecondInfo)
+                    [](const TetArcIndexInfo& AFirstInfo, const TetArcIndexInfo& ASecondInfo)
                     {
-                        if (FirstInfo.ArcType != SecondInfo.ArcType) {
-                            return static_cast<int>(FirstInfo.ArcType) < static_cast<int>(SecondInfo.ArcType);
+                        if (AFirstInfo.ArcType != ASecondInfo.ArcType){
+                            return static_cast<int>(AFirstInfo.ArcType) < static_cast<int>(ASecondInfo.ArcType);
                         }
-                        if (FirstInfo.SweepBucket != SecondInfo.SweepBucket) {
-                            return static_cast<int>(FirstInfo.SweepBucket) < static_cast<int>(SecondInfo.SweepBucket);
+                        if (AFirstInfo.SweepBucket != ASecondInfo.SweepBucket){
+                            return static_cast<int>(AFirstInfo.SweepBucket) < static_cast<int>(ASecondInfo.SweepBucket);
                         }
-                        if (FirstInfo.BulgeSign != SecondInfo.BulgeSign) {
-                            return FirstInfo.BulgeSign < SecondInfo.BulgeSign;
+                        if (AFirstInfo.BulgeSign != ASecondInfo.BulgeSign){
+                            return AFirstInfo.BulgeSign < ASecondInfo.BulgeSign;
                         }
-                        if (std::abs(FirstInfo.Radius - SecondInfo.Radius) > 1.0) {
-                            return FirstInfo.Radius < SecondInfo.Radius;
+                        if (std::abs(AFirstInfo.Radius - ASecondInfo.Radius) > 1.0){
+                            return AFirstInfo.Radius < ASecondInfo.Radius;
                         }
-                        if (std::abs(FirstInfo.ChordLength - SecondInfo.ChordLength) > 1.0) {
-                            return FirstInfo.ChordLength < SecondInfo.ChordLength;
+                        if (std::abs(AFirstInfo.ChordLength - ASecondInfo.ChordLength) > 1.0){
+                            return AFirstInfo.ChordLength < ASecondInfo.ChordLength;
                         }
-                        if (std::abs(FirstInfo.SweepAngle - SecondInfo.SweepAngle) > 1e-9) {
-                            return FirstInfo.SweepAngle < SecondInfo.SweepAngle;
+                        if (std::abs(AFirstInfo.SweepAngle - ASecondInfo.SweepAngle) > 1e-9){
+                            return AFirstInfo.SweepAngle < ASecondInfo.SweepAngle;
                         }
-                        return FirstInfo.Index < SecondInfo.Index;
+                        return AFirstInfo.Index < ASecondInfo.Index;
                     });
 
                 Infos.erase(
                     std::unique(
                         Infos.begin(),
                         Infos.end(),
-                        [](const TetArcIndexInfo& FirstInfo, const TetArcIndexInfo& SecondInfo)
+                        [](const TetArcIndexInfo& AFirstInfo, const TetArcIndexInfo& ASecondInfo)
                         {
-                            return FirstInfo.Index == SecondInfo.Index;
+                            return AFirstInfo.Index == ASecondInfo.Index;
                         }),
                     Infos.end());
 
@@ -170,14 +167,14 @@ namespace ET {
                 std::vector<int> CurrentGroup;
                 TetArcIndexInfo CurrentBaseInfo;
 
-                for (const TetArcIndexInfo& Info : Infos) {
-                    if (CurrentGroup.empty()) {
+                for (const TetArcIndexInfo& Info : Infos){
+                    if (CurrentGroup.empty()){
                         CurrentBaseInfo = Info;
                         CurrentGroup.push_back(Info.Index);
                         continue;
                     }
 
-                    if (AreCompatibleArcInfos(CurrentBaseInfo, Info)) {
+                    if (AreCompatibleArcInfos(CurrentBaseInfo, Info)){
                         CurrentGroup.push_back(Info.Index);
                     }
                     else {
@@ -188,139 +185,135 @@ namespace ET {
                     }
                 }
 
-                if (!CurrentGroup.empty()) {
+                if (!CurrentGroup.empty()){
                     Groups.push_back(std::move(CurrentGroup));
                 }
 
                 return Groups;
             }
 
-            bool FitsBin(double ClusterWidth, double ClusterHeight, const TetNestOptions& Options)
+            bool FitsBin(double AClusterWidth, double AClusterHeight, const TetNestOptions& AOptions)
             {
-                if (ClusterWidth <= 0.0 || ClusterHeight <= 0.0) {
+                if (AClusterWidth <= 0.0 || AClusterHeight <= 0.0){
                     return false;
                 }
 
-                const double BinWidth = static_cast<double>(NestUtils::ToNestCoord(Options.BinWidth));
-                const double BinHeight = static_cast<double>(NestUtils::ToNestCoord(Options.BinHeight));
-                if (BinWidth <= 0.0 || BinHeight <= 0.0) {
+                const double BinWidth = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth));
+                const double BinHeight = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinHeight));
+                if (BinWidth <= 0.0 || BinHeight <= 0.0){
                     return false;
                 }
 
-                const bool FitsNormally = ClusterWidth <= BinWidth && ClusterHeight <= BinHeight;
-                const bool QuarterTurnAllowed = CetRotationUtils::IsAllowedRotation(CET_CLUSTER_HALF_PI, Options.Rotations, 1e-9);
-                const bool FitsAfterRotation = QuarterTurnAllowed && ClusterHeight <= BinWidth && ClusterWidth <= BinHeight;
+                const bool FitsNormally = AClusterWidth <= BinWidth && AClusterHeight <= BinHeight;
+                const bool QuarterTurnAllowed = CetRotationUtils::IsAllowedRotation(CET_CLUSTER_HALF_PI, AOptions.Rotations, 1e-9);
+                const bool FitsAfterRotation = QuarterTurnAllowed && AClusterHeight <= BinWidth && AClusterWidth <= BinHeight;
                 return FitsNormally || FitsAfterRotation;
             }
 
-            bool GetArcOrientationBounds(const CetNestItem& Item, const TetShapeFeature& Feature, bool ReverseChordDirection, const TetNestOptions& Options, const CetClusterGeometryHelper& Geometry, TetArcOrientationBounds& OutBounds)
+            bool GetArcOrientationBounds(const CetNestItem& AItem, const TetShapeFeature& AFeature, bool AReverseChordDirection, const TetNestOptions& AOptions, const CetClusterGeometryHelper& AGeometry, TetArcOrientationBounds& AOutBounds)
             {
-                OutBounds = TetArcOrientationBounds{};
-                const double TargetRotation = ReverseChordDirection? CET_CLUSTER_PI - Feature.ArcChordAngle: -Feature.ArcChordAngle;
-                if (!CetRotationUtils::SnapToNearestAllowedRotation(TargetRotation, Options.Rotations, OutBounds.Rotation)) {
+                AOutBounds = TetArcOrientationBounds{};
+                const double TargetRotation = AReverseChordDirection? CET_CLUSTER_PI - AFeature.ArcChordAngle: -AFeature.ArcChordAngle;
+                if (!CetRotationUtils::SnapToNearestAllowedRotation(TargetRotation, AOptions.Rotations, AOutBounds.Rotation)){
                     return false;
                 }
 
-                const CetPath RotatedContour = Geometry.TransformContour(
-                    Geometry.GetIdentityContour(Item),
-                    OutBounds.Rotation,
-                    0.0,
-                    0.0);
+                const CetPath RotatedContour = AGeometry.TransformContour(AGeometry.GetIdentityContour(AItem),AOutBounds.Rotation,0.0,0.0);
 
                 double MaxX = 0.0;
                 double MaxY = 0.0;
-                if (!Geometry.GetBounds(RotatedContour, OutBounds.MinX, OutBounds.MinY, MaxX, MaxY)) {
+                if (!AGeometry.GetBounds(RotatedContour, AOutBounds.MinX, AOutBounds.MinY, MaxX, MaxY)){
                     return false;
                 }
 
-                OutBounds.Width = MaxX - OutBounds.MinX;
-                OutBounds.Height = MaxY - OutBounds.MinY;
-                return OutBounds.Width > 0.0 && OutBounds.Height > 0.0;
+                AOutBounds.Width = MaxX - AOutBounds.MinX;
+                AOutBounds.Height = MaxY - AOutBounds.MinY;
+                return AOutBounds.Width > 0.0 && AOutBounds.Height > 0.0;
             }
 
-            TetArcLayout MakeLineLayout(std::size_t ArcCount, const TetArcOrientationBounds& ForwardBounds, const TetArcOrientationBounds& ReverseBounds, double Gap, bool VerticalStack, bool AlternateDirection, const std::string& StyleName)
+            TetArcLayout MakeLineLayout(std::size_t AArcCount, const TetArcOrientationBounds& AForwardBounds, const TetArcOrientationBounds& AReverseBounds, double AGap, bool AVerticalStack, bool AAlternateDirection, const std::string& AStyleName)
             {
                 TetArcLayout Layout;
-                if (ArcCount < 2) {
+                if (AArcCount < 2){
                     return Layout;
                 }
 
-                Layout.Slots.reserve(ArcCount);
-                if (VerticalStack) {
+                Layout.Slots.reserve(AArcCount);
+                if (AVerticalStack){
                     double CurrentY = 0.0;
                     double MaxWidth = 0.0;
-                    for (std::size_t arcOffset = 0; arcOffset < ArcCount; ++arcOffset) {
-                        const bool ReverseChordDirection = AlternateDirection && (arcOffset % 2 == 1);
-                        const TetArcOrientationBounds& SlotBounds = ReverseChordDirection ? ReverseBounds : ForwardBounds;
+                    for (std::size_t arcOffset = 0; arcOffset < AArcCount; ++arcOffset){
+                        const bool ReverseChordDirection = AAlternateDirection && (arcOffset % 2 == 1);
+                        const TetArcOrientationBounds& SlotBounds = ReverseChordDirection ? AReverseBounds : AForwardBounds;
                         Layout.Slots.push_back({ 0.0, CurrentY, ReverseChordDirection });
-                        CurrentY += SlotBounds.Height + Gap;
+                        CurrentY += SlotBounds.Height + AGap;
                         MaxWidth = std::max(MaxWidth, SlotBounds.Width);
                     }
 
-                    for (TetArcLayoutSlot& Slot : Layout.Slots) {
-                        const TetArcOrientationBounds& SlotBounds = Slot.ReverseChordDirection ? ReverseBounds : ForwardBounds;
+                    for (TetArcLayoutSlot& Slot : Layout.Slots){
+                        const TetArcOrientationBounds& SlotBounds = Slot.ReverseChordDirection ? AReverseBounds : AForwardBounds;
                         Slot.X = (MaxWidth - SlotBounds.Width) * 0.5;
                     }
 
                     Layout.Width = MaxWidth;
-                    Layout.Height = CurrentY - Gap;
-                    Layout.ClusterType = ArcCount == 2 && StyleName == "SemiCircle" && AlternateDirection
+                    Layout.Height = CurrentY - AGap;
+                    Layout.ClusterType = AArcCount == 2 && AStyleName == "SemiCircle" && AAlternateDirection
                         ? "SemiCirclePair"
-                        : "ArcColumn_" + std::to_string(ArcCount) + "_" + StyleName;
+                        : "ArcColumn_" + std::to_string(AArcCount) + "_" + AStyleName;
                     return Layout;
                 }
 
                 double CurrentX = 0.0;
                 double MaxHeight = 0.0;
-                for (std::size_t arcOffset = 0; arcOffset < ArcCount; ++arcOffset) {
-                    const bool ReverseChordDirection = AlternateDirection && (arcOffset % 2 == 1);
-                    const TetArcOrientationBounds& SlotBounds = ReverseChordDirection ? ReverseBounds : ForwardBounds;
+                for (std::size_t arcOffset = 0; arcOffset < AArcCount; ++arcOffset){
+                    const bool ReverseChordDirection = AAlternateDirection && (arcOffset % 2 == 1);
+                    const TetArcOrientationBounds& SlotBounds = ReverseChordDirection ? AReverseBounds : AForwardBounds;
                     Layout.Slots.push_back({ CurrentX, 0.0, ReverseChordDirection });
-                    CurrentX += SlotBounds.Width + Gap;
+                    CurrentX += SlotBounds.Width + AGap;
                     MaxHeight = std::max(MaxHeight, SlotBounds.Height);
                 }
 
-                for (TetArcLayoutSlot& Slot : Layout.Slots) {
-                    const TetArcOrientationBounds& SlotBounds = Slot.ReverseChordDirection ? ReverseBounds : ForwardBounds;
+                for (TetArcLayoutSlot& Slot : Layout.Slots){
+                    const TetArcOrientationBounds& SlotBounds = Slot.ReverseChordDirection ? AReverseBounds : AForwardBounds;
                     Slot.Y = (MaxHeight - SlotBounds.Height) * 0.5;
                 }
 
-                Layout.Width = CurrentX - Gap;
+                Layout.Width = CurrentX - AGap;
                 Layout.Height = MaxHeight;
-                Layout.ClusterType = AlternateDirection ? "ArcAlternatingLine_" : "ArcLine_";
-                Layout.ClusterType += std::to_string(ArcCount) + "_" + StyleName;
+                Layout.ClusterType = AAlternateDirection ? "ArcAlternatingLine_" : "ArcLine_";
+                Layout.ClusterType += std::to_string(AArcCount) + "_" + AStyleName;
                 return Layout;
             }
 
-            TetArcLayout MakeGridLayout(std::size_t ArcCount, int RowCount, const TetArcOrientationBounds& ForwardBounds, const TetArcOrientationBounds& ReverseBounds, double Gap, bool AlternateDirection, const std::string& StyleName)
+            TetArcLayout MakeGridLayout(std::size_t AArcCount, int ARowCount, const TetArcOrientationBounds& AForwardBounds, const TetArcOrientationBounds& AReverseBounds, double AGap, bool AAlternateDirection, const std::string& AStyleName)
             {
                 TetArcLayout Layout;
-                if (ArcCount < 3 || RowCount < 2 || RowCount > static_cast<int>(ArcCount)) {
+                if (AArcCount < 3 || ARowCount < 2 || ARowCount > static_cast<int>(AArcCount)){
                     return Layout;
                 }
 
-                const int ColumnCount = static_cast<int>((ArcCount + static_cast<std::size_t>(RowCount) - 1) / static_cast<std::size_t>(RowCount));
-                if (ColumnCount < 2) {
+                const int ColumnCount = static_cast<int>((AArcCount + static_cast<std::size_t>(ARowCount) - 1) / static_cast<std::size_t>(ARowCount));
+                if (ColumnCount < 2){
                     return Layout;
                 }
-                const double CellWidth = AlternateDirection ? std::max(ForwardBounds.Width, ReverseBounds.Width) : ForwardBounds.Width;
-                const double CellHeight = AlternateDirection ? std::max(ForwardBounds.Height, ReverseBounds.Height) : ForwardBounds.Height;
+                const double CellWidth = AAlternateDirection ? std::max(AForwardBounds.Width, AReverseBounds.Width) : AForwardBounds.Width;
+                const double CellHeight = AAlternateDirection ? std::max(AForwardBounds.Height, AReverseBounds.Height) : AForwardBounds.Height;
 
-                Layout.Slots.reserve(ArcCount);
-                for (std::size_t arcOffset = 0; arcOffset < ArcCount; ++arcOffset) {
+                Layout.Slots.reserve(AArcCount);
+                for (std::size_t arcOffset = 0; arcOffset < AArcCount; ++arcOffset){
                     const int CurrentRow = static_cast<int>(arcOffset / static_cast<std::size_t>(ColumnCount));
                     const int CurrentColumn = static_cast<int>(arcOffset % static_cast<std::size_t>(ColumnCount));
-                    const bool ReverseChordDirection = AlternateDirection && ((CurrentRow + CurrentColumn) % 2 == 1);
-                    const TetArcOrientationBounds& SlotBounds = ReverseChordDirection ? ReverseBounds : ForwardBounds;
-                    const double SlotX = static_cast<double>(CurrentColumn) * (CellWidth + Gap) + (CellWidth - SlotBounds.Width) * 0.5;
-                    const double SlotY = static_cast<double>(CurrentRow) * (CellHeight + Gap) + (CellHeight - SlotBounds.Height) * 0.5;
+                    const bool ReverseChordDirection = AAlternateDirection && ((CurrentRow + CurrentColumn) % 2 == 1);
+                    const TetArcOrientationBounds& SlotBounds = ReverseChordDirection ? AReverseBounds : AForwardBounds;
+                    const double SlotX = static_cast<double>(CurrentColumn) * (CellWidth + AGap) + (CellWidth - SlotBounds.Width) * 0.5;
+                    const double SlotY = static_cast<double>(CurrentRow) * (CellHeight + AGap) + (CellHeight - SlotBounds.Height) * 0.5;
                     Layout.Slots.push_back({ SlotX, SlotY, ReverseChordDirection });
                 }
 
-                Layout.Width = static_cast<double>(ColumnCount) * CellWidth + static_cast<double>(ColumnCount - 1) * Gap;
-                Layout.Height = static_cast<double>(RowCount) * CellHeight + static_cast<double>(RowCount - 1) * Gap;
-                Layout.ClusterType = AlternateDirection ? "ArcAlternatingGrid_" : "ArcGrid_";
-                Layout.ClusterType += std::to_string(ArcCount) + "_R" + std::to_string(RowCount) + "_" + StyleName;
+                Layout.Width = static_cast<double>(ColumnCount) * CellWidth + static_cast<double>(ColumnCount - 1) * AGap;
+                Layout.Height = static_cast<double>(ARowCount) * CellHeight + static_cast<double>(ARowCount - 1) * AGap;
+                Layout.ClusterType = AAlternateDirection ? "ArcAlternatingGrid_" : "ArcGrid_";
+                Layout.ClusterType += std::to_string(AArcCount) + "_R" + std::to_string(ARowCount) + "_" + AStyleName;
                 return Layout;
             }
 
@@ -329,31 +322,31 @@ namespace ET {
                 const std::vector<TetShapeFeature>& AFeatures,
                 const std::vector<int>& AIndices,
                 const TetNestOptions& AOptions,
-                const TetArcIndexInfo& BaseInfo,
-                const TetArcLayout& Layout,
-                CetClusterGeometryHelper& Geometry,
+                const TetArcIndexInfo& ABaseInfo,
+                const TetArcLayout& ALayout,
+                CetClusterGeometryHelper& AGeometry,
                 TetClusterCandidate& AOutCandidate)
             {
                 AOutCandidate = TetClusterCandidate{};
 
-                if (Layout.Slots.size() != AIndices.size() || Layout.Width <= 0.0 || Layout.Height <= 0.0) {
+                if (ALayout.Slots.size() != AIndices.size() || ALayout.Width <= 0.0 || ALayout.Height <= 0.0){
                     return false;
                 }
 
                 TetClusterCandidate Candidate;
                 Candidate.BuilderName = "ArcBuilder";
-                Candidate.ClusterType = Layout.ClusterType;
+                Candidate.ClusterType = ALayout.ClusterType;
                 Candidate.OriginalIndices = AIndices;
-                Candidate.Confidence = BaseInfo.SweepBucket == MetArcSweepBucket::SemiCircle ? 0.78 : 0.72;
+                Candidate.Confidence = ABaseInfo.SweepBucket == MetArcSweepBucket::SemiCircle ? 0.78 : 0.72;
                 Candidate.Transforms.reserve(AIndices.size());
 
-                for (std::size_t ArcOffset = 0; ArcOffset < AIndices.size(); ++ArcOffset) {
+                for (std::size_t ArcOffset = 0; ArcOffset < AIndices.size(); ++ArcOffset){
                     const int OriginalIndex = AIndices[ArcOffset];
                     const TetShapeFeature& Feature = AFeatures[OriginalIndex];
-                    const TetArcLayoutSlot& Slot = Layout.Slots[ArcOffset];
+                    const TetArcLayoutSlot& Slot = ALayout.Slots[ArcOffset];
 
                     TetArcOrientationBounds SlotBounds;
-                    if (!GetArcOrientationBounds(AOriginalItems[OriginalIndex], Feature, Slot.ReverseChordDirection, AOptions, Geometry, SlotBounds)) {
+                    if (!GetArcOrientationBounds(AOriginalItems[OriginalIndex], Feature, Slot.ReverseChordDirection, AOptions, AGeometry, SlotBounds)){
                         return false;
                     }
 
@@ -365,7 +358,7 @@ namespace ET {
                     Candidate.Transforms.push_back(Transform);
                 }
 
-                if (!Geometry.FinalizeCandidate(AOriginalItems, AOptions, Candidate)) {
+                if (!AGeometry.FinalizeCandidate(AOriginalItems, AOptions, Candidate)){
                     return false;
                 }
 
@@ -379,22 +372,21 @@ namespace ET {
 
         void CetArcClusterBuilder::BuildCandidates(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const std::vector<int>& AIndices, const TetNestOptions& AOptions, std::vector<TetClusterCandidate>& AOutCandidates)
         {
-            if (AOriginalItems.empty() || AOriginalItems.size() != AFeatures.size() || AIndices.size() < 2) {
+            if (AOriginalItems.empty() || AOriginalItems.size() != AFeatures.size() || AIndices.size() < 2){
                 return;
             }
 
             const std::vector<std::vector<int>> Groups = GroupCompatibleArcIndices(AIndices, AFeatures);
-            if (Groups.empty()) {
+            if (Groups.empty()){
                 return;
             }
 
             const std::size_t OldCandidateCount = AOutCandidates.size();
-            for (const std::vector<int>& Group : Groups) {
+            for (const std::vector<int>& Group : Groups){
                 _BuildCompatibleArcClusterCandidates(AOriginalItems, AFeatures, Group, AOptions, AOutCandidates);
             }
 
-            std::cout << "[ARC][BUILD CANDIDATES] GroupCount = " << Groups.size()
-                << ", NewCandidateCount = " << AOutCandidates.size() - OldCandidateCount << std::endl;
+            std::cout << "[ARC][BUILD CANDIDATES] GroupCount = " << Groups.size() << ", NewCandidateCount = " << AOutCandidates.size() - OldCandidateCount << std::endl;
         }
 
         void CetArcClusterBuilder::_BuildCompatibleArcClusterCandidates(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const std::vector<int>& AIndices, const TetNestOptions& AOptions, std::vector<TetClusterCandidate>& AOutCandidates)
@@ -403,7 +395,7 @@ namespace ET {
             std::sort(RemainingIndices.begin(), RemainingIndices.end());
             RemainingIndices.erase(std::unique(RemainingIndices.begin(), RemainingIndices.end()), RemainingIndices.end());
 
-            if (RemainingIndices.size() < 2) {
+            if (RemainingIndices.size() < 2){
                 return;
             }
 
@@ -411,20 +403,16 @@ namespace ET {
             const std::size_t MaxTrialCount = std::min(RemainingIndices.size(), CET_ARC_MAX_CLUSTER_CHILDREN);
             std::size_t PreferredCount = 0;
             TetClusterCandidate FirstCandidate;
-            for (std::size_t TrialCount = MaxTrialCount; TrialCount >= 2; --TrialCount) {
-                std::vector<int> TrialIndices(
-                    RemainingIndices.begin(),
-                    RemainingIndices.begin() + static_cast<std::vector<int>::difference_type>(TrialCount));
+            for (std::size_t TrialCount = MaxTrialCount; TrialCount >= 2; --TrialCount){
+                std::vector<int> TrialIndices(RemainingIndices.begin(),RemainingIndices.begin() + static_cast<std::vector<int>::difference_type>(TrialCount));
 
                 TetClusterCandidate Candidate;
-                if (!_BuildClusterCandidate(AOriginalItems, AFeatures, TrialIndices, AOptions, Candidate)) {
+                if (!_BuildClusterCandidate(AOriginalItems, AFeatures, TrialIndices, AOptions, Candidate)){
                     continue;
                 }
 
-                const std::size_t RequiredCopies = std::min(
-                    CET_CLUSTER_TARGET_COPIES_PER_BOARD,
-                    RemainingIndices.size() / TrialCount);
-                if (!Geometry.CanPlaceCandidateCopiesOnBoard(Candidate, AOptions, RequiredCopies)) {
+                const std::size_t RequiredCopies = std::min(CET_CLUSTER_TARGET_COPIES_PER_BOARD,RemainingIndices.size() / TrialCount);
+                if (!Geometry.CanPlaceCandidateCopiesOnBoard(Candidate, AOptions, RequiredCopies)){
                     continue;
                 }
 
@@ -433,32 +421,29 @@ namespace ET {
                 break;
             }
 
-            if (PreferredCount < 2) {
-                std::cout << "[ARC][REJECT] No practical board-fitting compatible cluster can be built. Count = "
-                    << RemainingIndices.size() << std::endl;
+            if (PreferredCount < 2){
+                std::cout << "[ARC][REJECT] No practical board-fitting compatible cluster can be built. Count = " << RemainingIndices.size() << std::endl;
                 return;
             }
 
             std::size_t GroupOffset = 0;
-            while (GroupOffset + 1 < RemainingIndices.size()) {
+            while (GroupOffset + 1 < RemainingIndices.size()){
                 const std::size_t RemainingCount = RemainingIndices.size() - GroupOffset;
                 std::size_t TrialCount = std::min(RemainingCount, PreferredCount);
                 std::size_t BestCount = 0;
                 TetClusterCandidate BestCandidate;
 
-                while (TrialCount >= 2) {
-                    std::vector<int> TrialIndices(
-                        RemainingIndices.begin() + static_cast<std::vector<int>::difference_type>(GroupOffset),
-                        RemainingIndices.begin() + static_cast<std::vector<int>::difference_type>(GroupOffset + TrialCount));
+                while (TrialCount >= 2){
+                    std::vector<int> TrialIndices(RemainingIndices.begin() + static_cast<std::vector<int>::difference_type>(GroupOffset),RemainingIndices.begin() + static_cast<std::vector<int>::difference_type>(GroupOffset + TrialCount));
 
-                    if (GroupOffset == 0 && TrialCount == PreferredCount) {
+                    if (GroupOffset == 0 && TrialCount == PreferredCount){
                         BestCandidate = std::move(FirstCandidate);
                         BestCount = TrialCount;
                         break;
                     }
 
                     TetClusterCandidate Candidate;
-                    if (_BuildClusterCandidate(AOriginalItems, AFeatures, TrialIndices, AOptions, Candidate)) {
+                    if (_BuildClusterCandidate(AOriginalItems, AFeatures, TrialIndices, AOptions, Candidate)){
                         BestCandidate = std::move(Candidate);
                         BestCount = TrialCount;
                         break;
@@ -467,16 +452,13 @@ namespace ET {
                     --TrialCount;
                 }
 
-                if (BestCount < 2) {
-                    std::cout << "[ARC][REJECT] No board-fitting compatible cluster can be built. RemainingCount = "
-                        << RemainingCount << std::endl;
+                if (BestCount < 2){
+                    std::cout << "[ARC][REJECT] No board-fitting compatible cluster can be built. RemainingCount = " << RemainingCount << std::endl;
                     return;
                 }
 
                 AOutCandidates.push_back(std::move(BestCandidate));
-                std::cout << "[ARC][CANDIDATE] Size = " << BestCount
-                    << ", Type = " << AOutCandidates.back().ClusterType
-                    << ", Score = " << AOutCandidates.back().Score << std::endl;
+                std::cout << "[ARC][CANDIDATE] Size = " << BestCount << ", Type = " << AOutCandidates.back().ClusterType << ", Score = " << AOutCandidates.back().Score << std::endl;
 
                 GroupOffset += BestCount;
             }
@@ -486,36 +468,35 @@ namespace ET {
         {
             AOutCandidate = TetClusterCandidate{};
 
-            if (AOriginalItems.size() != AFeatures.size() || AIndices.size() < 2 ||
-                AIndices.size() > CET_ARC_MAX_CLUSTER_CHILDREN) {
+            if (AOriginalItems.size() != AFeatures.size() || AIndices.size() < 2 ||AIndices.size() > CET_ARC_MAX_CLUSTER_CHILDREN){
                 return false;
             }
 
             std::vector<int> Indices = AIndices;
             std::sort(Indices.begin(), Indices.end());
             Indices.erase(std::unique(Indices.begin(), Indices.end()), Indices.end());
-            if (Indices.size() < 2) {
+            if (Indices.size() < 2){
                 return false;
             }
 
-            for (int OriginalIndex : Indices) {
-                if (OriginalIndex < 0 || OriginalIndex >= static_cast<int>(AFeatures.size())) {
+            for (int OriginalIndex : Indices){
+                if (OriginalIndex < 0 || OriginalIndex >= static_cast<int>(AFeatures.size())){
                     return false;
                 }
             }
 
             const TetShapeFeature& BaseFeature = AFeatures[Indices.front()];
-            if (!IsValidArcFeature(BaseFeature)) {
+            if (!IsValidArcFeature(BaseFeature)){
                 return false;
             }
 
             const TetArcIndexInfo BaseInfo = MakeArcIndexInfo(Indices.front(), BaseFeature);
-            for (int OriginalIndex : Indices) {
-                if (!IsValidArcFeature(AFeatures[OriginalIndex])) {
+            for (int OriginalIndex : Indices){
+                if (!IsValidArcFeature(AFeatures[OriginalIndex])){
                     return false;
                 }
 
-                if (!AreCompatibleArcInfos(BaseInfo, MakeArcIndexInfo(OriginalIndex, AFeatures[OriginalIndex]))) {
+                if (!AreCompatibleArcInfos(BaseInfo, MakeArcIndexInfo(OriginalIndex, AFeatures[OriginalIndex]))){
                     return false;
                 }
             }
@@ -524,8 +505,7 @@ namespace ET {
             TetArcOrientationBounds ForwardBounds;
             TetArcOrientationBounds ReverseBounds;
             if (!GetArcOrientationBounds(AOriginalItems[Indices.front()], BaseFeature, false, AOptions, Geometry, ForwardBounds) ||
-                !GetArcOrientationBounds(AOriginalItems[Indices.front()], BaseFeature, true, AOptions, Geometry, ReverseBounds))
-            {
+                !GetArcOrientationBounds(AOriginalItems[Indices.front()], BaseFeature, true, AOptions, Geometry, ReverseBounds)){
                 return false;
             }
 
@@ -541,7 +521,7 @@ namespace ET {
             Layouts.push_back(MakeLineLayout(Indices.size(), ForwardBounds, ReverseBounds, Gap, true, true, StyleName));
 
             const int MaxGridRowCount = static_cast<int>((Indices.size() + 1) / 2);
-            for (int RowCount = 2; RowCount <= MaxGridRowCount; ++RowCount) {
+            for (int RowCount = 2; RowCount <= MaxGridRowCount; ++RowCount){
                 Layouts.push_back(MakeGridLayout(Indices.size(), RowCount, ForwardBounds, ReverseBounds, Gap, false, StyleName));
                 Layouts.push_back(MakeGridLayout(Indices.size(), RowCount, ForwardBounds, ReverseBounds, Gap, true, StyleName));
             }
@@ -549,24 +529,24 @@ namespace ET {
             bool HasBestCandidate = false;
             TetClusterCandidate BestCandidate;
 
-            for (const TetArcLayout& Layout : Layouts) {
-                if (!_FitsBin(Layout.Width, Layout.Height, AOptions)) {
+            for (const TetArcLayout& Layout : Layouts){
+                if (!_FitsBin(Layout.Width, Layout.Height, AOptions)){
                     continue;
                 }
 
                 TetClusterCandidate Candidate;
-                if (!TryBuildArcCandidateFromLayout(AOriginalItems, AFeatures, Indices, AOptions, BaseInfo, Layout, Geometry, Candidate)) {
+                if (!TryBuildArcCandidateFromLayout(AOriginalItems, AFeatures, Indices, AOptions, BaseInfo, Layout, Geometry, Candidate)){
                     continue;
                 }
 
                 Candidate.Score = _CalculateScore(Candidate, AOptions);
-                if (!HasBestCandidate || Candidate.Score > BestCandidate.Score) {
+                if (!HasBestCandidate || Candidate.Score > BestCandidate.Score){
                     HasBestCandidate = true;
                     BestCandidate = std::move(Candidate);
                 }
             }
 
-            if (!HasBestCandidate) {
+            if (!HasBestCandidate){
                 return false;
             }
 
@@ -581,7 +561,7 @@ namespace ET {
 
         double CetArcClusterBuilder::_CalculateScore(const TetClusterCandidate& ACandidate, const TetNestOptions& AOptions)
         {
-            if (!ACandidate.Valid || ACandidate.OriginalIndices.empty() || ACandidate.ClusterWidth <= 0.0 || ACandidate.ClusterHeight <= 0.0 || ACandidate.ProxyArea <= 0.0) {
+            if (!ACandidate.Valid || ACandidate.OriginalIndices.empty() || ACandidate.ClusterWidth <= 0.0 || ACandidate.ClusterHeight <= 0.0 || ACandidate.ProxyArea <= 0.0){
                 return -std::numeric_limits<double>::infinity();
             }
 
@@ -594,19 +574,19 @@ namespace ET {
             const double CompactScore = CompactRatio * 25.0;
 
             double LayoutBonus = 0.0;
-            if (ACandidate.ClusterType == "SemiCirclePair") {
+            if (ACandidate.ClusterType == "SemiCirclePair"){
                 LayoutBonus = 80.0;
             }
-            else if (ACandidate.ClusterType.find("AlternatingGrid") != std::string::npos) {
+            else if (ACandidate.ClusterType.find("AlternatingGrid") != std::string::npos){
                 LayoutBonus = 95.0;
             }
-            else if (ACandidate.ClusterType.find("Grid") != std::string::npos) {
+            else if (ACandidate.ClusterType.find("Grid") != std::string::npos){
                 LayoutBonus = 70.0;
             }
-            else if (ACandidate.ClusterType.find("AlternatingLine") != std::string::npos) {
+            else if (ACandidate.ClusterType.find("AlternatingLine") != std::string::npos){
                 LayoutBonus = 45.0;
             }
-            else if (ACandidate.ClusterType.find("Column") != std::string::npos) {
+            else if (ACandidate.ClusterType.find("Column") != std::string::npos){
                 LayoutBonus = ACandidate.OriginalIndices.size() >= 4 ? -80.0 : 10.0;
             }
 

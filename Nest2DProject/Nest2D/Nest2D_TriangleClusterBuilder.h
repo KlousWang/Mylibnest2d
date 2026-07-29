@@ -24,12 +24,12 @@ namespace ET {
 			CetTriangleClusterBuilder();
 			~CetTriangleClusterBuilder();
 		public:
-			bool TryMakeRightTrianglePair(const CetTNestItemVector& AOriginaIItem, int AAIndex, int ABIndex, const TetNestOptions& AOptions, TetClusterBuildResult& Aresult);
+			bool TryMakeRightTrianglePair(const CetTNestItemVector& AOriginaIItem, int AAIndex, int ABIndex, const TetNestOptions& AOptions, TetClusterBuildResult& AResult);
 			void BuildCandidates(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const std::vector<int>& AIndices, const TetNestOptions& AOptions, std::vector<TetClusterCandidate>& AOutCandidates);
 		protected:
 	     	bool _IsRightTriangleLike(const CetNestItem& AItem);
-			bool _IsSameSizeTrianglePair(const CetNestItem& AItem,const CetNestItem& BItem);
-			bool _NearlyEqual(double A,double B,double ARelativeTolerance);
+			bool _IsSameSizeTrianglePair(const CetNestItem& AItem,const CetNestItem& ABItem);
+			bool _NearlyEqual(double A,double AB,double ARelativeTolerance);
 			double _GetItemWidth(const CetNestItem& AItem);
 			double _GetItemHeight(const CetNestItem& AItem);
 			double _CalcTrianglePairAxisGap(double AWidth,double AHeight,double ASpacing);
@@ -45,7 +45,7 @@ namespace ET {
 			bool _BuildAnyTriangleClusterCandidate(const CetTNestItemVector& AOriginalItems,const std::vector<TetShapeFeature>& AFeatures,const std::vector<int>& AIndices,const TetNestOptions& AOptions,TetClusterCandidate& AOutCandidate);
 			
 			bool _BuildAnyTrianglePairCandidate(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, int AAIndex, int ABIndex, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate);
-			bool _TryBuildTriangleEdgePairCandidate(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, int AAIndex, int ABIndex, int AEdgeIndex, int BEdgeIndex, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate);
+			bool _TryBuildTriangleEdgePairCandidate(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, int AAIndex, int ABIndex, int AEdgeIndex, int ABEdgeIndex, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate);
 			bool _GetTriangleEdgePose(const CetPath& AContour, int AEdgeIndex, TetTriangleEdgePose& AOutEdge) ;
 			double _NormalizeAngle(double AAngle) ;
 			CetInpoint _RotatePoint(const CetInpoint& APoint, double ARotation) ;

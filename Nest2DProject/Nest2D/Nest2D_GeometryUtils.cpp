@@ -32,11 +32,11 @@ bool ET::NEST2DMANAGERLIB::CetGeometryUtils::PointInPolygon(const TetNestPoint& 
     bool Inside = false;
     size_t Count = APolygon.size();
 
-    if (Count < 3) {
+    if (Count < 3){
         return false;
     }
 
-    for (size_t i = 0, j = Count - 1; i < Count; j = i++) {
+    for (size_t i = 0, j = Count - 1; i < Count; j = i++){
         const auto& Pi = APolygon[i];
         const auto& Pj = APolygon[j];
 
@@ -44,7 +44,7 @@ bool ET::NEST2DMANAGERLIB::CetGeometryUtils::PointInPolygon(const TetNestPoint& 
             ((Pi.Y > AP.Y) != (Pj.Y > AP.Y)) &&
             (AP.X < (Pj.X - Pi.X) * (AP.Y - Pi.Y) / (Pj.Y - Pi.Y + 1e-12) + Pi.X);
 
-        if (Intersect) {
+        if (Intersect){
             Inside = !Inside;
         }
     }
@@ -54,12 +54,12 @@ bool ET::NEST2DMANAGERLIB::CetGeometryUtils::PointInPolygon(const TetNestPoint& 
 
 bool ET::NEST2DMANAGERLIB::CetGeometryUtils::IsPointInsideBoard(const TetNestPoint& AP, const TetNestBoard& ABoard)
 {
-    if (!PointInPolygon(AP, ABoard.Vertices)) {
+    if (!PointInPolygon(AP, ABoard.Vertices)){
         return false;
     }
 
-    for (const auto& Hole : ABoard.Holes) {
-        if (PointInPolygon(AP, Hole)) {
+    for (const auto& Hole : ABoard.Holes){
+        if (PointInPolygon(AP, Hole)){
             return false;
         }
     }
@@ -69,32 +69,27 @@ bool ET::NEST2DMANAGERLIB::CetGeometryUtils::IsPointInsideBoard(const TetNestPoi
 
 void ET::NEST2DMANAGERLIB::CetGeometryUtils::ValidateItemsInsideBoard(std::vector<TetNestPolygon>& AItems, const TetNestBoard& ABoard)
 {
-    if (!ABoard.Enabled || ABoard.Vertices.size() < 3) {
+    if (!ABoard.Enabled || ABoard.Vertices.size() < 3){
         return;
     }
 
-    for (auto& Item : AItems) {
-        if (Item.Out_bin < 0) {
+    for (auto& Item : AItems){
+        if (Item.Out_bin < 0){
             continue;
         }
 
         bool Valid = true;
 
-        for (const auto& P : Item.Vertices) {
-            TetNestPoint TP = TransformPoint(
-                P,
-                Item.Out_x,
-                Item.Out_y,
-                Item.Out_angle
-            );
+        for (const auto& P : Item.Vertices){
+            TetNestPoint TP = TransformPoint(P,Item.Out_x,Item.Out_y,Item.Out_angle);
 
-            if (!IsPointInsideBoard(TP, ABoard)) {
+            if (!IsPointInsideBoard(TP, ABoard)){
                 Valid = false;
                 break;
             }
         }
 
-        if (!Valid) {
+        if (!Valid){
             Item.Out_bin = -1;
             Item.Out_x = 0.0;
             Item.Out_y = 0.0;
@@ -110,7 +105,7 @@ double ET::NEST2DMANAGERLIB::CetGeometryUtils::CalcPolygonBoundingBoxArea(const 
     double minX = APoly.Vertices[0].X, maxX = minX;
     double minY = APoly.Vertices[0].Y, maxY = minY;
 
-    for (const auto& pt : APoly.Vertices) {
+    for (const auto& pt : APoly.Vertices){
         if (pt.X < minX) minX = pt.X;
         if (pt.X > maxX) maxX = pt.X;
         if (pt.Y < minY) minY = pt.Y;

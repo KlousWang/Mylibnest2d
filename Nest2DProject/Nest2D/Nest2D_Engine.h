@@ -1,5 +1,5 @@
 #pragma once
-#include "Nest2D_DataType.h" // °üº¬ TNestItemVector
+#include "Nest2D_DataType.h" 
 #include "Nest2D_PrivateDataType.h"
 #include "EtTechCore_Object.h"
 
@@ -23,12 +23,12 @@ namespace ET {
             struct TetNestProgressTracker {
                 int totalItems;
                 NestProgressCallback callback;
-                TetNestProgressTracker(int total, NestProgressCallback cb)
-                    : totalItems(total), callback(cb) {
+                TetNestProgressTracker(int Atotal, NestProgressCallback Acb)
+                    : totalItems(Atotal), callback(Acb) {
                 }
-                void operator()(unsigned cnt) const {
-                    if (callback != nullptr) {
-                        int finished = totalItems - static_cast<int>(cnt);
+                void operator()(unsigned Acnt) const {
+                    if (callback != nullptr){
+                        int finished = totalItems - static_cast<int>(Acnt);
                         callback(finished, totalItems);
                     }
                 }
@@ -40,9 +40,9 @@ namespace ET {
 
             int RunNesting_Impl(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, std::size_t* AUsedBins);
         protected:
-            std::size_t RunPolygonBoardNesting(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, TetNestProgressTracker& Tracker);
+            std::size_t RunPolygonBoardNesting(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker);
 			std::size_t RunPolygonNestOnce(CetTNestItemVector& ATestItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker);
-            std::size_t RunRectangleBoardNesting(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, TetNestProgressTracker& Tracker);
+            std::size_t RunRectangleBoardNesting(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker);
             std::size_t RunRectangleNestOnce(CetTNestItemVector& ATestItems,const TetNestOptions& AOptions,TetNestProgressTracker& ATracker);
             TetLocalBestResult EvaluateSortingStrategies(const TetClusterBuildResult& AClusterResult, const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker);
 			bool ShoouldUpdateGlobalBest(const TetLocalBestResult& ALocalResult,bool AHasBest, const TetTNestEvalResult& ABestEval, std::size_t ABestLayers, bool ABestHasCluster);

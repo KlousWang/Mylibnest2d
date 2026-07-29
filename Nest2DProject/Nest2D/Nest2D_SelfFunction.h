@@ -3,7 +3,7 @@
 #include "Nest2D_InvokeFunctor.h"
 #include"Nest2D_ClusterInvokeFunctor.h"
 #include"EtTechCore_LibConfig.h"
-// 2. 引入你刚刚写好的“遥控器”头文件
+
 
 namespace ET {
 	namespace NEST2DMANAGERLIB {

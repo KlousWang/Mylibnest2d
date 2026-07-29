@@ -29,7 +29,7 @@ namespace ET {
 			 int ExportSvg(const std::vector<TetNestPolygon>& AItems, const TetNestOptions& AOptions, int AUsedBins);
 
 			 int ExportSvgItems(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, int AUsedBins);
-			 int ExportSvgPackGroup(const CetPackGround& PackGroup, const TetNestOptions& AOptions);
+			 int ExportSvgPackGroup(const CetPackGround& APackGroup, const TetNestOptions& AOptions);
 		};
 
 	}

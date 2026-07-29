@@ -17,7 +17,7 @@ ET::NEST2DMANAGERLIB::CetSvgUtils::~CetSvgUtils()
 
 std::string ET::NEST2DMANAGERLIB::CetSvgUtils::MakeBoardSvgPath(const TetNestBoard& ABoard, double ASvgHeight)
 {
-    if (!ABoard.Enabled || ABoard.Vertices.size() < 3) {
+    if (!ABoard.Enabled || ABoard.Vertices.size() < 3){
         return "";
     }
 
@@ -31,7 +31,7 @@ std::string ET::NEST2DMANAGERLIB::CetSvgUtils::MakeBoardSvgPath(const TetNestBoa
         << (ASvgHeight - ABoard.Vertices[0].Y)
         << " ";
 
-    for (size_t i = 1; i < ABoard.Vertices.size(); ++i) {
+    for (size_t i = 1; i < ABoard.Vertices.size(); ++i){
         ss << "L "
             << ABoard.Vertices[i].X
             << ","
@@ -45,13 +45,13 @@ std::string ET::NEST2DMANAGERLIB::CetSvgUtils::MakeBoardSvgPath(const TetNestBoa
 
 void ET::NEST2DMANAGERLIB::CetSvgUtils::InsertTextBeforeSvgEnd(const std::string& AFilePath, const std::string& AText)
 {
-    if (AText.empty()) {
+    if (AText.empty()){
         return;
     }
 
     std::ifstream fin(AFilePath.c_str(), std::ios::in | std::ios::binary);
 
-    if (!fin.is_open()) {
+    if (!fin.is_open()){
         std::cout << "[SVG][WARN] cannot reopen svg: " << AFilePath << std::endl;
         return;
     }
@@ -63,7 +63,7 @@ void ET::NEST2DMANAGERLIB::CetSvgUtils::InsertTextBeforeSvgEnd(const std::string
 
     size_t pos = content.rfind("</svg>");
 
-    if (pos == std::string::npos) {
+    if (pos == std::string::npos){
         std::cout << "[SVG][WARN] cannot find </svg> in: " << AFilePath << std::endl;
         return;
     }
@@ -72,7 +72,7 @@ void ET::NEST2DMANAGERLIB::CetSvgUtils::InsertTextBeforeSvgEnd(const std::string
 
     std::ofstream fout(AFilePath.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
 
-    if (!fout.is_open()) {
+    if (!fout.is_open()){
         std::cout << "[SVG][WARN] cannot write svg: " << AFilePath << std::endl;
         return;
     }

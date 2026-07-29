@@ -19,60 +19,60 @@ namespace ET {
             constexpr double CET_ELLIPSE_SIZE_TOLERANCE = 0.05;
             constexpr double CET_ELLIPSE_HONEYCOMB_ROW_RATIO = 0.90;
 
-            bool NearlyEqual(double A, double B, double RelativeTolerance)
+            bool NearlyEqual(double A, double AB, double ARelativeTolerance)
             {
-                const double Denominator = std::max(1.0, std::max(std::abs(A), std::abs(B)));
-                return std::abs(A - B) <= Denominator * RelativeTolerance;
+                const double Denominator = std::max(1.0, std::max(std::abs(A), std::abs(AB)));
+                return std::abs(A - AB) <= Denominator * ARelativeTolerance;
             }
 
-            bool IsValidEllipseFeature(const TetShapeFeature& Feature)
+            bool IsValidEllipseFeature(const TetShapeFeature& AFeature)
             {
-                return Feature.ShapeType == MetShapeType::EllipseLike &&
-                    Feature.EllipseMajorAxis > 0.0 &&
-                    Feature.EllipseMinorAxis > 0.0 &&
-                    Feature.Width > 0.0 &&
-                    Feature.Height > 0.0 &&
-                    Feature.Area > 0.0;
+                return AFeature.ShapeType == MetShapeType::EllipseLike &&
+                    AFeature.EllipseMajorAxis > 0.0 &&
+                    AFeature.EllipseMinorAxis > 0.0 &&
+                    AFeature.Width > 0.0 &&
+                    AFeature.Height > 0.0 &&
+                    AFeature.Area > 0.0;
             }
 
-            bool AreSameSizeEllipses(const TetShapeFeature& A, const TetShapeFeature& B)
+            bool AreSameSizeEllipses(const TetShapeFeature& A, const TetShapeFeature& AB)
             {
                 return IsValidEllipseFeature(A) &&
-                    IsValidEllipseFeature(B) &&
-                    NearlyEqual(A.EllipseMajorAxis, B.EllipseMajorAxis, CET_ELLIPSE_SIZE_TOLERANCE) &&
-                    NearlyEqual(A.EllipseMinorAxis, B.EllipseMinorAxis, CET_ELLIPSE_SIZE_TOLERANCE);
+                    IsValidEllipseFeature(AB) &&
+                    NearlyEqual(A.EllipseMajorAxis, AB.EllipseMajorAxis, CET_ELLIPSE_SIZE_TOLERANCE) &&
+                    NearlyEqual(A.EllipseMinorAxis, AB.EllipseMinorAxis, CET_ELLIPSE_SIZE_TOLERANCE);
             }
 
-            bool FitsBin(double Width, double Height, const TetNestOptions& Options)
+            bool FitsBin(double AWidth, double AHeight, const TetNestOptions& AOptions)
             {
-                if (Width <= 0.0 || Height <= 0.0) {
+                if (AWidth <= 0.0 || AHeight <= 0.0){
                     return false;
                 }
 
-                const double BinWidth = static_cast<double>(NestUtils::ToNestCoord(Options.BinWidth));
-                const double BinHeight = static_cast<double>(NestUtils::ToNestCoord(Options.BinHeight));
-                if (BinWidth <= 0.0 || BinHeight <= 0.0) {
+                const double BinWidth = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth));
+                const double BinHeight = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinHeight));
+                if (BinWidth <= 0.0 || BinHeight <= 0.0){
                     return false;
                 }
 
-                const bool Normal = Width <= BinWidth && Height <= BinHeight;
-                const bool QuarterTurnAllowed = CetRotationUtils::IsAllowedRotation(CET_CLUSTER_HALF_PI, Options.Rotations, 1e-9);
-                const bool Rotated = QuarterTurnAllowed && Height <= BinWidth && Width <= BinHeight;
+                const bool Normal = AWidth <= BinWidth && AHeight <= BinHeight;
+                const bool QuarterTurnAllowed = CetRotationUtils::IsAllowedRotation(CET_CLUSTER_HALF_PI, AOptions.Rotations, 1e-9);
+                const bool Rotated = QuarterTurnAllowed && AHeight <= BinWidth && AWidth <= BinHeight;
                 return Normal || Rotated;
             }
 
-            std::vector<std::vector<int>> GroupEllipseIndices(const std::vector<int>& Indices, const std::vector<TetShapeFeature>& Features)
+            std::vector<std::vector<int>> GroupEllipseIndices(const std::vector<int>& AIndices, const std::vector<TetShapeFeature>& AFeatures)
             {
                 std::vector<TetEllipseIndexInfo> Infos;
-                Infos.reserve(Indices.size());
+                Infos.reserve(AIndices.size());
 
-                for (int Index : Indices) {
-                    if (Index < 0 || Index >= static_cast<int>(Features.size())) {
+                for (int Index : AIndices){
+                    if (Index < 0 || Index >= static_cast<int>(AFeatures.size())){
                         continue;
                     }
 
-                    const TetShapeFeature& Feature = Features[Index];
-                    if (!IsValidEllipseFeature(Feature)) {
+                    const TetShapeFeature& Feature = AFeatures[Index];
+                    if (!IsValidEllipseFeature(Feature)){
                         continue;
                     }
 
@@ -82,24 +82,24 @@ namespace ET {
                 std::sort(
                     Infos.begin(),
                     Infos.end(),
-                    [](const TetEllipseIndexInfo& A, const TetEllipseIndexInfo& B)
+                    [](const TetEllipseIndexInfo& A, const TetEllipseIndexInfo& AB)
                     {
-                        if (A.MajorAxis != B.MajorAxis) {
-                            return A.MajorAxis < B.MajorAxis;
+                        if (A.MajorAxis != AB.MajorAxis){
+                            return A.MajorAxis < AB.MajorAxis;
                         }
-                        if (A.MinorAxis != B.MinorAxis) {
-                            return A.MinorAxis < B.MinorAxis;
+                        if (A.MinorAxis != AB.MinorAxis){
+                            return A.MinorAxis < AB.MinorAxis;
                         }
-                        return A.Index < B.Index;
+                        return A.Index < AB.Index;
                     });
 
                 Infos.erase(
                     std::unique(
                         Infos.begin(),
                         Infos.end(),
-                        [](const TetEllipseIndexInfo& A, const TetEllipseIndexInfo& B)
+                        [](const TetEllipseIndexInfo& A, const TetEllipseIndexInfo& AB)
                         {
-                            return A.Index == B.Index;
+                            return A.Index == AB.Index;
                         }),
                     Infos.end());
 
@@ -107,16 +107,14 @@ namespace ET {
                 std::vector<int> CurrentGroup;
                 TetEllipseIndexInfo BaseInfo;
 
-                for (const TetEllipseIndexInfo& Info : Infos) {
-                    if (CurrentGroup.empty()) {
+                for (const TetEllipseIndexInfo& Info : Infos){
+                    if (CurrentGroup.empty()){
                         BaseInfo = Info;
                         CurrentGroup.push_back(Info.Index);
                         continue;
                     }
 
-                    if (NearlyEqual(BaseInfo.MajorAxis, Info.MajorAxis, CET_ELLIPSE_SIZE_TOLERANCE) &&
-                        NearlyEqual(BaseInfo.MinorAxis, Info.MinorAxis, CET_ELLIPSE_SIZE_TOLERANCE))
-                    {
+                    if (NearlyEqual(BaseInfo.MajorAxis, Info.MajorAxis, CET_ELLIPSE_SIZE_TOLERANCE) &&NearlyEqual(BaseInfo.MinorAxis, Info.MinorAxis, CET_ELLIPSE_SIZE_TOLERANCE)){
                         CurrentGroup.push_back(Info.Index);
                     }
                     else {
@@ -127,150 +125,150 @@ namespace ET {
                     }
                 }
 
-                if (!CurrentGroup.empty()) {
+                if (!CurrentGroup.empty()){
                     Groups.push_back(std::move(CurrentGroup));
                 }
 
                 return Groups;
             }
 
-            bool GetOrientedBounds(const CetNestItem& Item, const TetShapeFeature& Feature, bool RotateToVertical, const TetNestOptions& Options, const CetClusterGeometryHelper& Geometry, double& OutRotation, double& OutMinX, double& OutMinY, double& OutWidth, double& OutHeight)
+            bool GetOrientedBounds(const CetNestItem& AItem, const TetShapeFeature& AFeature, bool ARotateToVertical, const TetNestOptions& AOptions, const CetClusterGeometryHelper& AGeometry, double& AOutRotation, double& AOutMinX, double& AOutMinY, double& AOutWidth, double& AOutHeight)
             {
-                const double TargetAngle = RotateToVertical ? CET_CLUSTER_HALF_PI : 0.0;
-                if (!CetRotationUtils::SnapToNearestAllowedRotation(TargetAngle - Feature.EllipseAngle, Options.Rotations, OutRotation)) {
+                const double TargetAngle = ARotateToVertical ? CET_CLUSTER_HALF_PI : 0.0;
+                if (!CetRotationUtils::SnapToNearestAllowedRotation(TargetAngle - AFeature.EllipseAngle, AOptions.Rotations, AOutRotation)){
                     return false;
                 }
 
-                const CetPath Contour = Geometry.TransformContour(Geometry.GetIdentityContour(Item), OutRotation, 0.0, 0.0);
+                const CetPath Contour = AGeometry.TransformContour(AGeometry.GetIdentityContour(AItem), AOutRotation, 0.0, 0.0);
                 double MaxX = 0.0;
                 double MaxY = 0.0;
-                if (!Geometry.GetBounds(Contour, OutMinX, OutMinY, MaxX, MaxY)) {
+                if (!AGeometry.GetBounds(Contour, AOutMinX, AOutMinY, MaxX, MaxY)){
                     return false;
                 }
 
-                OutWidth = MaxX - OutMinX;
-                OutHeight = MaxY - OutMinY;
-                return OutWidth > 0.0 && OutHeight > 0.0;
+                AOutWidth = MaxX - AOutMinX;
+                AOutHeight = MaxY - AOutMinY;
+                return AOutWidth > 0.0 && AOutHeight > 0.0;
             }
 
-            TetEllipseLayout MakeLineLayout(std::size_t Count, double HorizontalWidth, double HorizontalHeight, double VerticalWidth, double VerticalHeight, double Gap, bool VerticalStack, bool AlternateRotation)
+            TetEllipseLayout MakeLineLayout(std::size_t ACount, double AHorizontalWidth, double AHorizontalHeight, double AVerticalWidth, double AVerticalHeight, double AGap, bool AVerticalStack, bool AAlternateRotation)
             {
                 TetEllipseLayout Layout;
-                if (Count < 2) {
+                if (ACount < 2){
                     return Layout;
                 }
 
-                Layout.Slots.reserve(Count);
-                if (VerticalStack) {
+                Layout.Slots.reserve(ACount);
+                if (AVerticalStack){
                     double Y = 0.0;
-                    for (std::size_t I = 0; I < Count; ++I) {
+                    for (std::size_t I = 0; I < ACount; ++I){
                         Layout.Slots.push_back({ 0.0, Y, false });
-                        Y += HorizontalHeight + Gap;
+                        Y += AHorizontalHeight + AGap;
                     }
-                    Layout.Width = HorizontalWidth;
-                    Layout.Height = static_cast<double>(Count) * HorizontalHeight + static_cast<double>(Count - 1) * Gap;
-                    Layout.ClusterType = "EllipseColumn_" + std::to_string(Count);
+                    Layout.Width = AHorizontalWidth;
+                    Layout.Height = static_cast<double>(ACount) * AHorizontalHeight + static_cast<double>(ACount - 1) * AGap;
+                    Layout.ClusterType = "EllipseColumn_" + std::to_string(ACount);
                     return Layout;
                 }
 
                 double X = 0.0;
-                double MaxHeight = HorizontalHeight;
-                for (std::size_t I = 0; I < Count; ++I) {
-                    const bool RotateToVertical = AlternateRotation && (I % 2 == 1);
-                    const double SlotWidth = RotateToVertical ? VerticalWidth : HorizontalWidth;
-                    const double SlotHeight = RotateToVertical ? VerticalHeight : HorizontalHeight;
+                double MaxHeight = AHorizontalHeight;
+                for (std::size_t I = 0; I < ACount; ++I){
+                    const bool RotateToVertical = AAlternateRotation && (I % 2 == 1);
+                    const double SlotWidth = RotateToVertical ? AVerticalWidth : AHorizontalWidth;
+                    const double SlotHeight = RotateToVertical ? AVerticalHeight : AHorizontalHeight;
                     Layout.Slots.push_back({ X, 0.0, RotateToVertical });
-                    X += SlotWidth + Gap;
+                    X += SlotWidth + AGap;
                     MaxHeight = std::max(MaxHeight, SlotHeight);
                 }
 
-                for (TetEllipseLayoutSlot& Slot : Layout.Slots) {
-                    const double SlotHeight = Slot.RotateToVertical ? VerticalHeight : HorizontalHeight;
+                for (TetEllipseLayoutSlot& Slot : Layout.Slots){
+                    const double SlotHeight = Slot.RotateToVertical ? AVerticalHeight : AHorizontalHeight;
                     Slot.Y = (MaxHeight - SlotHeight) * 0.5;
                 }
 
-                Layout.Width = X - Gap;
+                Layout.Width = X - AGap;
                 Layout.Height = MaxHeight;
-                Layout.ClusterType = AlternateRotation ? "EllipseAlternatingLine_" : "EllipseLine_";
-                Layout.ClusterType += std::to_string(Count);
+                Layout.ClusterType = AAlternateRotation ? "EllipseAlternatingLine_" : "EllipseLine_";
+                Layout.ClusterType += std::to_string(ACount);
                 return Layout;
             }
 
-            TetEllipseLayout MakeGridLayout(std::size_t Count, int Rows, double HorizontalWidth, double HorizontalHeight, double VerticalWidth, double VerticalHeight, double Gap, bool AlternateRotation)
+            TetEllipseLayout MakeGridLayout(std::size_t ACount, int ARows, double AHorizontalWidth, double AHorizontalHeight, double AVerticalWidth, double AVerticalHeight, double AGap, bool AAlternateRotation)
             {
                 TetEllipseLayout Layout;
-                if (Count < 2 || Rows < 1 || Rows > static_cast<int>(Count)) {
+                if (ACount < 2 || ARows < 1 || ARows > static_cast<int>(ACount)){
                     return Layout;
                 }
 
-                const int Columns = static_cast<int>((Count + static_cast<std::size_t>(Rows) - 1) / static_cast<std::size_t>(Rows));
-                const double CellWidth = AlternateRotation ? std::max(HorizontalWidth, VerticalWidth) : HorizontalWidth;
-                const double CellHeight = AlternateRotation ? std::max(HorizontalHeight, VerticalHeight) : HorizontalHeight;
+                const int Columns = static_cast<int>((ACount + static_cast<std::size_t>(ARows) - 1) / static_cast<std::size_t>(ARows));
+                const double CellWidth = AAlternateRotation ? std::max(AHorizontalWidth, AVerticalWidth) : AHorizontalWidth;
+                const double CellHeight = AAlternateRotation ? std::max(AHorizontalHeight, AVerticalHeight) : AHorizontalHeight;
 
-                Layout.Slots.reserve(Count);
-                for (std::size_t I = 0; I < Count; ++I) {
+                Layout.Slots.reserve(ACount);
+                for (std::size_t I = 0; I < ACount; ++I){
                     const int Row = static_cast<int>(I / static_cast<std::size_t>(Columns));
                     const int Col = static_cast<int>(I % static_cast<std::size_t>(Columns));
-                    const bool RotateToVertical = AlternateRotation && ((Row + Col) % 2 == 1);
-                    const double SlotWidth = RotateToVertical ? VerticalWidth : HorizontalWidth;
-                    const double SlotHeight = RotateToVertical ? VerticalHeight : HorizontalHeight;
+                    const bool RotateToVertical = AAlternateRotation && ((Row + Col) % 2 == 1);
+                    const double SlotWidth = RotateToVertical ? AVerticalWidth : AHorizontalWidth;
+                    const double SlotHeight = RotateToVertical ? AVerticalHeight : AHorizontalHeight;
 
-                    const double X = static_cast<double>(Col) * (CellWidth + Gap) + (CellWidth - SlotWidth) * 0.5;
-                    const double Y = static_cast<double>(Row) * (CellHeight + Gap) + (CellHeight - SlotHeight) * 0.5;
+                    const double X = static_cast<double>(Col) * (CellWidth + AGap) + (CellWidth - SlotWidth) * 0.5;
+                    const double Y = static_cast<double>(Row) * (CellHeight + AGap) + (CellHeight - SlotHeight) * 0.5;
                     Layout.Slots.push_back({ X, Y, RotateToVertical });
                 }
 
-                Layout.Width = static_cast<double>(Columns) * CellWidth + static_cast<double>(Columns - 1) * Gap;
-                Layout.Height = static_cast<double>(Rows) * CellHeight + static_cast<double>(Rows - 1) * Gap;
-                Layout.ClusterType = AlternateRotation ? "EllipseAlternatingGrid_" : "EllipseGrid_";
-                Layout.ClusterType += std::to_string(Count) + "_R" + std::to_string(Rows);
+                Layout.Width = static_cast<double>(Columns) * CellWidth + static_cast<double>(Columns - 1) * AGap;
+                Layout.Height = static_cast<double>(ARows) * CellHeight + static_cast<double>(ARows - 1) * AGap;
+                Layout.ClusterType = AAlternateRotation ? "EllipseAlternatingGrid_" : "EllipseGrid_";
+                Layout.ClusterType += std::to_string(ACount) + "_R" + std::to_string(ARows);
                 return Layout;
             }
 
-            TetEllipseLayout MakeHoneycombLayout(std::size_t Count, int Rows, double Width, double Height, double Gap)
+            TetEllipseLayout MakeHoneycombLayout(std::size_t ACount, int ARows, double AWidth, double AHeight, double AGap)
             {
                 TetEllipseLayout Layout;
-                if (Count < 5 || Rows < 2 || Rows > static_cast<int>(Count)) {
+                if (ACount < 5 || ARows < 2 || ARows > static_cast<int>(ACount)){
                     return Layout;
                 }
 
-                const int BaseCount = static_cast<int>(Count / static_cast<std::size_t>(Rows));
-                int ExtraCount = static_cast<int>(Count % static_cast<std::size_t>(Rows));
-                std::vector<int> RowCounts(static_cast<std::size_t>(Rows), BaseCount);
+                const int BaseCount = static_cast<int>(ACount / static_cast<std::size_t>(ARows));
+                int ExtraCount = static_cast<int>(ACount % static_cast<std::size_t>(ARows));
+                std::vector<int> RowCounts(static_cast<std::size_t>(ARows), BaseCount);
 
-                for (int Row = 0; Row < Rows && ExtraCount > 0; Row += 2) {
+                for (int Row = 0; Row < ARows && ExtraCount > 0; Row += 2){
                     ++RowCounts[static_cast<std::size_t>(Row)];
                     --ExtraCount;
                 }
-                for (int Row = 1; Row < Rows && ExtraCount > 0; Row += 2) {
+                for (int Row = 1; Row < ARows && ExtraCount > 0; Row += 2){
                     ++RowCounts[static_cast<std::size_t>(Row)];
                     --ExtraCount;
                 }
 
-                const double StepX = Width + Gap;
-                const double RowStep = (Height + Gap) * CET_ELLIPSE_HONEYCOMB_ROW_RATIO;
-                Layout.Slots.reserve(Count);
+                const double StepX = AWidth + AGap;
+                const double RowStep = (AHeight + AGap) * CET_ELLIPSE_HONEYCOMB_ROW_RATIO;
+                Layout.Slots.reserve(ACount);
 
                 double MaxX = 0.0;
                 double MaxY = 0.0;
-                for (int Row = 0; Row < Rows; ++Row) {
+                for (int Row = 0; Row < ARows; ++Row){
                     const double ShiftX = (Row % 2 == 0) ? 0.0 : StepX * 0.5;
                     const double Y = static_cast<double>(Row) * RowStep;
-                    for (int Col = 0; Col < RowCounts[static_cast<std::size_t>(Row)]; ++Col) {
+                    for (int Col = 0; Col < RowCounts[static_cast<std::size_t>(Row)]; ++Col){
                         const double X = ShiftX + static_cast<double>(Col) * StepX;
                         Layout.Slots.push_back({ X, Y, false });
-                        MaxX = std::max(MaxX, X + Width);
-                        MaxY = std::max(MaxY, Y + Height);
+                        MaxX = std::max(MaxX, X + AWidth);
+                        MaxY = std::max(MaxY, Y + AHeight);
                     }
                 }
 
-                if (Layout.Slots.size() != Count) {
+                if (Layout.Slots.size() != ACount){
                     return {};
                 }
 
                 Layout.Width = MaxX;
                 Layout.Height = MaxY;
-                Layout.ClusterType = "EllipseHoneycomb_" + std::to_string(Count) + "_R" + std::to_string(Rows);
+                Layout.ClusterType = "EllipseHoneycomb_" + std::to_string(ACount) + "_R" + std::to_string(ARows);
                 return Layout;
             }
         }
@@ -280,18 +278,18 @@ namespace ET {
 
         void CetEllipseClusterBuilder::BuildCandidates(const CetTNestItemVector& AItems, const std::vector<TetShapeFeature>& AFeatures, const std::vector<int>& AIndices, const TetNestOptions& AOptions, std::vector<TetClusterCandidate>& AOut)
         {
-            if (AItems.empty() || AItems.size() != AFeatures.size() || AIndices.size() < 2) {
+            if (AItems.empty() || AItems.size() != AFeatures.size() || AIndices.size() < 2){
                 return;
             }
             const std::vector<std::vector<int>> Groups = GroupEllipseIndices(AIndices, AFeatures);
-            if (Groups.empty()) {
+            if (Groups.empty()){
                 return;
             }
             const std::size_t OldCandidateCount = AOut.size();
-            for (const std::vector<int>& Group : Groups) {
+            for (const std::vector<int>& Group : Groups){
                 _BuildSameSizeClusterCandidates(AItems, AFeatures, Group, AOptions, AOut);
             }
-            std::cout << "[ELLIPSE][BUILD CANDIDATES] GroupCount = " << Groups.size()<< ", NewCandidateCount = " << AOut.size() - OldCandidateCount << std::endl;
+            std::cout << "[ELLIPSE][BUILD CANDIDATES] GroupCount = " << Groups.size() << ", NewCandidateCount = " << AOut.size() - OldCandidateCount << std::endl;
         }
 
         void CetEllipseClusterBuilder::_BuildSameSizeClusterCandidates(const CetTNestItemVector& AItems, const std::vector<TetShapeFeature>& AFeatures, const std::vector<int>& AIndices, const TetNestOptions& AOptions, std::vector<TetClusterCandidate>& AOut)
@@ -300,28 +298,28 @@ namespace ET {
             std::sort(Remaining.begin(), Remaining.end());
             Remaining.erase(std::unique(Remaining.begin(), Remaining.end()), Remaining.end());
 
-            while (Remaining.size() >= 2) {
+            while (Remaining.size() >= 2){
                 std::size_t BestCount = 0;
                 TetClusterCandidate BestCandidate;
 
-                for (std::size_t Count = Remaining.size(); Count >= 2; --Count) {
+                for (std::size_t Count = Remaining.size(); Count >= 2; --Count){
                     std::vector<int> TrialIndices(Remaining.begin(),Remaining.begin() + static_cast<std::vector<int>::difference_type>(Count));
 
                     TetClusterCandidate TrialCandidate;
-                    if (_BuildClusterCandidate(AItems, AFeatures, TrialIndices, AOptions, TrialCandidate)) {
+                    if (_BuildClusterCandidate(AItems, AFeatures, TrialIndices, AOptions, TrialCandidate)){
                         BestCount = Count;
                         BestCandidate = std::move(TrialCandidate);
                         break;
                     }
                 }
 
-                if (BestCount < 2) {
-                    std::cout << "[ELLIPSE][REJECT] No board-fitting cluster can be built. RemainingCount = "<< Remaining.size() << std::endl;
+                if (BestCount < 2){
+                    std::cout << "[ELLIPSE][REJECT] No board-fitting cluster can be built. RemainingCount = " << Remaining.size() << std::endl;
                     return;
                 }
 
                 AOut.push_back(std::move(BestCandidate));
-                std::cout << "[ELLIPSE][CANDIDATE] Size = " << BestCount<< ", Type = " << AOut.back().ClusterType<< ", Score = " << AOut.back().Score << std::endl;
+                std::cout << "[ELLIPSE][CANDIDATE] Size = " << BestCount << ", Type = " << AOut.back().ClusterType << ", Score = " << AOut.back().Score << std::endl;
 
                 Remaining.erase(Remaining.begin(),Remaining.begin() + static_cast<std::vector<int>::difference_type>(BestCount));
             }
@@ -331,30 +329,30 @@ namespace ET {
         {
             AOutCandidate = TetClusterCandidate{};
 
-            if (AItems.size() != AFeatures.size() || AIndices.size() < 2) {
+            if (AItems.size() != AFeatures.size() || AIndices.size() < 2){
                 return false;
             }
 
             std::vector<int> Indices = AIndices;
             std::sort(Indices.begin(), Indices.end());
             Indices.erase(std::unique(Indices.begin(), Indices.end()), Indices.end());
-            if (Indices.size() < 2) {
+            if (Indices.size() < 2){
                 return false;
             }
 
-            for (int Index : Indices) {
-                if (Index < 0 || Index >= static_cast<int>(AFeatures.size())) {
+            for (int Index : Indices){
+                if (Index < 0 || Index >= static_cast<int>(AFeatures.size())){
                     return false;
                 }
             }
 
             const TetShapeFeature& BaseFeature = AFeatures[Indices.front()];
-            if (!IsValidEllipseFeature(BaseFeature)) {
+            if (!IsValidEllipseFeature(BaseFeature)){
                 return false;
             }
 
-            for (int Index : Indices) {
-                if (!AreSameSizeEllipses(BaseFeature, AFeatures[Index])) {
+            for (int Index : Indices){
+                if (!AreSameSizeEllipses(BaseFeature, AFeatures[Index])){
                     return false;
                 }
             }
@@ -365,7 +363,7 @@ namespace ET {
             double HorizontalMinY = 0.0;
             double HorizontalWidth = 0.0;
             double HorizontalHeight = 0.0;
-            if (!GetOrientedBounds(AItems[Indices.front()], BaseFeature, false, AOptions, Geometry, HorizontalRotation, HorizontalMinX, HorizontalMinY, HorizontalWidth, HorizontalHeight)) {
+            if (!GetOrientedBounds(AItems[Indices.front()], BaseFeature, false, AOptions, Geometry, HorizontalRotation, HorizontalMinX, HorizontalMinY, HorizontalWidth, HorizontalHeight)){
                 return false;
             }
 
@@ -374,7 +372,7 @@ namespace ET {
             double VerticalMinY = 0.0;
             double VerticalWidth = 0.0;
             double VerticalHeight = 0.0;
-            if (!GetOrientedBounds(AItems[Indices.front()], BaseFeature, true, AOptions, Geometry, VerticalRotation, VerticalMinX, VerticalMinY, VerticalWidth, VerticalHeight)) {
+            if (!GetOrientedBounds(AItems[Indices.front()], BaseFeature, true, AOptions, Geometry, VerticalRotation, VerticalMinX, VerticalMinY, VerticalWidth, VerticalHeight)){
                 return false;
             }
 
@@ -387,7 +385,7 @@ namespace ET {
             Layouts.push_back(MakeLineLayout(Indices.size(), HorizontalWidth, HorizontalHeight, VerticalWidth, VerticalHeight, Gap, true, false));
             Layouts.push_back(MakeLineLayout(Indices.size(), HorizontalWidth, HorizontalHeight, VerticalWidth, VerticalHeight, Gap, false, true));
 
-            for (int Rows = 2; Rows <= static_cast<int>(Indices.size()); ++Rows) {
+            for (int Rows = 2; Rows <= static_cast<int>(Indices.size()); ++Rows){
                 Layouts.push_back(MakeGridLayout(Indices.size(), Rows, HorizontalWidth, HorizontalHeight, VerticalWidth, VerticalHeight, Gap, false));
                 Layouts.push_back(MakeGridLayout(Indices.size(), Rows, HorizontalWidth, HorizontalHeight, VerticalWidth, VerticalHeight, Gap, true));
                 Layouts.push_back(MakeHoneycombLayout(Indices.size(), Rows, HorizontalWidth, HorizontalHeight, Gap));
@@ -396,12 +394,12 @@ namespace ET {
             bool HasBest = false;
             TetClusterCandidate BestCandidate;
 
-            for (const TetEllipseLayout& Layout : Layouts) {
-                if (Layout.Slots.size() != Indices.size() || Layout.Width <= 0.0 || Layout.Height <= 0.0) {
+            for (const TetEllipseLayout& Layout : Layouts){
+                if (Layout.Slots.size() != Indices.size() || Layout.Width <= 0.0 || Layout.Height <= 0.0){
                     continue;
                 }
 
-                if (!FitsBin(Layout.Width, Layout.Height, AOptions)) {
+                if (!FitsBin(Layout.Width, Layout.Height, AOptions)){
                     continue;
                 }
 
@@ -413,7 +411,7 @@ namespace ET {
                 Candidate.Transforms.reserve(Indices.size());
 
                 bool TransformValid = true;
-                for (std::size_t I = 0; I < Indices.size(); ++I) {
+                for (std::size_t I = 0; I < Indices.size(); ++I){
                     const int Index = Indices[I];
                     const TetShapeFeature& Feature = AFeatures[Index];
                     const TetEllipseLayoutSlot& Slot = Layout.Slots[I];
@@ -423,7 +421,7 @@ namespace ET {
                     double MinY = 0.0;
                     double Width = 0.0;
                     double Height = 0.0;
-                    if (!GetOrientedBounds(AItems[Index], Feature, Slot.RotateToVertical, AOptions, Geometry, Rotation, MinX, MinY, Width, Height)) {
+                    if (!GetOrientedBounds(AItems[Index], Feature, Slot.RotateToVertical, AOptions, Geometry, Rotation, MinX, MinY, Width, Height)){
                         TransformValid = false;
                         break;
                     }
@@ -436,22 +434,22 @@ namespace ET {
                     Candidate.Transforms.push_back(Transform);
                 }
 
-                if (!TransformValid) {
+                if (!TransformValid){
                     continue;
                 }
 
-                if (!Geometry.FinalizeCandidate(AItems, AOptions, Candidate)) {
+                if (!Geometry.FinalizeCandidate(AItems, AOptions, Candidate)){
                     continue;
                 }
 
                 Candidate.Score = _CalculateScore(Candidate, AOptions);
-                if (!HasBest || Candidate.Score > BestCandidate.Score) {
+                if (!HasBest || Candidate.Score > BestCandidate.Score){
                     HasBest = true;
                     BestCandidate = std::move(Candidate);
                 }
             }
 
-            if (!HasBest) {
+            if (!HasBest){
                 return false;
             }
 
@@ -461,7 +459,7 @@ namespace ET {
 
         double CetEllipseClusterBuilder::_CalculateScore(const TetClusterCandidate& ACandidate, const TetNestOptions& AOptions)
         {
-            if (!ACandidate.Valid || ACandidate.OriginalIndices.empty() || ACandidate.ClusterWidth <= 0.0 || ACandidate.ClusterHeight <= 0.0 || ACandidate.ProxyArea <= 0.0) {
+            if (!ACandidate.Valid || ACandidate.OriginalIndices.empty() || ACandidate.ClusterWidth <= 0.0 || ACandidate.ClusterHeight <= 0.0 || ACandidate.ProxyArea <= 0.0){
                 return -std::numeric_limits<double>::infinity();
             }
 
@@ -473,19 +471,19 @@ namespace ET {
             const double CompactRatio = LongSide > 0.0 ? ShortSide / LongSide : 0.0;
             const double CompactScore = CompactRatio * 20.0;
             double LayoutBonus = 0.0;
-            if (ACandidate.ClusterType.find("Honeycomb") != std::string::npos) {
+            if (ACandidate.ClusterType.find("Honeycomb") != std::string::npos){
                 LayoutBonus = 145.0;
             }
-            else if (ACandidate.ClusterType.find("AlternatingGrid") != std::string::npos) {
+            else if (ACandidate.ClusterType.find("AlternatingGrid") != std::string::npos){
                 LayoutBonus = 110.0;
             }
-            else if (ACandidate.ClusterType.find("Grid") != std::string::npos) {
+            else if (ACandidate.ClusterType.find("Grid") != std::string::npos){
                 LayoutBonus = 85.0;
             }
-            else if (ACandidate.ClusterType.find("AlternatingLine") != std::string::npos) {
+            else if (ACandidate.ClusterType.find("AlternatingLine") != std::string::npos){
                 LayoutBonus = 45.0;
             }
-            else if (ACandidate.ClusterType.find("Column") != std::string::npos) {
+            else if (ACandidate.ClusterType.find("Column") != std::string::npos){
                 LayoutBonus = ACandidate.OriginalIndices.size() >= 4 ? -140.0 : -60.0;
             }
 

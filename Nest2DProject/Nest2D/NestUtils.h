@@ -10,7 +10,7 @@ namespace NestUtils {
     inline long double NestScale()
     {
         long double scale = static_cast<long double>(libnest2d::mm());
-        if (scale == 0.0L || !std::isfinite(static_cast<double>(scale))) {
+        if (scale == 0.0L || !std::isfinite(static_cast<double>(scale))){
             throw std::runtime_error("Nest coordinate scale is invalid.");
         }
         return scale;
@@ -18,7 +18,7 @@ namespace NestUtils {
 
     inline auto ToNestCoord(double AValue) -> decltype(libnest2d::mm(0.0))
     {
-        if (!std::isfinite(AValue)) {
+        if (!std::isfinite(AValue)){
             throw std::invalid_argument("Coordinate value is not finite.");
         }
 
@@ -28,8 +28,7 @@ namespace NestUtils {
         // The Clipper backend defines 1 mm as libnest2d::mm() internal integer units.
         long double scaled = static_cast<long double>(AValue) * NestScale();
 
-        if (scaled > static_cast<long double>(std::numeric_limits<TNestCoord>::max()) ||
-            scaled < static_cast<long double>(std::numeric_limits<TNestCoord>::lowest())) {
+        if (scaled > static_cast<long double>(std::numeric_limits<TNestCoord>::max()) ||scaled < static_cast<long double>(std::numeric_limits<TNestCoord>::lowest())){
             throw std::overflow_error("Coordinate overflow after scaling.");
         }
 

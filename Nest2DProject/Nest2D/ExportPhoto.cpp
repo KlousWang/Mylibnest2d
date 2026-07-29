@@ -20,13 +20,13 @@ using namespace ClipperLib;
 namespace {
     std::string MakeUtilizationSvgText(const TetBoardUsageResult& AUsage, double ASvgWidth, double ASvgHeight)
     {
-        if (AUsage.BoardArea <= 0.0 || ASvgWidth <= 0.0 || ASvgHeight <= 0.0) {
+        if (AUsage.BoardArea <= 0.0 || ASvgWidth <= 0.0 || ASvgHeight <= 0.0){
             return "";
         }
 
         double Percent = std::max(0.0, AUsage.UsagePercent);
 
-        if (!std::isfinite(Percent)) {
+        if (!std::isfinite(Percent)){
             return "";
         }
 
@@ -58,19 +58,10 @@ namespace ET {
 		}
 		int CetExportPhoto::ExportSvg(const std::vector<TetNestPolygon>& AItems, const TetNestOptions& AOptions, int AUsedBins) 
 		{
-            std::cout << "[SVG] Board.Enabled = "
-                << AOptions.Board.Enabled
-                << ", Board.Vertices.size = "
-                << AOptions.Board.Vertices.size()
-                << std::endl;
+            std::cout << "[SVG] Board.Enabled = " << AOptions.Board.Enabled << ", Board.Vertices.size = " << AOptions.Board.Vertices.size() << std::endl;
 
-            for (size_t i = 0; i < AOptions.Board.Vertices.size(); ++i) {
-                std::cout << "[SVG] Board Pt " << i
-                    << " = "
-                    << AOptions.Board.Vertices[i].X
-                    << ", "
-                    << AOptions.Board.Vertices[i].Y
-                    << std::endl;
+            for (size_t i = 0; i < AOptions.Board.Vertices.size(); ++i){
+                std::cout << "[SVG] Board Pt " << i << " = " << AOptions.Board.Vertices[i].X << ", " << AOptions.Board.Vertices[i].Y << std::endl;
             }
 			std::cout << "[DLL]this is export svg1" << std::endl;
 			if (AItems.empty() || AUsedBins <= 0) return NEST2D_ERR_EXPORT_EMPTY_ITEMS;
@@ -82,68 +73,58 @@ namespace ET {
             CetAreaUsageCalculator* UsageCalculator = Nest2DUtils->Nest2DAreaUsage != nullptr ? Nest2DUtils->Nest2DAreaUsage : &LocalUsageCalculator;
             const std::vector<TetBoardUsageResult> BoardUsages = UsageCalculator->CalculateBoardUsages(AItems, AOptions, AUsedBins);
 
-			using SvgWriter = svg::SVGWriter<PolygonImpl>;
+			using SvgWriter = svg::SVGWriter<CetPolygonImpl>;
 			SvgWriter::Config conf;
 			conf.mm_in_coord_units = mm();
 
-			// 处理文件后缀
+			
 			std::string basePath = AOptions.SvgPath;
 			size_t extPos = basePath.find(".svg");
-			if (extPos != std::string::npos) {
+			if (extPos != std::string::npos){
 				basePath = basePath.substr(0, extPos);
 			}
 
-			// 遍历每一块使用到的板材，单独生成一个 SVG (解决堆叠和单文件输出问题)
-            for (int currentBin = 0; currentBin < AUsedBins; ++currentBin) {
+			
+            for (int currentBin = 0; currentBin < AUsedBins; ++currentBin){
 
                 SvgWriter svgw(conf);
                 svgw.setSize(binSize);
 
                 std::vector<libnest2d::Item> currentBinItems;
 
-                for (const auto& item : AItems) {
-                    if (item.Out_bin == currentBin) {
+                for (const auto& item : AItems){
+                    if (item.Out_bin == currentBin){
                         Path outerPoints;
                         outerPoints.reserve(item.Vertices.size());
 
-                        for (const auto& pt : item.Vertices) {
-                            outerPoints.push_back(
-                                Point(
-                                    NestUtils::ToNestCoord(pt.X),
-                                    NestUtils::ToNestCoord(pt.Y)
-                                )
-                            );
+                        for (const auto& pt : item.Vertices){
+                            outerPoints.push_back(Point(NestUtils::ToNestCoord(pt.X),NestUtils::ToNestCoord(pt.Y)));
                         }
 
-                        if (outerPoints.size() < 3) {
+                        if (outerPoints.size() < 3){
                             continue;
                         }
 
-                        if (ClipperLib::Orientation(outerPoints) == false) {
+                        if (ClipperLib::Orientation(outerPoints) == false){
                             std::reverse(outerPoints.begin(), outerPoints.end());
                         }
                         Paths holes;
                         holes.reserve(item.Holes.size());
-                        for (const auto& holePts : item.Holes) {
-                            if (holePts.size() < 3) {
+                        for (const auto& holePts : item.Holes){
+                            if (holePts.size() < 3){
                                 continue;
                             }
                             Path innerPoints;
                             innerPoints.reserve(holePts.size());
-                            for (const auto& pt : holePts) {
-                                innerPoints.push_back(
-                                    Point(
-                                        NestUtils::ToNestCoord(pt.X),
-                                        NestUtils::ToNestCoord(pt.Y)
-                                    )
-                                );
+                            for (const auto& pt : holePts){
+                                innerPoints.push_back(Point(NestUtils::ToNestCoord(pt.X),NestUtils::ToNestCoord(pt.Y)));
                             }
-                            if (ClipperLib::Orientation(innerPoints) == true) {
+                            if (ClipperLib::Orientation(innerPoints) == true){
                                 std::reverse(innerPoints.begin(), innerPoints.end());
                             }
                             holes.push_back(std::move(innerPoints));
                         }
-                        PolygonImpl poly(std::move(outerPoints), std::move(holes));
+                        CetPolygonImpl poly(std::move(outerPoints), std::move(holes));
                         libnest2d::Item svgItem(poly);
                         svgItem.rotation(item.Out_angle);
                         svgItem.translation(Point(NestUtils::ToNestCoord(item.Out_x),NestUtils::ToNestCoord(item.Out_y)));
@@ -151,13 +132,13 @@ namespace ET {
                         currentBinItems.push_back(std::move(svgItem));
                     }
                 }
-                // 关键：空板材不导出，防止 SVGWriter 内部访问空 vector
-                if (currentBinItems.empty()) {
+                
+                if (currentBinItems.empty()){
                     std::cout << "[WARN] Skip empty bin: " << currentBin << std::endl;
                     continue;
                 }
-                libnest2d::_PackGroup<libnest2d::PolygonImpl> pgrp(1);
-                for (auto& svgItem : currentBinItems) {
+                CetPackGround pgrp(1);
+                for (auto& svgItem : currentBinItems){
                     pgrp[0].emplace_back(svgItem);
                 }
                 svgw.writePackGroup(pgrp);
@@ -167,22 +148,18 @@ namespace ET {
                 svgw.save(finalPath);
                 std::string realSvgPath = finalPath;
                 std::ifstream testFile(realSvgPath.c_str(), std::ios::in | std::ios::binary);
-                if (!testFile.is_open()) {
+                if (!testFile.is_open()){
                     realSvgPath = finalPath + ".svg";
                 }
                 else {testFile.close();}
                 std::cout << "[SVG] realSvgPath = " << realSvgPath << std::endl;
                 std::string ExtraSvg;
-                if (AOptions.Board.Enabled && AOptions.Board.Vertices.size() >= 3) {
+                if (AOptions.Board.Enabled && AOptions.Board.Vertices.size() >= 3){
                     std::string boardPath = Nest2DUtils->Nest2DSvgUtils->MakeBoardSvgPath(AOptions.Board,AOptions.BinHeight);
                     ExtraSvg += boardPath;
                 }
-                if (currentBin >= 0 && static_cast<std::size_t>(currentBin) < BoardUsages.size()) {
-                    ExtraSvg += MakeUtilizationSvgText(
-                        BoardUsages[static_cast<std::size_t>(currentBin)],
-                        AOptions.BinWidth,
-                        AOptions.BinHeight
-                    );
+                if (currentBin >= 0 && static_cast<std::size_t>(currentBin) < BoardUsages.size()){
+                    ExtraSvg += MakeUtilizationSvgText(BoardUsages[static_cast<std::size_t>(currentBin)],AOptions.BinWidth,AOptions.BinHeight);
                 }
 
                 Nest2DUtils->Nest2DSvgUtils->InsertTextBeforeSvgEnd(realSvgPath, ExtraSvg);
@@ -200,7 +177,7 @@ namespace ET {
 			const auto binHeight = NestUtils::ToNestCoord(AOptions.BinHeight);
 
 			Box binSize(binWidth, binHeight);
-			using SvgWriter = svg::SVGWriter<PolygonImpl>;
+			using SvgWriter = svg::SVGWriter<CetPolygonImpl>;
 
 			SvgWriter::Config conf;
 			conf.mm_in_coord_units = mm();
@@ -208,16 +185,16 @@ namespace ET {
 			SvgWriter svgw(conf);
 			svgw.setSize(binSize);
 
-			libnest2d::_PackGroup<libnest2d::PolygonImpl> pgrp(AUsedBins);
+			CetPackGround pgrp(AUsedBins);
 
-			for (auto& item : ANestItems) {
+			for (auto& item : ANestItems){
 				int binId = static_cast<int>(item.binId());
-				if (binId >= 0 && binId < AUsedBins) {
+				if (binId >= 0 && binId < AUsedBins){
 					pgrp[static_cast<size_t>(binId)].emplace_back(item);
 				}
 			}
 			std::string basePath = AOptions.SvgPath;
-			if (basePath.size() >= 4 && basePath.substr(basePath.size() - 4) == ".svg") {
+			if (basePath.size() >= 4 && basePath.substr(basePath.size() - 4) == ".svg"){
 				basePath = basePath.substr(0, basePath.size() - 4);
 			}
 
@@ -226,13 +203,13 @@ namespace ET {
 
 			return 0;
 		}
-        int CetExportPhoto::ExportSvgPackGroup(const CetPackGround& PackGroup,const TetNestOptions& AOptions)
+        int CetExportPhoto::ExportSvgPackGroup(const CetPackGround& APackGroup,const TetNestOptions& AOptions)
         {
-            if (PackGroup.empty()) {
+            if (APackGroup.empty()){
                 return NEST2D_ERR_EXPORT_EMPTY_ITEMS;
             }
 
-            if (AOptions.SvgPath.empty()) {
+            if (AOptions.SvgPath.empty()){
                 return NEST2D_ERR_EXPORT_NO_PATH;
             }
 
@@ -241,31 +218,28 @@ namespace ET {
 
             Box binSize(binWidth, binHeight);
 
-            using SvgWriter = svg::SVGWriter<PolygonImpl>;
+            using SvgWriter = svg::SVGWriter<CetPolygonImpl>;
 
             SvgWriter::Config conf;
             conf.mm_in_coord_units = mm();
 
             std::string basePath = AOptions.SvgPath;
-            if (basePath.size() >= 4 && basePath.substr(basePath.size() - 4) == ".svg") {
+            if (basePath.size() >= 4 && basePath.substr(basePath.size() - 4) == ".svg"){
                 basePath = basePath.substr(0, basePath.size() - 4);
             }
 
-            for (std::size_t binIndex = 0; binIndex < PackGroup.size(); ++binIndex)
-            {
-                if (PackGroup[binIndex].empty()) {
-                    std::cout << "[SVG][Filler] Skip empty bin: "
-                        << binIndex << std::endl;
+            for (std::size_t binIndex = 0; binIndex < APackGroup.size(); ++binIndex){
+                if (APackGroup[binIndex].empty()){
+                    std::cout << "[SVG][Filler] Skip empty bin: " << binIndex << std::endl;
                     continue;
                 }
 
                 SvgWriter svgw(conf);
                 svgw.setSize(binSize);
 
-                libnest2d::_PackGroup<libnest2d::PolygonImpl> singleBinGroup(1);
+                CetPackGround singleBinGroup(1);
 
-                for (const auto& itemRef : PackGroup[binIndex])
-                {
+                for (const auto& itemRef : APackGroup[binIndex]){
                     singleBinGroup[0].emplace_back(itemRef);
                 }
 
@@ -273,7 +247,7 @@ namespace ET {
 
                 std::string finalPath;
 
-                if (PackGroup.size() > 1) {
+                if (APackGroup.size() > 1){
                     finalPath = basePath + "_" + std::to_string(binIndex);
                 }
                 else {
@@ -282,12 +256,7 @@ namespace ET {
 
                 svgw.save(finalPath);
 
-                std::cout << "[SVG][Filler] saved bin "
-                    << binIndex
-                    << " to "
-                    << finalPath
-                    << ".svg"
-                    << std::endl;
+                std::cout << "[SVG][Filler] saved bin " << binIndex << " to " << finalPath << ".svg" << std::endl;
             }
 
             return Nest2D_Success;

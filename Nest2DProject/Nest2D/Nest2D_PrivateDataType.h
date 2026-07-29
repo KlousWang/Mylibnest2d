@@ -7,12 +7,12 @@
 #include <libnest2d/libnest2d.hpp>
 
 
-// 将别名定义在这里，让整个模块内部都能看到
+
 using CetTNestItemVector = std::vector<libnest2d::Item>;
 using CetNestItem = CetTNestItemVector::value_type;
-using CetPackGround = libnest2d::_PackGroup<libnest2d::PolygonImpl>;
 using CetPath = ClipperLib::Path;
 using CetPolygonImpl = libnest2d::PolygonImpl;
+using CetPackGround = libnest2d::_PackGroup<CetPolygonImpl>;
 using CetInpoint = ClipperLib::IntPoint;
 
 constexpr double CET_CLUSTER_PI = 3.14159265358979323846;
@@ -116,7 +116,7 @@ struct TetAutoPairItemCache
     bool Worth = false;
 };
 
-//cluster使用
+
 enum class MetShapeType
 {
     Unknown = 0,
@@ -135,12 +135,12 @@ struct TetShapeBucketKey {
     MetShapeType Type = MetShapeType::Unknown;
     long long ShortSideBucket = 0;
     long long LongSideBucket = 0;
-    bool operator<(const TetShapeBucketKey& Other) const {
+    bool operator<(const TetShapeBucketKey& AOther) const {
         const int LeftType = static_cast<int>(Type);
-        const int RightType = static_cast<int>(Other.Type);
+        const int RightType = static_cast<int>(AOther.Type);
         if (LeftType != RightType) return LeftType < RightType;
-        if (ShortSideBucket != Other.ShortSideBucket) return ShortSideBucket < Other.ShortSideBucket;
-        return LongSideBucket < Other.LongSideBucket;
+        if (ShortSideBucket != AOther.ShortSideBucket) return ShortSideBucket < AOther.ShortSideBucket;
+        return LongSideBucket < AOther.LongSideBucket;
     }
 };
 struct TetArcCandidateLocal
@@ -250,7 +250,7 @@ enum class MetArcType
     GeneralArcLike
 };
 
-// ---------- 弧形组合与识别 ----------
+
 enum class MetArcSweepBucket
 {
     Unknown = 0,
@@ -325,8 +325,8 @@ struct TetShapeFeature
     int OriginalIndex = -1;
     MetShapeType ShapeType = MetShapeType::Unknown;
 
-    // 归一化后的原始轮廓。
-    // 后面的三角形、旋转矩形和弧形 Builder 都会使用。
+    
+    
     CetPath NormalizedContour;
 
     bool HasHoles = false;
@@ -350,7 +350,7 @@ struct TetShapeFeature
     int VertexCount = 0;
     bool IsConvex = false;
 
-    // ---------- 旋转矩形 ----------
+    
     bool IsRotatedRectangle = false;
 
     double OrientedWidth = 0.0;
@@ -359,28 +359,28 @@ struct TetShapeFeature
     double OrientedBoxArea = 0.0;
     double OrientedFillRatio = 0.0;
 
-    // ---------- 三角形 ----------
+    
     MetTriangleSideType TriangleSideType =
         MetTriangleSideType::Unknown;
 
     MetTriangleAngleType TriangleAngleType =
         MetTriangleAngleType::Unknown;
 
-    // 由小到大排序后的三条边
+    
     std::array<double, 3> TriangleSides{};
 
-    // 对应三个顶点的角度，单位弧度
+    
     std::array<double, 3> TriangleAngles{};
 
     int LongestSideIndex = -1;
 
-    // ---------- 椭圆 ----------
+    
     double EllipseMajorAxis = 0.0;
     double EllipseMinorAxis = 0.0;
     double EllipseAngle = 0.0;
     double EllipseFitError = 1.0;
 
-    // ---------- 弧形 ----------
+    
     MetArcType ArcType = MetArcType::None;
 
     ClipperLib::IntPoint ArcChordStart{};
@@ -393,7 +393,7 @@ struct TetShapeFeature
     double ArcSweepAngle = 0.0;
     double ArcFitError = 1.0;
 
-    // 弧线位于有向弦的哪一侧
+    
     int ArcBulgeSign = 0;
 
     std::size_t ShapeHash = 0;

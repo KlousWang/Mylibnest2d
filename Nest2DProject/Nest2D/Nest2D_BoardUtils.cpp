@@ -13,14 +13,14 @@ TetBoardBounds ET::NEST2DMANAGERLIB::CetNest2DBoardUtils:: CalcBoardBoundsLocal(
 {
 	TetBoardBounds B;
 
-	if (!ABoard.Enabled || ABoard.Vertices.size() < 3) {
+	if (!ABoard.Enabled || ABoard.Vertices.size() < 3){
 		return B;
 	}
 
 	B.MinX = B.MaxX = ABoard.Vertices[0].X;
 	B.MinY = B.MaxY = ABoard.Vertices[0].Y;
 
-	for (const auto& P : ABoard.Vertices) {
+	for (const auto& P : ABoard.Vertices){
 		B.MinX = std::min(B.MinX, P.X);
 		B.MaxX = std::max(B.MaxX, P.X);
 		B.MinY = std::min(B.MinY, P.Y);
@@ -38,19 +38,19 @@ CetPath ET::NEST2DMANAGERLIB::CetNest2DBoardUtils::BuildPathFromPoints(const std
 	CetPath Result;
 	Result.reserve(APoints.size());
 
-	for (const auto& P : APoints) {
+	for (const auto& P : APoints){
 		Result.push_back(Point(NestUtils::ToNestCoord(P.X - AOffsetX),NestUtils::ToNestCoord(P.Y - AOffsetY)));
 	}
 
-	if (Result.size() >= 3) {
+	if (Result.size() >= 3){
 		bool IsCCW = ClipperLib::Orientation(Result);
-		// 外轮廓保持 CCW
-		if (AWantOuter && !IsCCW) {
+		
+		if (AWantOuter && !IsCCW){
 			std::reverse(Result.begin(), Result.end());
 		}
 
-		// 洞保持 CW
-		if (!AWantOuter && IsCCW) {
+		
+		if (!AWantOuter && IsCCW){
 			std::reverse(Result.begin(), Result.end());
 		}
 	}
@@ -59,32 +59,27 @@ CetPath ET::NEST2DMANAGERLIB::CetNest2DBoardUtils::BuildPathFromPoints(const std
 }
 CetPolygonImpl ET::NEST2DMANAGERLIB::CetNest2DBoardUtils::BuildBinPolygonFromOptions(const TetNestOptions& AOptions, double& AOutBinWidth, double& AOutBinHeight)
 {
-	if (AOptions.Board.Enabled && AOptions.Board.Vertices.size() >= 3) {
+	if (AOptions.Board.Enabled && AOptions.Board.Vertices.size() >= 3){
 		TetBoardBounds Bounds = CalcBoardBoundsLocal(AOptions.Board);
 
-		if (!Bounds.Valid) {
+		if (!Bounds.Valid){
 			throw std::runtime_error("Invalid custom board bounds.");
 		}
 		AOutBinWidth = Bounds.Width;
 		AOutBinHeight = Bounds.Height;
-		Path Outer = BuildPathFromPoints(
-			AOptions.Board.Vertices,
-			Bounds.MinX,
-			Bounds.MinY,
-			true
-		);
+		Path Outer = BuildPathFromPoints(AOptions.Board.Vertices,Bounds.MinX,Bounds.MinY,true);
 		Paths Holes;
 		Holes.reserve(AOptions.Board.Holes.size());
 
-		for (const auto& Hole : AOptions.Board.Holes) {
-			if (Hole.size() < 3) {
+		for (const auto& Hole : AOptions.Board.Holes){
+			if (Hole.size() < 3){
 				continue;
 			}
 
 			Holes.push_back(BuildPathFromPoints(Hole, Bounds.MinX, Bounds.MinY, false));
 		}
 
-		return PolygonImpl(std::move(Outer), std::move(Holes));
+		return CetPolygonImpl(std::move(Outer), std::move(Holes));
 	}
 
 	AOutBinWidth = AOptions.BinWidth;
@@ -100,7 +95,7 @@ CetPolygonImpl ET::NEST2DMANAGERLIB::CetNest2DBoardUtils::BuildBinPolygonFromOpt
 
 	Outer.push_back(Point(NestUtils::ToNestCoord(0.0), NestUtils::ToNestCoord(AOptions.BinHeight)));
 
-	if (ClipperLib::Orientation(Outer) == false) {
+	if (ClipperLib::Orientation(Outer) == false){
 		std::reverse(Outer.begin(), Outer.end());
 	}
 
@@ -122,8 +117,8 @@ CetPolygonImpl ET::NEST2DMANAGERLIB::CetNest2DBoardUtils::BuildRectangleBinPolyg
 	Contour.push_back(ClipperLib::IntPoint(Width, Height));
 	Contour.push_back(ClipperLib::IntPoint(0, Height));
 
-	// 保持外轮廓方向符合 Clipper 要求
-	if (!ClipperLib::Orientation(Contour)) {
+	
+	if (!ClipperLib::Orientation(Contour)){
 		std::reverse(Contour.begin(), Contour.end());
 	}
 

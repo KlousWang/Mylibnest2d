@@ -26,8 +26,8 @@ namespace ET {
 			CetStrategyManager();
 			~CetStrategyManager();
 		public:
-			TetTNestEvalResult EvaluateNestResult(const CetTNestItemVector& Items, std::size_t Layers);
-			bool IsBetterNestResult(const TetTNestEvalResult& A, const TetTNestEvalResult& B);
+			TetTNestEvalResult EvaluateNestResult(const CetTNestItemVector& AItems, std::size_t ALayers);
+			bool IsBetterNestResult(const TetTNestEvalResult& A, const TetTNestEvalResult& AB);
 			void ApplyNestPriorityStrategy(CetTNestItemVector& AItems, MetENestOrderStrategy AStrategy);
 			void PrintBinCount(const CetTNestItemVector& AItems);
 			TetTNestEvalResult EvaluatePackedResultWithMeta(const CetTNestItemVector& AItems, const std::vector<TetMetaItem>& AMetaItems, const CetTNestItemVector& AOriginalItems, std::size_t ALayers);

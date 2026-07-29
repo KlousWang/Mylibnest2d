@@ -9,15 +9,15 @@ namespace ET {
 
         int CetNest2DInvokeFunctor::_EnableFunctor()
         {
-            // 1. 必须先调用基类的初始化 [cite: 150]
+            
             CetCoreInvokeFunctor::_EnableFunctor();
             //WWFunct1.Reload(_);
             Nest2DExportPhoto = (decltype(Nest2DExportPhoto))m_LibConfig->GetLocalCoreObjIns("l_ExportPhoto");
             //if (!m_ExportPhoto)return -1;
             NestDataMapperIns = (decltype(NestDataMapperIns))m_LibConfig->GetLocalCoreObjIns("l_NestDataMapper");
            /* if (!m_NestDataMapper)return -1;*/
-            // 2. 通过框架基类自带的 m_LibConfig，根据变量名抓取到底层的 Object 实例 [cite: 128, 149]
-            // 注意：这里的 "g_Nest2DEngine" 是你在 JSON 中配置的 GlobalObjIns 变量名
+            
+            
 			Nest2DEngineIns = (decltype(Nest2DEngineIns))m_LibConfig->GetLocalCoreObjIns("l_Nest2DEngine");
             m_Engine =m_LibConfig->CreateCoreObj("Nest2D_Engine");
            // if (!Nest2DEngineIns) return -1;

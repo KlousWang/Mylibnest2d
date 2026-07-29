@@ -26,13 +26,13 @@ namespace ET {
 		public:
 			
 			CetPolygonBoardRepairer();
-			CetPolygonBoardRepairer(CetTNestItemVector& ANestItems,const TetNestOptions& AOptions,const libnest2d::PolygonImpl& ABinPoly,double ABoardBinWidth,double ABoardBinHeight);
+			CetPolygonBoardRepairer(CetTNestItemVector& ANestItems,const TetNestOptions& AOptions,const CetPolygonImpl& ABinPoly,double ABoardBinWidth,double ABoardBinHeight);
 			~CetPolygonBoardRepairer();
 		public:
-			void SetContext(CetTNestItemVector& ANestItems,const TetNestOptions& AOptions,const libnest2d::PolygonImpl& ABinPoly,double ABoardBinWidth,double ABoardBinHeight);
+			void SetContext(CetTNestItemVector& ANestItems,const TetNestOptions& AOptions,const CetPolygonImpl& ABinPoly,double ABoardBinWidth,double ABoardBinHeight);
 			void Repair(std::size_t& ALayers);
 			
-			//CetPolygonBoardRepairer(CetTNestItemVector& ANestItems,const TetNestOptions& AOptions,const libnest2d::PolygonImpl& ABinPoly,double ABoardBinWidth,double ABoardBinHeight);
+			//CetPolygonBoardRepairer(CetTNestItemVector& ANestItems,const TetNestOptions& AOptions,const CetPolygonImpl& ABinPoly,double ABoardBinWidth,double ABoardBinHeight);
 		protected:
 			struct TetPlacementCandidate;			
 
@@ -50,7 +50,7 @@ namespace ET {
 			bool _IsCurrentPlacementValid(std::size_t AItemIndex);
 
 			void _FixInvalidItems(std::size_t& ALayers);
-			//МоІ№
+			
 			void _FillHoles(std::size_t& ALayers);
 			bool _FindBestCandidateForTargetBin(int ATargetBin,TetHoleFillCandidate& ABestCandidate);
 			bool _TryFindBestPlacementInBin(std::size_t AItemIndex,int ATargetBin,TetHoleFillCandidate& ABestCandidate);
@@ -59,7 +59,7 @@ namespace ET {
 		protected:
 			CetTNestItemVector* _Items = nullptr;
 			const TetNestOptions* _Options = nullptr;
-			const libnest2d::PolygonImpl* _BinPoly = nullptr;
+			const CetPolygonImpl* _BinPoly = nullptr;
 
 			double m_BoardBinWidth = 0.0;
 			double m_BoardBinHeight = 0.0;

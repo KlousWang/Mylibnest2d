@@ -14,22 +14,22 @@
 namespace ET {
     namespace NEST2DMANAGERLIB {
 
-        // 两个矩形的长边和短边允许有 5% 的相对误差。
+        
         constexpr double CET_RECT_SIZE_TOLERANCE = 0.05;
 
-        // 判断正方形时使用更严格的 1% 误差。
+        
         constexpr double CET_RECT_SQUARE_TOLERANCE = 0.01;
 
-        // 第一阶段最多允许组合代理面积比基准面积扩大 10%。
-        // 超过该值就认为组合明显变差。
+        
+        
         constexpr double CET_RECT_MAX_AREA_LOSS_RATIO = 0.10;
         constexpr std::size_t CET_RECT_MAX_CLUSTER_CHILDREN = 32;
         namespace {
 
-            bool NearlyEqual(double A, double B, double ARelativeTolerance)
+            bool NearlyEqual(double A, double AB, double ARelativeTolerance)
             {
-                const double Denominator = std::max(1.0, std::max(std::abs(A), std::abs(B)));
-                return std::abs(A - B) <= Denominator * ARelativeTolerance;
+                const double Denominator = std::max(1.0, std::max(std::abs(A), std::abs(AB)));
+                return std::abs(A - AB) <= Denominator * ARelativeTolerance;
             }
 
             void GetCanonicalSides(const TetShapeFeature& AFeature, double& AOutShortSide, double& AOutLongSide)
@@ -41,21 +41,21 @@ namespace ET {
             {
                 AOutPose = TetRectanglePose{};
 
-                /*
-                 * 先把矩形自身的倾斜角度消除，
-                 * 使其中一条边与 X 轴平行。
-                 *
-                 * 如果 ARotate90 为 true，
-                 * 再额外旋转 90°。
-                 */
+                
+
+
+
+
+
+
                 const double TargetRotation = -AFeature.OrientedAngle + (ARotate90 ? CET_CLUSTER_HALF_PI : 0.0);
-                if (!CetRotationUtils::SnapToNearestAllowedRotation(TargetRotation, AOptions.Rotations, AOutPose.Rotation)) {
+                if (!CetRotationUtils::SnapToNearestAllowedRotation(TargetRotation, AOptions.Rotations, AOutPose.Rotation)){
                     return false;
                 }
                 const CetPath Contour = AGeometry.TransformContour(AGeometry.GetIdentityContour(AItem), AOutPose.Rotation, 0.0, 0.0);
                 double MaxX = 0.0;
                 double MaxY = 0.0;
-                if (!AGeometry.GetBounds(Contour, AOutPose.MinX, AOutPose.MinY, MaxX, MaxY)) { return false; }
+                if (!AGeometry.GetBounds(Contour, AOutPose.MinX, AOutPose.MinY, MaxX, MaxY)){ return false; }
 
                 AOutPose.Width = MaxX - AOutPose.MinX;
                 AOutPose.Height = MaxY - AOutPose.MinY;
@@ -70,44 +70,44 @@ namespace ET {
 
         void CetRectangleClusterBuilder::BuildCandidates(const CetTNestItemVector& AItems, const std::vector<TetShapeFeature>& AFeatures, const std::vector<int>& AIndices, const TetNestOptions& AOptions, std::vector<TetClusterCandidate>& AOut)
         {
-            if (AItems.size() != AFeatures.size()) {
+            if (AItems.size() != AFeatures.size()){
                 std::cout << "[RECTANGLE][ERROR] " << "Feature count mismatch. Items=" << AItems.size() << ", Features=" << AFeatures.size() << std::endl;
                 return;
             }
 
-            if (AIndices.size() < 2) { return; }
+            if (AIndices.size() < 2){ return; }
 
             std::vector<int> ValidIndices;
             ValidIndices.reserve(AIndices.size());
-            for (int Index : AIndices) {
-                if (Index < 0 || Index >= static_cast<int>(AFeatures.size())) { continue; }
-                if (_IsValidRectangle(AFeatures[Index])) {
+            for (int Index : AIndices){
+                if (Index < 0 || Index >= static_cast<int>(AFeatures.size())){ continue; }
+                if (_IsValidRectangle(AFeatures[Index])){
                     ValidIndices.push_back(Index);
                 }
             }
 
             std::sort(ValidIndices.begin(), ValidIndices.end());
             ValidIndices.erase(std::unique(ValidIndices.begin(), ValidIndices.end()), ValidIndices.end());
-            if (ValidIndices.size() < 2) { return; }
+            if (ValidIndices.size() < 2){ return; }
 
             const std::size_t OldCandidateCount = AOut.size();
             std::vector<std::vector<int>> Groups;
-            for (int Index : ValidIndices) {
+            for (int Index : ValidIndices){
                 bool AddedToGroup = false;
-                for (std::vector<int>& Group : Groups) {
-                    if (!Group.empty() && _AreCompatible(AFeatures[Group.front()], AFeatures[Index])) {
+                for (std::vector<int>& Group : Groups){
+                    if (!Group.empty() && _AreCompatible(AFeatures[Group.front()], AFeatures[Index])){
                         Group.push_back(Index);
                         AddedToGroup = true;
                         break;
                     }
                 }
-                if (!AddedToGroup) {
+                if (!AddedToGroup){
                     Groups.push_back({ Index });
                 }
             }
 
-            for (const std::vector<int>& Group : Groups) {
-                if (Group.size() < 2) {
+            for (const std::vector<int>& Group : Groups){
+                if (Group.size() < 2){
                     continue;
                 }
 
@@ -115,20 +115,15 @@ namespace ET {
                 const std::size_t MaxChildCount = std::min(Group.size(), CET_RECT_MAX_CLUSTER_CHILDREN);
                 std::size_t PreferredChildCount = 0;
                 TetClusterCandidate FirstCandidate;
-                for (std::size_t TrialChildCount = MaxChildCount; TrialChildCount >= 2; --TrialChildCount) {
-                    std::vector<int> ClusterIndices(
-                        Group.begin(),
-                        Group.begin() + static_cast<std::vector<int>::difference_type>(TrialChildCount));
+                for (std::size_t TrialChildCount = MaxChildCount; TrialChildCount >= 2; --TrialChildCount){
+                    std::vector<int> ClusterIndices(Group.begin(),Group.begin() + static_cast<std::vector<int>::difference_type>(TrialChildCount));
 
                     TetClusterCandidate Candidate;
-                    if (!_MakeGridCandidate(AItems, AFeatures, ClusterIndices, AOptions, Candidate)) {
+                    if (!_MakeGridCandidate(AItems, AFeatures, ClusterIndices, AOptions, Candidate)){
                         continue;
                     }
-
-                    const std::size_t RequiredCopies = std::min(
-                        CET_CLUSTER_TARGET_COPIES_PER_BOARD,
-                        Group.size() / TrialChildCount);
-                    if (!Geometry.CanPlaceCandidateCopiesOnBoard(Candidate, AOptions, RequiredCopies)) {
+                    const std::size_t RequiredCopies = std::min(CET_CLUSTER_TARGET_COPIES_PER_BOARD,Group.size() / TrialChildCount);
+                    if (!Geometry.CanPlaceCandidateCopiesOnBoard(Candidate, AOptions, RequiredCopies)){
                         continue;
                     }
 
@@ -137,30 +132,28 @@ namespace ET {
                     break;
                 }
 
-                if (PreferredChildCount < 2) {
+                if (PreferredChildCount < 2){
                     continue;
                 }
 
                 std::size_t GroupOffset = 0;
-                while (GroupOffset + 1 < Group.size()) {
+                while (GroupOffset + 1 < Group.size()){
                     const std::size_t RemainingCount = Group.size() - GroupOffset;
                     std::size_t TrialChildCount = std::min(RemainingCount, PreferredChildCount);
                     std::size_t BestChildCount = 0;
                     TetClusterCandidate BestCandidate;
 
-                    while (TrialChildCount >= 2) {
-                        std::vector<int> ClusterIndices(
-                            Group.begin() + static_cast<std::vector<int>::difference_type>(GroupOffset),
-                            Group.begin() + static_cast<std::vector<int>::difference_type>(GroupOffset + TrialChildCount));
+                    while (TrialChildCount >= 2){
+                        std::vector<int> ClusterIndices(Group.begin() + static_cast<std::vector<int>::difference_type>(GroupOffset),Group.begin() + static_cast<std::vector<int>::difference_type>(GroupOffset + TrialChildCount));
 
-                        if (GroupOffset == 0 && TrialChildCount == PreferredChildCount) {
+                        if (GroupOffset == 0 && TrialChildCount == PreferredChildCount){
                             BestCandidate = std::move(FirstCandidate);
                             BestChildCount = TrialChildCount;
                             break;
                         }
 
                         TetClusterCandidate Candidate;
-                        if (_MakeGridCandidate(AItems, AFeatures, ClusterIndices, AOptions, Candidate)) {
+                        if (_MakeGridCandidate(AItems, AFeatures, ClusterIndices, AOptions, Candidate)){
                             BestCandidate = std::move(Candidate);
                             BestChildCount = TrialChildCount;
                             break;
@@ -169,21 +162,17 @@ namespace ET {
                         --TrialChildCount;
                     }
 
-                    if (BestChildCount < 2) {
+                    if (BestChildCount < 2){
                         break;
                     }
 
                     GroupOffset += BestChildCount;
-                    std::cout << "[RECTANGLE][CANDIDATE] ChildCount=" << BestCandidate.OriginalIndices.size()
-                        << ", Type=" << BestCandidate.ClusterType
-                        << ", Score=" << BestCandidate.Score << std::endl;
+                    std::cout << "[RECTANGLE][CANDIDATE] ChildCount=" << BestCandidate.OriginalIndices.size() << ", Type=" << BestCandidate.ClusterType << ", Score=" << BestCandidate.Score << std::endl;
                     AOut.push_back(std::move(BestCandidate));
                 }
             }
 
-            std::cout << "[RECTANGLE][BUILD CANDIDATES] " << "IndexCount=" << ValidIndices.size()
-                << ", GroupCount=" << Groups.size()
-                << ", NewCandidateCount=" << AOut.size() - OldCandidateCount << std::endl;
+            std::cout << "[RECTANGLE][BUILD CANDIDATES] " << "IndexCount=" << ValidIndices.size() << ", GroupCount=" << Groups.size() << ", NewCandidateCount=" << AOut.size() - OldCandidateCount << std::endl;
         }
         bool CetRectangleClusterBuilder::_IsValidRectangle(const TetShapeFeature& AFeature)
         {
@@ -218,31 +207,31 @@ namespace ET {
         {
             AOutCandidate = TetClusterCandidate{};
 
-            if (AIndexA < 0 || AIndexB < 0 || AIndexA == AIndexB || AIndexA >= static_cast<int>(AItems.size()) || AIndexB >= static_cast<int>(AItems.size()) || AIndexA >= static_cast<int>(AFeatures.size()) || AIndexB >= static_cast<int>(AFeatures.size())) { return false; }
+            if (AIndexA < 0 || AIndexB < 0 || AIndexA == AIndexB || AIndexA >= static_cast<int>(AItems.size()) || AIndexB >= static_cast<int>(AItems.size()) || AIndexA >= static_cast<int>(AFeatures.size()) || AIndexB >= static_cast<int>(AFeatures.size())){ return false; }
 
             const TetShapeFeature& FeatureA = AFeatures[AIndexA];
             const TetShapeFeature& FeatureB = AFeatures[AIndexB];
 
-            if (!_IsValidRectangle(FeatureA) || !_IsValidRectangle(FeatureB) || !_AreCompatible(FeatureA, FeatureB)) { return false; }
+            if (!_IsValidRectangle(FeatureA) || !_IsValidRectangle(FeatureB) || !_AreCompatible(FeatureA, FeatureB)){ return false; }
 
             CetClusterGeometryHelper Geometry;
 
             TetRectanglePose PoseA;
             TetRectanglePose PoseB;
 
-            if (!_MakePose(AItems[AIndexA], FeatureA, false, AOptions, Geometry, PoseA) || !_MakePose(AItems[AIndexB], FeatureB, ARotateB90, AOptions, Geometry, PoseB)) { return false; }
+            if (!_MakePose(AItems[AIndexA], FeatureA, false, AOptions, Geometry, PoseA) || !_MakePose(AItems[AIndexB], FeatureB, ARotateB90, AOptions, Geometry, PoseB)){ return false; }
 
-            /*
-             * Spacing 转换为排样内部坐标。
-             *
-             * 横排时：
-             * B.MinX = A.Width + Gap
-             *
-             * 竖排时：
-             * B.MinY = A.Height + Gap
-             *
-             * 因此两个矩形包围盒之间会严格保留 Gap。
-             */
+            
+
+
+
+
+
+
+
+
+
+
             const double Gap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
 
             TetItemTransform TransformA;
@@ -255,29 +244,29 @@ namespace ET {
             TransformB.OriginalId = AIndexB;
             TransformB.RelativeRotation = PoseB.Rotation;
 
-            if (AHorizontal) {
-                /*
-                 * 横向排列：
-                 *
-                 * ┌─────────┐ Gap ┌─────────┐
-                 * │    A    │     │    B    │
-                 * └─────────┘     └─────────┘
-                 */
+            if (AHorizontal){
+                
+
+
+
+
+
+
                 TransformB.RelativeX = PoseA.Width + Gap - PoseB.MinX;
                 TransformB.RelativeY = -PoseB.MinY;
             }
             else {
-                /*
-                 * 纵向排列：
-                 *
-                 * ┌─────────┐
-                 * │    A    │
-                 * └─────────┘
-                 *     Gap
-                 * ┌─────────┐
-                 * │    B    │
-                 * └─────────┘
-                 */
+                
+
+
+
+
+
+
+
+
+
+
                 TransformB.RelativeX = -PoseB.MinX;
                 TransformB.RelativeY = PoseA.Height + Gap - PoseB.MinY;
             }
@@ -285,40 +274,40 @@ namespace ET {
             AOutCandidate.BuilderName = "RectangleBuilder";
             AOutCandidate.ClusterType = AHorizontal ? "RectanglePairHorizontal" : "RectanglePairVertical";
 
-            if (ARotateB90) {
+            if (ARotateB90){
                 AOutCandidate.ClusterType += "RotatedB90";
             }
 
             AOutCandidate.OriginalIndices = { AIndexA, AIndexB };
             AOutCandidate.Transforms = { TransformA, TransformB };
 
-            /*
-             * 简单矩形并排主要用于完成第一阶段闭环，
-             * 暂时不给它高于三角形、圆弧嵌套等组合的置信度。
-             */
+            
+
+
+
             AOutCandidate.Confidence = 0.60;
 
-            /*
-             * 统一交给 GeometryHelper：
-             *
-             * 1. 归一化局部坐标；
-             * 2. 创建代理轮廓；
-             * 3. 计算宽高和面积；
-             * 4. 检查子件包含关系；
-             * 5. 检查子件相交；
-             * 6. 检查能否放入板材；
-             * 7. 计算候选评分。
-             */
-            if (!Geometry.FinalizeCandidate(AItems, AOptions, AOutCandidate)) { return false; }
+            
 
-            /*
-             * 当前 ClusterManager 会继续接收所有合法且
-             * 原始零件尚未使用的候选。
-             *
-             * 因此 Builder 内先拦截明显扩大代理面积的组合，
-             * 避免两个差异较大的矩形被强制组合。
-             */
-            if (AOutCandidate.AreaSavingRatio < -CET_RECT_MAX_AREA_LOSS_RATIO) { return false; }
+
+
+
+
+
+
+
+
+
+            if (!Geometry.FinalizeCandidate(AItems, AOptions, AOutCandidate)){ return false; }
+
+            
+
+
+
+
+
+
+            if (AOutCandidate.AreaSavingRatio < -CET_RECT_MAX_AREA_LOSS_RATIO){ return false; }
 
             return true;
         }
@@ -326,14 +315,12 @@ namespace ET {
         bool CetRectangleClusterBuilder::_MakeGridCandidate(const CetTNestItemVector& AItems, const std::vector<TetShapeFeature>& AFeatures, const std::vector<int>& AIndices, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate)
         {
             AOutCandidate = TetClusterCandidate{};
-            if (AItems.size() != AFeatures.size() || AIndices.size() < 2 ||
-                AIndices.size() > CET_RECT_MAX_CLUSTER_CHILDREN) {
+            if (AItems.size() != AFeatures.size() || AIndices.size() < 2 ||AIndices.size() > CET_RECT_MAX_CLUSTER_CHILDREN){
                 return false;
             }
 
             const int FirstIndex = AIndices.front();
-            if (FirstIndex < 0 || FirstIndex >= static_cast<int>(AFeatures.size()) ||
-                !_IsValidRectangle(AFeatures[FirstIndex])) {
+            if (FirstIndex < 0 || FirstIndex >= static_cast<int>(AFeatures.size()) ||!_IsValidRectangle(AFeatures[FirstIndex])){
                 return false;
             }
 
@@ -344,18 +331,16 @@ namespace ET {
             double CellWidth = 0.0;
             double CellHeight = 0.0;
 
-            for (int Index : AIndices) {
-                if (Index < 0 || Index >= static_cast<int>(AFeatures.size()) ||
-                    !_IsValidRectangle(AFeatures[Index]) ||
-                    !_AreCompatible(AFeatures[FirstIndex], AFeatures[Index])) {
+            for (int Index : AIndices){
+                if (Index < 0 || Index >= static_cast<int>(AFeatures.size()) ||!_IsValidRectangle(AFeatures[Index]) ||!_AreCompatible(AFeatures[FirstIndex], AFeatures[Index])){
                     return false;
                 }
 
                 const TetShapeFeature& Feature = AFeatures[Index];
                 const bool RotateLongSideHorizontal = AllowQuarterTurn && Feature.OrientedWidth < Feature.OrientedHeight;
                 TetRectanglePose Pose;
-                if (!_MakePose(AItems[Index], Feature, RotateLongSideHorizontal, AOptions, Geometry, Pose)) {
-                    if (!RotateLongSideHorizontal || !_MakePose(AItems[Index], Feature, false, AOptions, Geometry, Pose)) {
+                if (!_MakePose(AItems[Index], Feature, RotateLongSideHorizontal, AOptions, Geometry, Pose)){
+                    if (!RotateLongSideHorizontal || !_MakePose(AItems[Index], Feature, false, AOptions, Geometry, Pose)){
                         return false;
                     }
                 }
@@ -365,7 +350,7 @@ namespace ET {
                 Poses.push_back(Pose);
             }
 
-            if (CellWidth <= 0.0 || CellHeight <= 0.0) {
+            if (CellWidth <= 0.0 || CellHeight <= 0.0){
                 return false;
             }
 
@@ -388,13 +373,13 @@ namespace ET {
 
             std::vector<TetRectangleGridLayout> Layouts;
             Layouts.reserve(AIndices.size());
-            for (int Rows = 1; Rows <= ItemCount; ++Rows) {
+            for (int Rows = 1; Rows <= ItemCount; ++Rows){
                 const int Cols = (ItemCount + Rows - 1) / Rows;
                 const double Width = static_cast<double>(Cols) * CellWidth + static_cast<double>(std::max(0, Cols - 1)) * CellGap;
                 const double Height = static_cast<double>(Rows) * CellHeight + static_cast<double>(std::max(0, Rows - 1)) * CellGap;
                 const bool FitsNormally = Width <= BinWidth && Height <= BinHeight;
                 const bool FitsRotated = AllowQuarterTurn && Height <= BinWidth && Width <= BinHeight;
-                if (!FitsNormally && !FitsRotated) {
+                if (!FitsNormally && !FitsRotated){
                     continue;
                 }
 
@@ -410,18 +395,18 @@ namespace ET {
                     });
             }
 
-            std::stable_sort(Layouts.begin(), Layouts.end(), [](const TetRectangleGridLayout& A, const TetRectangleGridLayout& B) {
-                if (std::abs(A.Area - B.Area) > 1e-6) {
-                    return A.Area < B.Area;
+            std::stable_sort(Layouts.begin(), Layouts.end(), [](const TetRectangleGridLayout& A, const TetRectangleGridLayout& AB) {
+                if (std::abs(A.Area - AB.Area) > 1e-6){
+                    return A.Area < AB.Area;
                 }
-                if (std::abs(A.AspectPenalty - B.AspectPenalty) > 1e-6) {
-                    return A.AspectPenalty < B.AspectPenalty;
+                if (std::abs(A.AspectPenalty - AB.AspectPenalty) > 1e-6){
+                    return A.AspectPenalty < AB.AspectPenalty;
                 }
-                return A.Rows < B.Rows;
+                return A.Rows < AB.Rows;
                 });
 
             const std::size_t MaxLayoutChecks = std::min<std::size_t>(Layouts.size(), 3);
-            for (std::size_t LayoutIndex = 0; LayoutIndex < MaxLayoutChecks; ++LayoutIndex) {
+            for (std::size_t LayoutIndex = 0; LayoutIndex < MaxLayoutChecks; ++LayoutIndex){
                 const TetRectangleGridLayout& Layout = Layouts[LayoutIndex];
                 TetClusterCandidate Candidate;
                 Candidate.BuilderName = "RectangleBuilder";
@@ -430,7 +415,7 @@ namespace ET {
                 Candidate.Confidence = 0.75;
                 Candidate.Transforms.reserve(AIndices.size());
 
-                for (int ItemOffset = 0; ItemOffset < ItemCount; ++ItemOffset) {
+                for (int ItemOffset = 0; ItemOffset < ItemCount; ++ItemOffset){
                     const int Row = ItemOffset / Layout.Cols;
                     const int Col = ItemOffset % Layout.Cols;
                     const TetRectanglePose& Pose = Poses[static_cast<std::size_t>(ItemOffset)];
@@ -445,8 +430,7 @@ namespace ET {
                     Candidate.Transforms.push_back(Transform);
                 }
 
-                if (!Geometry.FinalizeCandidate(AItems, AOptions, Candidate) ||
-                    Candidate.AreaSavingRatio < -CET_RECT_MAX_AREA_LOSS_RATIO) {
+                if (!Geometry.FinalizeCandidate(AItems, AOptions, Candidate) ||Candidate.AreaSavingRatio < -CET_RECT_MAX_AREA_LOSS_RATIO){
                     continue;
                 }
 

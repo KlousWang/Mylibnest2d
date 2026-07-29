@@ -5,7 +5,7 @@
 #include <cstddef>
 //
 //using CetTNestItemVector = std::vector<libnest2d::Item>;
-typedef void(*NestProgressCallback)(int current_finished, int total);
+typedef void(*NestProgressCallback)(int Acurrent_finished, int Atotal);
 struct TetNestPoint
 {
 	double X = 0.0;
@@ -29,12 +29,12 @@ struct TetNestPolygon
 {
 	int Id = 0;
 	std::string Name = "Polygon";
-	std::vector<TetNestPoint> Vertices;//顶点集合（逆时针闭合轮廓）
-	// 内孔洞 (一个零件可能包含 0 个或多个孔洞，所以是二维数组)
+	std::vector<TetNestPoint> Vertices;
+	
 	std::vector<std::vector<TetNestPoint>> Holes;
-	//std::vector<std::string> HoleNames;//孔洞形状名字
-	//算法计算输出的结果
-	int Out_bin = -1; // 输出的板材编号，-1表示未成功嵌套
+	
+	
+	int Out_bin = -1; 
 	double Out_x = 0.0;
 	double Out_y = 0.0;
 	double Out_angle = 0.0;
@@ -61,7 +61,7 @@ struct TetNestOptions
 	bool ExportSvg = false;
 	std::string SvgPath = "NestingResult";
 
-	NestProgressCallback ProgressCallback = nullptr; // 回调函数，用来看当前的排序进度
+	NestProgressCallback ProgressCallback = nullptr; 
 };
 
 struct TetBoardUsageResult
@@ -101,8 +101,7 @@ enum class MetClusterProxyMode
 
 inline const char* ToString(MetClusterProxyMode AMode)
 {
-	switch (AMode)
-	{
+	switch (AMode){
 	case MetClusterProxyMode::ExactUnion:
 		return "ExactUnion";
 	case MetClusterProxyMode::OffsetUnion:
@@ -178,7 +177,7 @@ struct TetAutoPairCandidate
 	double RelBX = 0.0;
 	double RelBY = 0.0;
 	double RelBRotation = 0.0;
-	// 用于粗搜后局部细搜
+	
 	double RawBOffsetX = 0.0;
 	double RawBOffsetY = 0.0;
 
@@ -188,7 +187,7 @@ struct TetAutoPairCandidate
 	double Score = 0.0;
 };
 
-// 边缘匹配的全局不变上下文
+
 struct TetEdgePairContext {
 	const CetTNestItemVector& OriginalItems;
 	int AIndex;
@@ -199,7 +198,7 @@ struct TetEdgePairContext {
 	bool SimilarTrianglePair;
 };
 
-// 某一对边缘匹配时的探测状态
+
 struct TetEdgeMatchState {
 	double BRotation;
 	double LengthMatchRatio;
@@ -207,7 +206,7 @@ struct TetEdgeMatchState {
 	std::vector<std::pair<double, double>> BaseOffsets;
 };
 
-// 网格搜索角度时的上下文
+
 struct TetAutoPairContext {
 	const CetTNestItemVector& OriginalItems;
 	int AIndex;
@@ -233,10 +232,10 @@ struct TetClusterCandidate
 	std::vector<int> OriginalIndices;
 	std::vector<TetItemTransform> Transforms;
 
-	// 新增：组合件实际用于排样的代理轮廓
+	
 	CetPath ProxyContour;
 
-	// ProxyContour 是否已经平移到左下角为 0,0
+	
 	bool ProxyContourNormalized = false;
 
 	double ClusterWidth = 0.0;
@@ -252,10 +251,10 @@ struct TetClusterCandidate
 	double ProxyWasteArea = 0.0;
 	double ProxyWasteRatio = 0.0;
 
-	// 各子件单独包围盒面积之和
+	
 	double BaselineArea = 0.0;
 
-	// 组合前后代理占用面积改善率
+	
 	double AreaSavingRatio = 0.0;
 
 	double Confidence = 1.0;

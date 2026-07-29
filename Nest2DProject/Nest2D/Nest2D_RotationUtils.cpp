@@ -21,16 +21,16 @@ namespace ET {
 
         double CetRotationUtils::NormalizeAngle(double AAngle)
         {
-            if (!std::isfinite(AAngle)) {
+            if (!std::isfinite(AAngle)){
                 return 0.0;
             }
 
             double NormalizedAngle = std::fmod(AAngle, CET_CLUSTER_TWO_PI);
-            if (NormalizedAngle < 0.0) {
+            if (NormalizedAngle < 0.0){
                 NormalizedAngle += CET_CLUSTER_TWO_PI;
             }
 
-            if (NormalizedAngle >= CET_CLUSTER_TWO_PI) {
+            if (NormalizedAngle >= CET_CLUSTER_TWO_PI){
                 NormalizedAngle = 0.0;
             }
 
@@ -40,29 +40,29 @@ namespace ET {
         std::vector<double> CetRotationUtils::BuildAllowedRotations(int ARotationCount)
         {
             std::vector<double> Rotations;
-            if (ARotationCount <= 1) {
+            if (ARotationCount <= 1){
                 Rotations.push_back(0.0);
                 return Rotations;
             }
 
             Rotations.reserve(static_cast<std::size_t>(ARotationCount));
             const double AngleStep = CET_CLUSTER_TWO_PI / static_cast<double>(ARotationCount);
-            for (int RotationIndex = 0; RotationIndex < ARotationCount; ++RotationIndex) {
+            for (int RotationIndex = 0; RotationIndex < ARotationCount; ++RotationIndex){
                 const double CandidateAngle = NormalizeAngle(static_cast<double>(RotationIndex) * AngleStep);
                 bool Duplicate = false;
-                for (double ExistingAngle : Rotations) {
-                    if (GetAngleDistance(CandidateAngle, ExistingAngle) <= CET_ROTATION_DUPLICATE_TOLERANCE) {
+                for (double ExistingAngle : Rotations){
+                    if (GetAngleDistance(CandidateAngle, ExistingAngle) <= CET_ROTATION_DUPLICATE_TOLERANCE){
                         Duplicate = true;
                         break;
                     }
                 }
 
-                if (!Duplicate) {
+                if (!Duplicate){
                     Rotations.push_back(CandidateAngle);
                 }
             }
 
-            if (Rotations.empty()) {
+            if (Rotations.empty()){
                 Rotations.push_back(0.0);
             }
 
@@ -74,7 +74,7 @@ namespace ET {
             const std::vector<double> AllowedRotations = BuildAllowedRotations(ARotationCount);
             std::vector<libnest2d::Radians> Result;
             Result.reserve(AllowedRotations.size());
-            for (double Rotation : AllowedRotations) {
+            for (double Rotation : AllowedRotations){
                 Result.push_back(libnest2d::Radians(Rotation));
             }
             return Result;
@@ -89,7 +89,7 @@ namespace ET {
         bool CetRotationUtils::SnapToNearestAllowedRotation(double ATarget, int ARotationCount, double& AOutRotation)
         {
             AOutRotation = 0.0;
-            if (!std::isfinite(ATarget)) {
+            if (!std::isfinite(ATarget)){
                 return false;
             }
 
@@ -98,9 +98,9 @@ namespace ET {
             double BestDistance = 0.0;
             bool HasBest = false;
 
-            for (double Rotation : Rotations) {
+            for (double Rotation : Rotations){
                 const double Distance = GetAngleDistance(TargetAngle, Rotation);
-                if (!HasBest || Distance < BestDistance) {
+                if (!HasBest || Distance < BestDistance){
                     HasBest = true;
                     BestDistance = Distance;
                     AOutRotation = Rotation;
@@ -113,7 +113,7 @@ namespace ET {
         bool CetRotationUtils::SnapToAllowedRotation(double ATarget, int ARotationCount, double& AOutRotation, double ATolerance)
         {
             AOutRotation = 0.0;
-            if (!std::isfinite(ATarget) || !std::isfinite(ATolerance) || ATolerance < 0.0) {
+            if (!std::isfinite(ATarget) || !std::isfinite(ATolerance) || ATolerance < 0.0){
                 return false;
             }
 
@@ -122,9 +122,9 @@ namespace ET {
             double BestDistance = 0.0;
             bool HasBest = false;
 
-            for (double Rotation : Rotations) {
+            for (double Rotation : Rotations){
                 const double Distance = GetAngleDistance(TargetAngle, Rotation);
-                if (!HasBest || Distance < BestDistance) {
+                if (!HasBest || Distance < BestDistance){
                     HasBest = true;
                     BestDistance = Distance;
                     AOutRotation = Rotation;

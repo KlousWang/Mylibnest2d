@@ -27,7 +27,7 @@ namespace ET {
 
 		public:
 			 void BuildNestItems(const std::vector<TetNestPolygon>& AItems,CetTNestItemVector& ANestItems);
-			 void ApplyResults(const CetTNestItemVector& nestItems, std::vector<TetNestPolygon>& AItems);
+			 void ApplyResults(const CetTNestItemVector& AnestItems, std::vector<TetNestPolygon>& AItems);
 		};
 
 	}

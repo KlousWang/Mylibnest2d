@@ -26,79 +26,65 @@ namespace ET {
             using namespace libnest2d;
             ANestItems.clear();
             ANestItems.reserve(AItems.size());
-            //¹¹½¨ÍâÂÖÀª
-            for (const auto& item : AItems) {
+            
+            for (const auto& item : AItems){
                 Path outerPoints;
                 outerPoints.reserve(item.Vertices.size());
 
-                for (const auto& pt : item.Vertices) {
-                    outerPoints.push_back(
-                        Point(
-                            NestUtils::ToNestCoord(pt.X),
-                            NestUtils::ToNestCoord(pt.Y)
-                        )
-                    );
+                for (const auto& pt : item.Vertices){
+                    outerPoints.push_back(Point(NestUtils::ToNestCoord(pt.X),NestUtils::ToNestCoord(pt.Y)));
                 }
 
-                if (ClipperLib::Orientation(outerPoints) == false) {
+                if (ClipperLib::Orientation(outerPoints) == false){
                     std::reverse(outerPoints.begin(), outerPoints.end());
                 }
 
                 Paths holes;
                 holes.reserve(item.Holes.size());
 
-                for (const auto& holePts : item.Holes) {
+                for (const auto& holePts : item.Holes){
                     Path innerPoints;
                     innerPoints.reserve(holePts.size());
 
-                    for (const auto& pt : holePts) {
-                        innerPoints.push_back(
-                            Point(
-                                NestUtils::ToNestCoord(pt.X),
-                                NestUtils::ToNestCoord(pt.Y)
-                            )
-                        );
+                    for (const auto& pt : holePts){
+                        innerPoints.push_back(Point(NestUtils::ToNestCoord(pt.X),NestUtils::ToNestCoord(pt.Y)));
                     }
 
-                    if (ClipperLib::Orientation(innerPoints) == true) {
+                    if (ClipperLib::Orientation(innerPoints) == true){
                         std::reverse(innerPoints.begin(), innerPoints.end());
                     }
 
                     holes.push_back(std::move(innerPoints));
                 }
 
-                PolygonImpl poly(std::move(outerPoints), std::move(holes));
+                CetPolygonImpl poly(std::move(outerPoints), std::move(holes));
 
                 ANestItems.emplace_back(std::move(poly));
             }
         }
 
-        void CetNestDataMapper::ApplyResults(const CetTNestItemVector& nestItems, std::vector<TetNestPolygon>& AItems)
+        void CetNestDataMapper::ApplyResults(const CetTNestItemVector& AnestItems, std::vector<TetNestPolygon>& AItems)
         {
             double invScale = 1.0 / libnest2d::mm();
 
-            const size_t nestCount = nestItems.size();
+            const size_t nestCount = AnestItems.size();
             const size_t itemCount = AItems.size();
 
-            if (nestCount != itemCount) {
-                std::cout << "[ERROR] ApplyResults size mismatch: nestItems = "
-                    << nestCount
-                    << ", AItems = "
-                    << itemCount
-                    << std::endl;
+            if (nestCount != itemCount){
+                std::cout << "[ERROR] ApplyResults size mismatch: nestItems = " << nestCount << ", AItems = " << itemCount << std::endl;
             }
 
             const size_t count = std::min(nestCount, itemCount);
 
-            for (size_t i = 0; i < count; ++i) {
-                auto tr = nestItems[i].translation();
+            for (size_t i = 0; i < count; ++i){
+                auto tr = AnestItems[i].translation();
 
-                AItems[i].Out_bin = static_cast<int>(nestItems[i].binId());
+                AItems[i].Out_bin = static_cast<int>(AnestItems[i].binId());
                 AItems[i].Out_x = static_cast<double>(tr.X) * invScale;
                 AItems[i].Out_y = static_cast<double>(tr.Y) * invScale;
-                AItems[i].Out_angle = nestItems[i].rotation();
+                AItems[i].Out_angle = AnestItems[i].rotation();
             }
-            for (size_t i = count; i < itemCount; ++i) {
+            for (size_t i = count; i < itemCount; ++i){
                 AItems[i].Out_bin = -1;
                 AItems[i].Out_x = 0.0;
                 AItems[i].Out_y = 0.0;
