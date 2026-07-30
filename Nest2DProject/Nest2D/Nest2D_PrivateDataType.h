@@ -19,6 +19,12 @@ constexpr double CET_CLUSTER_PI = 3.14159265358979323846;
 constexpr double CET_CLUSTER_HALF_PI = CET_CLUSTER_PI * 0.5;
 constexpr double CET_CLUSTER_TWO_PI = CET_CLUSTER_PI * 2.0;
 constexpr double CET_CLUSTER_THREE_HALF_PI = CET_CLUSTER_PI * 1.5;
+
+constexpr double CET_ARC_SIZE_TOLERANCE = 0.05;
+constexpr double CET_ARC_SWEEP_TOLERANCE = CET_CLUSTER_PI / 36.0;
+constexpr double CET_ARC_SAFETY_GAP_RATIO = 0.05;
+constexpr std::size_t CET_ARC_MAX_CLUSTER_CHILDREN = 32;
+
 struct TetLib2DItemDataType
 {
 

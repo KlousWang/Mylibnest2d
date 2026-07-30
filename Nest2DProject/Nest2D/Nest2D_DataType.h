@@ -71,6 +71,9 @@ struct TetBoardUsageResult
 	double BoardArea = 0.0;
 	double UsedArea = 0.0;
 	double UsagePercent = 0.0;
+
+	double PureArea = 0.0;
+	double PureUsagePercnt = 0.0;
 };
 
 struct TetNestResult

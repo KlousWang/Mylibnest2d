@@ -25,6 +25,7 @@ namespace {
         }
 
         double Percent = std::max(0.0, AUsage.UsagePercent);
+        double PureUsagePercnt = std::max(0.0, AUsage.PureUsagePercnt);
 
         if (!std::isfinite(Percent)){
             return "";
@@ -40,9 +41,10 @@ namespace {
             << "\" font-family=\"Arial, Helvetica, sans-serif\""
             << " font-size=\"" << FontSize
             << "\" fill=\"#111111\""
-            << " fill-opacity=\"0.85\">Usage: "
-            << Percent
-            << "%</text>\n";
+            << " fill-opacity=\"0.85\">UsagePercent: "
+            << Percent<< "%"
+            << " PureUsagePercnt: "
+            << PureUsagePercnt<< "%</text>\n";
 
         return ss.str();
     }

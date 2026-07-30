@@ -16,10 +16,7 @@ namespace ET {
     namespace NEST2DMANAGERLIB {
 
         namespace {
-            constexpr double CET_ARC_SIZE_TOLERANCE = 0.05;
-            constexpr double CET_ARC_SWEEP_TOLERANCE = CET_CLUSTER_PI / 36.0;
-            constexpr double CET_ARC_SAFETY_GAP_RATIO = 0.05;
-            constexpr std::size_t CET_ARC_MAX_CLUSTER_CHILDREN = 32;
+
 
             bool NearlyEqual(double AFirstValue, double ASecondValue, double ARelativeTolerance)
             {
