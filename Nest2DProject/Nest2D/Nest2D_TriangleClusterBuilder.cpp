@@ -18,6 +18,7 @@ namespace ET {
         namespace {
             constexpr std::size_t CET_TRIANGLE_MAX_CLUSTER_CHILDREN = 32;
             constexpr std::size_t CET_GENERAL_TRIANGLE_MAX_CLUSTER_CHILDREN = 32;
+            constexpr int CET_TRIANGLE_PAIR_PITCH_SEARCH_STEPS = 20;
         }
 
         CetTriangleClusterBuilder::CetTriangleClusterBuilder() : CetCoreObject()
@@ -666,6 +667,8 @@ namespace ET {
             CetClusterGeometryHelper Geometry;
             std::size_t PreferredPairCount = 0;
             TetClusterCandidate FirstCandidate;
+            std::size_t FallbackPairCount = 0;
+            TetClusterCandidate FallbackCandidate;
             for (std::size_t TrialPairCount = MaxPairCount; TrialPairCount >= 1; --TrialPairCount){
                 const std::size_t ChildCount = TrialPairCount * 2;
                 std::vector<int> ClusterIndices(RemainingIndices.begin(),RemainingIndices.begin() + static_cast<std::vector<int>::difference_type>(ChildCount));
@@ -676,14 +679,23 @@ namespace ET {
                 }
 
                 const std::size_t FullChunkCopies = RemainingIndices.size() / ChildCount;
-                const std::size_t RequiredCopies = std::min(CET_CLUSTER_TARGET_COPIES_PER_BOARD,std::max(FullChunkCopies, RemainingIndices.size() > 2 ? std::size_t{ 2 } : std::size_t{ 1 }));
-                if (!Geometry.CanPlaceCandidateCopiesOnBoard(Candidate, AOptions, RequiredCopies)){
-                    continue;
+                const std::size_t PracticalCopies = std::min(CET_CLUSTER_TARGET_COPIES_PER_BOARD,std::max(FullChunkCopies, RemainingIndices.size() > 2 ? std::size_t{ 2 } : std::size_t{ 1 }));
+                if (FallbackPairCount == 0 && Geometry.CanPlaceCandidateCopiesOnBoard(Candidate, AOptions, PracticalCopies)){
+                    FallbackPairCount = TrialPairCount;
+                    FallbackCandidate = Candidate;
                 }
 
-                PreferredPairCount = TrialPairCount;
-                FirstCandidate = std::move(Candidate);
-                break;
+                const std::size_t AllChunkCopies = (RemainingIndices.size() + ChildCount - 1) / ChildCount;
+                if (Geometry.CanPlaceCandidateCopiesOnBoard(Candidate, AOptions, AllChunkCopies)){
+                    PreferredPairCount = TrialPairCount;
+                    FirstCandidate = std::move(Candidate);
+                    break;
+                }
+            }
+
+            if (PreferredPairCount == 0 && FallbackPairCount > 0){
+                PreferredPairCount = FallbackPairCount;
+                FirstCandidate = std::move(FallbackCandidate);
             }
 
             if (PreferredPairCount == 0){
@@ -811,6 +823,49 @@ namespace ET {
             const double BinWidth = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth));
             const double BinHeight = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinHeight));
             const bool QuarterTurnAllowed = CetRotationUtils::IsAllowedRotation(CET_CLUSTER_HALF_PI, AOptions.Rotations, 1e-9);
+            CetClusterGeometryHelper Geometry;
+
+            auto FindMinimumPairPitch = [&](bool AHorizontal, double AFallbackPitch) {
+                if (PairCandidates.size() < 2 || AFallbackPitch <= 0.0){
+                    return AFallbackPitch;
+                }
+
+                auto HasValidPitch = [&](double APitch) {
+                    std::vector<TetItemTransform> ProbeTransforms = PairCandidates[0].Transforms;
+                    ProbeTransforms.reserve(PairCandidates[0].Transforms.size() + PairCandidates[1].Transforms.size());
+                    for (TetItemTransform Transform : PairCandidates[1].Transforms){
+                        if (AHorizontal){
+                            Transform.RelativeX += APitch;
+                        }
+                        else {
+                            Transform.RelativeY += APitch;
+                        }
+                        ProbeTransforms.push_back(Transform);
+                    }
+                    return Geometry.HasValidTransformSpacing(AOriginalItems, AOptions, ProbeTransforms);
+                    };
+
+                if (!HasValidPitch(AFallbackPitch)){
+                    return AFallbackPitch;
+                }
+
+                double InvalidPitch = 0.0;
+                double ValidPitch = AFallbackPitch;
+                for (int SearchIndex = 0; SearchIndex < CET_TRIANGLE_PAIR_PITCH_SEARCH_STEPS; ++SearchIndex){
+                    const double TrialPitch = (InvalidPitch + ValidPitch) * 0.5;
+                    if (HasValidPitch(TrialPitch)){
+                        ValidPitch = TrialPitch;
+                    }
+                    else {
+                        InvalidPitch = TrialPitch;
+                    }
+                }
+
+                return std::min(AFallbackPitch, ValidPitch + SafetyGap);
+                };
+
+            const double PairPitchX = FindMinimumPairPitch(true, CellWidth + CellGap);
+            const double PairPitchY = FindMinimumPairPitch(false, CellHeight + CellGap);
 
             struct TetGeneralTriangleLayout
             {
@@ -826,8 +881,8 @@ namespace ET {
             Layouts.reserve(static_cast<std::size_t>(PairCount));
             for (int Rows = 1; Rows <= PairCount; ++Rows){
                 const int Cols = (PairCount + Rows - 1) / Rows;
-                const double Width = static_cast<double>(Cols) * CellWidth + static_cast<double>(std::max(0, Cols - 1)) * CellGap;
-                const double Height = static_cast<double>(Rows) * CellHeight + static_cast<double>(std::max(0, Rows - 1)) * CellGap;
+                const double Width = CellWidth + static_cast<double>(std::max(0, Cols - 1)) * PairPitchX;
+                const double Height = CellHeight + static_cast<double>(std::max(0, Rows - 1)) * PairPitchY;
                 const bool FitsNormally = Width <= BinWidth && Height <= BinHeight;
                 const bool FitsRotated = QuarterTurnAllowed && Height <= BinWidth && Width <= BinHeight;
                 if (!FitsNormally && !FitsRotated){
@@ -856,7 +911,6 @@ namespace ET {
                 return A.Rows < AB.Rows;
                 });
 
-            CetClusterGeometryHelper Geometry;
             const std::size_t MaxLayoutChecks = std::min<std::size_t>(Layouts.size(), 3);
             for (std::size_t LayoutIndex = 0; LayoutIndex < MaxLayoutChecks; ++LayoutIndex){
                 const TetGeneralTriangleLayout& Layout = Layouts[LayoutIndex];
@@ -873,8 +927,8 @@ namespace ET {
                     const TetClusterCandidate& PairCandidate = PairCandidates[static_cast<std::size_t>(PairIndex)];
                     const int Row = PairIndex / Layout.Cols;
                     const int Col = PairIndex % Layout.Cols;
-                    const double BaseX = static_cast<double>(Col) * (CellWidth + CellGap) + (CellWidth - PairCandidate.ClusterWidth) * 0.5;
-                    const double BaseY = static_cast<double>(Row) * (CellHeight + CellGap) + (CellHeight - PairCandidate.ClusterHeight) * 0.5;
+                    const double BaseX = static_cast<double>(Col) * PairPitchX + (CellWidth - PairCandidate.ClusterWidth) * 0.5;
+                    const double BaseY = static_cast<double>(Row) * PairPitchY + (CellHeight - PairCandidate.ClusterHeight) * 0.5;
 
                     for (const TetItemTransform& PairTransform : PairCandidate.Transforms){
                         TetItemTransform Transform = PairTransform;

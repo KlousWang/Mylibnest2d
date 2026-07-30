@@ -321,7 +321,7 @@ namespace ET {
             return true;
         }
 
-        bool CetClusterGeometryHelper::_ValidateChildSpacing(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const TetClusterCandidate& ACandidate) const 
+        bool CetClusterGeometryHelper::_ValidateChildSpacing(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const TetClusterCandidate& ACandidate, bool ALogRejection) const
         {
             
 
@@ -373,17 +373,17 @@ namespace ET {
                         InflatedItemA.inflation(static_cast<decltype(OriginalInflation)>(SpacingCoord));
 
                         if (CetNestItem::intersects(InflatedItemA, ItemB)){
-                            std::cout << "[GEOMETRY][REJECT] Child spacing violation. A=" << TransformA.OriginalId << ", B=" << TransformB.OriginalId << ", RequiredSpacing=" << AOptions.Spacing << ", SpacingCoord=" << SpacingCoord << std::endl;
+                            if (ALogRejection){
+                                std::cout << "[GEOMETRY][REJECT] Child spacing violation. A=" << TransformA.OriginalId << ", B=" << TransformB.OriginalId << ", RequiredSpacing=" << AOptions.Spacing << ", SpacingCoord=" << SpacingCoord << std::endl;
+                            }
                             return false;
                         }
                     }
-                    else {
-                        
-
-
-
+                    else {                      
                         if (CetNestItem::intersects(ItemA, ItemB)){
-                            std::cout << "[GEOMETRY][REJECT] Child intersects. A=" << TransformA.OriginalId << ", B=" << TransformB.OriginalId << std::endl;
+                            if (ALogRejection){
+                                std::cout << "[GEOMETRY][REJECT] Child intersects. A=" << TransformA.OriginalId << ", B=" << TransformB.OriginalId << std::endl;
+                            }
                             return false;
                         }
                     }
@@ -400,8 +400,20 @@ namespace ET {
             if (ACandidate.ProxyContour.size() < 3 || ACandidate.ProxyArea <= 0.0 || !std::isfinite(ACandidate.ProxyArea)) return false;
             if (!std::isfinite(ACandidate.ProxyWasteRatio) || ACandidate.ProxyWasteRatio < 0.0 || ACandidate.ProxyWasteRatio > 1.0) return false;
             if (!_ValidateChildContainment(AOriginalItems, ACandidate)) return false;
-            if (!_ValidateChildSpacing(AOriginalItems, AOptions, ACandidate)) return false;
+            if (!_ValidateChildSpacing(AOriginalItems, AOptions, ACandidate, true)) return false;
             return true;
+        }
+
+        bool CetClusterGeometryHelper::HasValidTransformSpacing(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const std::vector<TetItemTransform>& ATransforms) const
+        {
+            TetClusterCandidate Candidate;
+            Candidate.Transforms = ATransforms;
+            Candidate.OriginalIndices.reserve(ATransforms.size());
+            for (const TetItemTransform& Transform : ATransforms){
+                Candidate.OriginalIndices.push_back(Transform.OriginalId);
+            }
+
+            return _ValidateIndexAndTransforms(AOriginalItems, Candidate) && _ValidateChildSpacing(AOriginalItems, AOptions, Candidate, false);
         }
 
         bool CetClusterGeometryHelper::FinalizeCandidate(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetClusterCandidate& ACandidate) const

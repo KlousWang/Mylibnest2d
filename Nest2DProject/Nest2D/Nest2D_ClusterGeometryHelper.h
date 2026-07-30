@@ -4,6 +4,8 @@
 #include "Nest2D_PrivateDataType.h"
 #include "Nest2D_DataType.h"
 
+#include <vector>
+
 namespace ET {
     namespace NEST2DMANAGERLIB {
         constexpr std::size_t CET_CLUSTER_TARGET_COPIES_PER_BOARD = 4;
@@ -29,12 +31,13 @@ namespace ET {
             bool FinalizeCandidate(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetClusterCandidate& ACandidate) const;
             bool FinalizeCandidate(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetClusterCandidate& ACandidate, bool AForceRectangleProxy) const;
             bool ValidateCandidateGeometry(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const TetClusterCandidate& ACandidate) const;
+            bool HasValidTransformSpacing(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const std::vector<TetItemTransform>& ATransforms) const;
             bool CanPlaceCandidateCopiesOnBoard(const TetClusterCandidate& ACandidate, const TetNestOptions& AOptions, std::size_t ARequiredCopies) const;
 
         protected:
             bool _ValidateIndexAndTransforms(const CetTNestItemVector& AOriginalItems, const TetClusterCandidate& ACandidate) const;
             bool _ValidateChildContainment(const CetTNestItemVector& AOriginalItems, const TetClusterCandidate& ACandidate) const;
-            bool _ValidateChildSpacing(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const TetClusterCandidate& ACandidate) const;
+            bool _ValidateChildSpacing(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const TetClusterCandidate& ACandidate, bool ALogRejection) const;
             bool _FitsBoardBounds(const TetClusterCandidate& ACandidate, const TetNestOptions& AOptions) const;
             bool _BuildTransformedChildContours(const CetTNestItemVector& AOriginalItems, const TetClusterCandidate& ACandidate, ClipperLib::Paths& AOutContours) const;
             double _CalculateUnionArea(const ClipperLib::Paths& AContours) const;
