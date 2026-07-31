@@ -20,6 +20,12 @@ constexpr double CET_CLUSTER_HALF_PI = CET_CLUSTER_PI * 0.5;
 constexpr double CET_CLUSTER_TWO_PI = CET_CLUSTER_PI * 2.0;
 constexpr double CET_CLUSTER_THREE_HALF_PI = CET_CLUSTER_PI * 1.5;
 
+constexpr std::size_t CET_CUSTOM_MAX_CLUSTER_CHILDREN = 8;
+constexpr std::size_t CET_CUSTOM_MAX_EDGE_CANDIDATES = 12;
+constexpr double CET_CUSTOM_EDGE_LENGTH_TOLERANCE = 0.01;
+constexpr double CET_CUSTOM_EDGE_ANGLE_TOLERANCE = CET_CLUSTER_PI / 90.0;
+constexpr double CET_CUSTOM_MAX_AREA_LOSS_RATIO = 0.08;
+
 constexpr double CET_ARC_SIZE_TOLERANCE = 0.05;
 constexpr double CET_ARC_SWEEP_TOLERANCE = CET_CLUSTER_PI / 36.0;
 constexpr double CET_ARC_SAFETY_GAP_RATIO = 0.05;
@@ -136,6 +142,36 @@ enum class MetShapeType
     QuadrilateralLike,
     ConvexPolygon,
     ConcavePolygon
+};
+
+struct TetCustomShapeKey
+{
+    MetShapeType ShapeType = MetShapeType::Unknown;
+    bool HasHoles = false;
+    std::vector<long long> OuterSignature;
+    std::vector<std::vector<long long>> HoleSignatures;
+
+    bool operator<(const TetCustomShapeKey& AOther) const
+    {
+        if (ShapeType != AOther.ShapeType){
+            return static_cast<int>(ShapeType) < static_cast<int>(AOther.ShapeType);
+        }
+        if (HasHoles != AOther.HasHoles){
+            return HasHoles < AOther.HasHoles;
+        }
+        if (OuterSignature != AOther.OuterSignature){
+            return OuterSignature < AOther.OuterSignature;
+        }
+        return HoleSignatures < AOther.HoleSignatures;
+    }
+};
+
+struct TetCustomEdgeInfo
+{
+    CetInpoint Start;
+    CetInpoint End;
+    double Length = 0.0;
+    double Angle = 0.0;
 };
 struct TetShapeBucketKey {
     MetShapeType Type = MetShapeType::Unknown;

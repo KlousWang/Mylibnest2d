@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Nest2D_EllipseClusterBuilder.h"
 #include "Nest2D_ClusterGeometryHelper.h"
+#include "Nest2D_ClusterMathUtils.h"
 #include "Nest2D_RotationUtils.h"
 #include "NestUtils.h"
 
@@ -19,12 +20,6 @@ namespace ET {
             constexpr double CET_ELLIPSE_SIZE_TOLERANCE = 0.05;
             constexpr double CET_ELLIPSE_HONEYCOMB_ROW_RATIO = 0.90;
 
-            bool NearlyEqual(double A, double AB, double ARelativeTolerance)
-            {
-                const double Denominator = std::max(1.0, std::max(std::abs(A), std::abs(AB)));
-                return std::abs(A - AB) <= Denominator * ARelativeTolerance;
-            }
-
             bool IsValidEllipseFeature(const TetShapeFeature& AFeature)
             {
                 return AFeature.ShapeType == MetShapeType::EllipseLike &&
@@ -39,8 +34,8 @@ namespace ET {
             {
                 return IsValidEllipseFeature(A) &&
                     IsValidEllipseFeature(AB) &&
-                    NearlyEqual(A.EllipseMajorAxis, AB.EllipseMajorAxis, CET_ELLIPSE_SIZE_TOLERANCE) &&
-                    NearlyEqual(A.EllipseMinorAxis, AB.EllipseMinorAxis, CET_ELLIPSE_SIZE_TOLERANCE);
+                    CetClusterMathUtils::NearlyEqual(A.EllipseMajorAxis, AB.EllipseMajorAxis, CET_ELLIPSE_SIZE_TOLERANCE) &&
+                    CetClusterMathUtils::NearlyEqual(A.EllipseMinorAxis, AB.EllipseMinorAxis, CET_ELLIPSE_SIZE_TOLERANCE);
             }
 
             bool FitsBin(double AWidth, double AHeight, const TetNestOptions& AOptions)
@@ -114,7 +109,7 @@ namespace ET {
                         continue;
                     }
 
-                    if (NearlyEqual(BaseInfo.MajorAxis, Info.MajorAxis, CET_ELLIPSE_SIZE_TOLERANCE) &&NearlyEqual(BaseInfo.MinorAxis, Info.MinorAxis, CET_ELLIPSE_SIZE_TOLERANCE)){
+                    if (CetClusterMathUtils::NearlyEqual(BaseInfo.MajorAxis, Info.MajorAxis, CET_ELLIPSE_SIZE_TOLERANCE) &&CetClusterMathUtils::NearlyEqual(BaseInfo.MinorAxis, Info.MinorAxis, CET_ELLIPSE_SIZE_TOLERANCE)){
                         CurrentGroup.push_back(Info.Index);
                     }
                     else {

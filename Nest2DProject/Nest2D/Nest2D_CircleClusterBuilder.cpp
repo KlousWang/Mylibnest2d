@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Nest2D_CircleClusterBuilder.h"
 #include "Nest2D_ClusterGeometryHelper.h"
+#include "Nest2D_ClusterMathUtils.h"
 #include "Nest2D_RotationUtils.h"
 #include "NestUtils.h"
 
@@ -18,12 +19,6 @@ namespace ET {
         namespace {
             constexpr double CET_CIRCLE_SIZE_TOLERANCE = 0.01;
             constexpr double CET_CIRCLE_HONEYCOMB_ROW_RATIO = 0.86602540378443864676;
-
-            bool NearlyEqual(double AA, double AB, double ARelativeTolerance)
-            {
-                const double Denominator = std::max(1.0, std::max(std::abs(AA), std::abs(AB)));
-                return std::abs(AA - AB) <= Denominator * ARelativeTolerance;
-            }
 
             double GetCircleSizeKey(const TetShapeFeature& AFeature)
             {
@@ -89,7 +84,7 @@ namespace ET {
                         continue;
                     }
 
-                    if (NearlyEqual(CurrentBaseSize, Info.SizeKey, CET_CIRCLE_SIZE_TOLERANCE)){
+                    if (CetClusterMathUtils::NearlyEqual(CurrentBaseSize, Info.SizeKey, CET_CIRCLE_SIZE_TOLERANCE)){
                         CurrentGroup.push_back(Info.Index);
                     }
                     else {
@@ -382,7 +377,7 @@ namespace ET {
                 }
 
                 const double SizeKey = GetCircleSizeKey(Feature);
-                if (!NearlyEqual(BaseSize, SizeKey, CET_CIRCLE_SIZE_TOLERANCE)){
+                if (!CetClusterMathUtils::NearlyEqual(BaseSize, SizeKey, CET_CIRCLE_SIZE_TOLERANCE)){
                     return false;
                 }
 

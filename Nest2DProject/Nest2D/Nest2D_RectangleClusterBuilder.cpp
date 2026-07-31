@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Nest2D_RectangleClusterBuilder.h"
 #include "Nest2D_ClusterGeometryHelper.h"
+#include "Nest2D_ClusterMathUtils.h"
 #include "Nest2D_RotationUtils.h"
 #include "NestUtils.h"
 #include "Nest2D_PrivateDataType.h"
@@ -25,12 +26,6 @@ namespace ET {
         constexpr double CET_RECT_MAX_AREA_LOSS_RATIO = 0.10;
         constexpr std::size_t CET_RECT_MAX_CLUSTER_CHILDREN = 32;
         namespace {
-
-            bool NearlyEqual(double A, double AB, double ARelativeTolerance)
-            {
-                const double Denominator = std::max(1.0, std::max(std::abs(A), std::abs(AB)));
-                return std::abs(A - AB) <= Denominator * ARelativeTolerance;
-            }
 
             void GetCanonicalSides(const TetShapeFeature& AFeature, double& AOutShortSide, double& AOutLongSide)
             {
@@ -189,12 +184,12 @@ namespace ET {
             GetCanonicalSides(AFeatureA, ShortA, LongA);
             GetCanonicalSides(AFeatureB, ShortB, LongB);
 
-            return NearlyEqual(ShortA, ShortB, CET_RECT_SIZE_TOLERANCE) && NearlyEqual(LongA, LongB, CET_RECT_SIZE_TOLERANCE);
+            return CetClusterMathUtils::NearlyEqual(ShortA, ShortB, CET_RECT_SIZE_TOLERANCE) && CetClusterMathUtils::NearlyEqual(LongA, LongB, CET_RECT_SIZE_TOLERANCE);
         }
 
         bool CetRectangleClusterBuilder::_IsSquareLike(const TetShapeFeature& AFeature)
         {
-            return NearlyEqual(AFeature.OrientedWidth, AFeature.OrientedHeight, CET_RECT_SQUARE_TOLERANCE);
+            return CetClusterMathUtils::NearlyEqual(AFeature.OrientedWidth, AFeature.OrientedHeight, CET_RECT_SQUARE_TOLERANCE);
         }
 
         bool CetRectangleClusterBuilder::_IsQuarterTurnAllowed(const TetNestOptions& AOptions)

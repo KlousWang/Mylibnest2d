@@ -1,5 +1,7 @@
 #include "pch.h"
 #include "Nest2D_ShapeAnalyzer.h"
+#include "Nest2D_ClusterMathUtils.h"
+#include "Nest2D_RotationUtils.h"
 
 #include <cmath>
 #include <algorithm>
@@ -14,15 +16,6 @@ namespace ET {
             constexpr double CET_GENERAL_ARC_MIN_SWEEP = CET_CLUSTER_PI / 18.0;
             constexpr double CET_GENERAL_ARC_MAX_SWEEP = CET_CLUSTER_TWO_PI - CET_CLUSTER_PI / 36.0;
             constexpr double CET_GENERAL_ARC_SEMI_TOLERANCE = CET_CLUSTER_PI / 36.0;
-
-            double NormalizeAngle(double AAngle)
-            {
-                double NormalizedAngle = std::fmod(AAngle, CET_CLUSTER_TWO_PI);
-                if (NormalizedAngle < 0.0){
-                    NormalizedAngle += CET_CLUSTER_TWO_PI;
-                }
-                return NormalizedAngle;
-            }
 
             TetCircleFitResult FitCircleCenterFromThreePoints(const ClipperLib::IntPoint& AFirstPoint, const ClipperLib::IntPoint& AMiddlePoint, const ClipperLib::IntPoint& ALastPoint)
             {
@@ -236,7 +229,7 @@ namespace ET {
                 std::vector<double> Angles;
                 Angles.reserve(AChain.size());
                 for (const ClipperLib::IntPoint& Point : AChain){
-                    Angles.push_back(NormalizeAngle(std::atan2(static_cast<double>(Point.Y) - ACenterY, static_cast<double>(Point.X) - ACenterX)));
+                    Angles.push_back(CetRotationUtils::NormalizeAngle(std::atan2(static_cast<double>(Point.Y) - ACenterY, static_cast<double>(Point.X) - ACenterX)));
                 }
 
                 std::sort(Angles.begin(), Angles.end());
@@ -434,19 +427,14 @@ std::cout << "[SHAPE] Index=" << Feature.OriginalIndex << " Type=" << static_cas
             std::sort(SortedSides.begin(), SortedSides.end());
             AFeature.TriangleSides = SortedSides;
 
-            const auto NearlyEqual = [](double A, double AB, double ATolerance) {
-                const double Denominator = std::max(1.0, std::max(std::abs(A), std::abs(AB)));
-                return std::abs(A - AB) <= Denominator * ATolerance;
-                };
-
             constexpr double SideTolerance = 0.02;
-            const bool Equal01 = NearlyEqual(SortedSides[0], SortedSides[1], SideTolerance);
-            const bool Equal12 = NearlyEqual(SortedSides[1], SortedSides[2], SideTolerance);
+            const bool Equal01 = CetClusterMathUtils::NearlyEqual(SortedSides[0], SortedSides[1], SideTolerance);
+            const bool Equal12 = CetClusterMathUtils::NearlyEqual(SortedSides[1], SortedSides[2], SideTolerance);
 
             if (Equal01 && Equal12){
                 AFeature.TriangleSideType = MetTriangleSideType::Equilateral;
             }
-            else if (Equal01 || Equal12 || NearlyEqual(SortedSides[0], SortedSides[2], SideTolerance)){
+            else if (Equal01 || Equal12 || CetClusterMathUtils::NearlyEqual(SortedSides[0], SortedSides[2], SideTolerance)){
                 AFeature.TriangleSideType = MetTriangleSideType::Isosceles;
             }
             else {
@@ -511,12 +499,7 @@ std::cout << "[SHAPE] Index=" << Feature.OriginalIndex << " Type=" << static_cas
                 if (NormalizedDot > OrthogonalTolerance){ return; }
             }
 
-            auto NearlyEqual = [](double A, double AB, double ATolerance) {
-                const double Denominator = std::max(1.0, std::max(std::abs(A), std::abs(AB)));
-                return std::abs(A - AB) <= Denominator * ATolerance;
-                };
-
-            if (!NearlyEqual(EdgeLengths[0], EdgeLengths[2], LengthTolerance) || !NearlyEqual(EdgeLengths[1], EdgeLengths[3], LengthTolerance)){ return; }
+            if (!CetClusterMathUtils::NearlyEqual(EdgeLengths[0], EdgeLengths[2], LengthTolerance) || !CetClusterMathUtils::NearlyEqual(EdgeLengths[1], EdgeLengths[3], LengthTolerance)){ return; }
 
             AFeature.IsRotatedRectangle = true;
             AFeature.OrientedWidth = EdgeLengths[0];

@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Nest2D_TriangleClusterBuilder.h"
 #include"Nest2D_ClusterGeometryHelper.h"
+#include "Nest2D_ClusterMathUtils.h"
 #include"Nest2D_RotationUtils.h"
 #include"NestUtils.h"
 
@@ -208,8 +209,7 @@ namespace ET {
         }
         bool CetTriangleClusterBuilder::_NearlyEqual(double A, double AB, double ARelTol)
         {
-            double Den = std::max(1.0, std::max(std::abs(A), std::abs(AB)));
-            return std::abs(A - AB) <= Den * ARelTol;
+            return CetClusterMathUtils::NearlyEqual(A, AB, ARelTol);
         }  
         double CetTriangleClusterBuilder::_GetItemWidth(const CetNestItem& AItem)
         {

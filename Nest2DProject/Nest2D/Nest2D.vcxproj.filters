@@ -96,14 +96,14 @@
     <ClInclude Include="Nest2D_ClusterGeometryHelper.h">
       <Filter>头文件\Cluster</Filter>
     </ClInclude>
+    <ClInclude Include="Nest2D_ClusterMathUtils.h">
+      <Filter>头文件\Cluster</Filter>
+    </ClInclude>
     <ClInclude Include="Nest2D_EllipseClusterBuilder.h">
       <Filter>头文件\Cluster</Filter>
     </ClInclude>
     <ClInclude Include="Nest2D_ArcClusterBuilder.h">
       <Filter>头文件\Cluster</Filter>
-    </ClInclude>
-    <ClInclude Include="Nest2D_AreaUsageCalculator.h">
-      <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="Nest2D_RectangleClusterBuilder.h">
       <Filter>头文件\Cluster</Filter>
@@ -114,8 +114,14 @@
     <ClInclude Include="Nest2D_ClusterManager.h">
       <Filter>头文件\Cluster</Filter>
     </ClInclude>
+    <ClInclude Include="Nest2D_CustomClusterBuilder.h">
+      <Filter>头文件\Cluster</Filter>
+    </ClInclude>
     <ClInclude Include="Nest2D_RotationUtils.h">
       <Filter>头文件\Cluster</Filter>
+    </ClInclude>
+    <ClInclude Include="Nest2D_AreaUsageCalculator.h">
+      <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -165,6 +171,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Nest2D_ClusterManager.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Nest2D_CustomClusterBuilder.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Nest2D_StrategyManager.cpp">

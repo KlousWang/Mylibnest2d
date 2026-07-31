@@ -7,6 +7,7 @@
 #include "Nest2D_EllipseClusterBuilder.h"
 #include "Nest2D_RectangleClusterBuilder.h"
 #include "Nest2D_ArcClusterBuilder.h"
+#include "Nest2D_CustomClusterBuilder.h"
 #include "Nest2D_ClusterBoundary.h"
 #include "Nest2D_ClusterGeometryHelper.h"
 #include "Nest2D_RotationUtils.h"
@@ -279,6 +280,21 @@ namespace ET {
 				CetArcClusterBuilder Builder;
 				Builder.BuildCandidates(AOriginalItems, AFeatures, IndicesByType[MetShapeType::ArcLike], AOptions, BaseCandidates);
 				AppendBuilderLog("ArcBuilder", OldCount);
+			}
+			{
+				std::vector<int> CustomIndices;
+				const auto AppendCustomIndices = [&](MetShapeType AShapeType) {
+					const std::vector<int>& TypeIndices = IndicesByType[AShapeType];
+					CustomIndices.insert(CustomIndices.end(), TypeIndices.begin(), TypeIndices.end());
+					};
+				AppendCustomIndices(MetShapeType::QuadrilateralLike);
+				AppendCustomIndices(MetShapeType::ConvexPolygon);
+				AppendCustomIndices(MetShapeType::ConcavePolygon);
+
+				const std::size_t OldCount = BaseCandidates.size();
+				CetCustomClusterBuilder Builder;
+				Builder.BuildCandidates(AOriginalItems, AFeatures, CustomIndices, AOptions, BaseCandidates);
+				AppendBuilderLog("CustomBuilder", OldCount);
 			}
 
 			std::stable_sort(BaseCandidates.begin(), BaseCandidates.end(), [](const TetClusterCandidate& A, const TetClusterCandidate& AB) {

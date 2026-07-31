@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Nest2D_ArcClusterBuilder.h"
 #include "Nest2D_ClusterGeometryHelper.h"
+#include "Nest2D_ClusterMathUtils.h"
 #include "Nest2D_RotationUtils.h"
 #include "NestUtils.h"
 
@@ -17,12 +18,6 @@ namespace ET {
 
         namespace {
 
-
-            bool NearlyEqual(double AFirstValue, double ASecondValue, double ARelativeTolerance)
-            {
-                const double Denominator = std::max(1.0, std::max(std::abs(AFirstValue), std::abs(ASecondValue)));
-                return std::abs(AFirstValue - ASecondValue) <= Denominator * ARelativeTolerance;
-            }
 
             int NormalizeBulgeSign(int ABulgeSign)
             {
@@ -99,10 +94,10 @@ namespace ET {
                     return false;
                 }
 
-                const bool RadiusMatches = NearlyEqual(ABaseInfo.Radius, ATestInfo.Radius, CET_ARC_SIZE_TOLERANCE);
-                const bool ChordMatches = NearlyEqual(ABaseInfo.ChordLength, ATestInfo.ChordLength, CET_ARC_SIZE_TOLERANCE);
+                const bool RadiusMatches = CetClusterMathUtils::NearlyEqual(ABaseInfo.Radius, ATestInfo.Radius, CET_ARC_SIZE_TOLERANCE);
+                const bool ChordMatches = CetClusterMathUtils::NearlyEqual(ABaseInfo.ChordLength, ATestInfo.ChordLength, CET_ARC_SIZE_TOLERANCE);
                 const bool SweepMatches = std::abs(ABaseInfo.SweepAngle - ATestInfo.SweepAngle) <= CET_ARC_SWEEP_TOLERANCE ||
-                    NearlyEqual(ABaseInfo.SweepAngle, ATestInfo.SweepAngle, CET_ARC_SIZE_TOLERANCE);
+                    CetClusterMathUtils::NearlyEqual(ABaseInfo.SweepAngle, ATestInfo.SweepAngle, CET_ARC_SIZE_TOLERANCE);
                 return RadiusMatches && ChordMatches && SweepMatches;
             }
 

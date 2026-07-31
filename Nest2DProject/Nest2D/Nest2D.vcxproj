@@ -170,8 +170,10 @@
     <ClInclude Include="Nest2D_CircleClusterBuilder.h" />
     <ClInclude Include="Nest2D_ClusterBoundary.h" />
     <ClInclude Include="Nest2D_ClusterGeometryHelper.h" />
+    <ClInclude Include="Nest2D_ClusterMathUtils.h" />
     <ClInclude Include="Nest2D_ClusterInvokeFunctor.h" />
     <ClInclude Include="Nest2D_ClusterManager.h" />
+    <ClInclude Include="Nest2D_CustomClusterBuilder.h" />
     <ClInclude Include="Nest2D_DataType.h" />
     <ClInclude Include="ExportPhoto.h" />
     <ClInclude Include="File.h" />
@@ -216,6 +218,7 @@
     <ClCompile Include="Nest2D_ClusterGeometryHelper.cpp" />
     <ClCompile Include="Nest2D_ClusterInvokeFunctor.cpp" />
     <ClCompile Include="Nest2D_ClusterManager.cpp" />
+    <ClCompile Include="Nest2D_CustomClusterBuilder.cpp" />
     <ClCompile Include="Nest2D_EllipseClusterBuilder.cpp" />
     <ClCompile Include="Nest2D_Engine.cpp" />
     <ClCompile Include="Nest2D_GapFillClusterBuilder.cpp" />
