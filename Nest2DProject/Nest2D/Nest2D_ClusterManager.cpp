@@ -301,6 +301,9 @@ namespace ET {
 				if (std::abs(A.Score - AB.Score) > 1e-9){
 					return A.Score > AB.Score;
 				}
+				if (std::abs(A.SheetReuseScore - AB.SheetReuseScore) > 1e-9){
+					return A.SheetReuseScore > AB.SheetReuseScore;
+				}
 				if (A.OriginalIndices.size() != AB.OriginalIndices.size()){
 					return A.OriginalIndices.size() > AB.OriginalIndices.size();
 				}
@@ -330,48 +333,84 @@ namespace ET {
 
 			int GapFilledClusterCount = 0;
 			int GapFillerItemCount = 0;
-			std::size_t CustomClusteredItemCount = 0;
-			for (const TetClusterCandidate& Candidate : AcceptedCandidates){
-				if (Candidate.BuilderName == "CustomBuilder"){
-					CustomClusteredItemCount += Candidate.OriginalIndices.size();
+			const auto GetLargestChildArea = [&](const TetClusterCandidate& ACandidate) {
+				double LargestArea = 0.0;
+				for (int OriginalIndex : ACandidate.OriginalIndices){
+					if (OriginalIndex >= 0 && OriginalIndex < static_cast<int>(AFeatures.size())){
+						LargestArea = std::max(LargestArea,AFeatures[OriginalIndex].Area);
+					}
 				}
-			}
-			const bool SkipGapFillForCustomMajority = Count >= 32 && CustomClusteredItemCount * 2 >= static_cast<std::size_t>(Count);
-			if (SkipGapFillForCustomMajority){
-				std::cout << "[TEMPLATE][GAPFILL SKIP] CustomClusteredItems=" << CustomClusteredItemCount << ", OriginalItems=" << Count << std::endl;
-			}
+				return LargestArea;
+				};
+			std::stable_sort(AcceptedCandidates.begin(),AcceptedCandidates.end(),[&](const TetClusterCandidate& AFirstCandidate, const TetClusterCandidate& ASecondCandidate){
+					if (std::abs(AFirstCandidate.SheetReuseScore - ASecondCandidate.SheetReuseScore) > 1e-9){
+						return AFirstCandidate.SheetReuseScore > ASecondCandidate.SheetReuseScore;
+					}
+					if (std::abs(AFirstCandidate.FragmentationRisk - ASecondCandidate.FragmentationRisk) > 1e-9){
+						return AFirstCandidate.FragmentationRisk < ASecondCandidate.FragmentationRisk;
+					}
+					const double FirstLargestArea = GetLargestChildArea(AFirstCandidate);
+					const double SecondLargestArea = GetLargestChildArea(ASecondCandidate);
+					if (std::abs(FirstLargestArea - SecondLargestArea) > 1.0){
+						return FirstLargestArea > SecondLargestArea;
+					}
+					if (std::abs(AFirstCandidate.ProxyWasteArea - ASecondCandidate.ProxyWasteArea) > 1.0){
+						return AFirstCandidate.ProxyWasteArea > ASecondCandidate.ProxyWasteArea;
+					}
+					return AFirstCandidate.Score > ASecondCandidate.Score;
+				});
+
+			std::fill(Used.begin(),Used.end(),false);
+			std::vector<TetClusterCandidate> LocallyOptimizedCandidates;
+			LocallyOptimizedCandidates.reserve(AcceptedCandidates.size());
 
 			CetGapFillClusterBuilder GapFillBuilder;
-			for (TetClusterCandidate& Candidate : AcceptedCandidates){
-				if (SkipGapFillForCustomMajority || Candidate.BuilderName == "CustomBuilder"){
+			CetClusterGeometryHelper Geometry;
+			for (const TetClusterCandidate& BaseCandidate : AcceptedCandidates){
+				TetClusterCandidate AvailableCandidate = BaseCandidate;
+				bool RemovedUsedChild = false;
+				AvailableCandidate.OriginalIndices.clear();
+				AvailableCandidate.Transforms.clear();
+				for (const TetItemTransform& Transform : BaseCandidate.Transforms){
+					if (Transform.OriginalId < 0 || Transform.OriginalId >= Count || Used[Transform.OriginalId]){
+						RemovedUsedChild = true;
+						continue;
+					}
+					AvailableCandidate.OriginalIndices.push_back(Transform.OriginalId);
+					AvailableCandidate.Transforms.push_back(Transform);
+				}
+
+				if (AvailableCandidate.OriginalIndices.size() < 2){
+					continue;
+				}
+				if (RemovedUsedChild){
+					AvailableCandidate.ClusterType += "_Reduced" + std::to_string(AvailableCandidate.OriginalIndices.size());
+					if (!Geometry.FinalizeCandidate(AOriginalItems,AOptions,AvailableCandidate)){
+						continue;
+					}
+				}
+				if (!_CanAcceptClusterCandidate(AOriginalItems,AOptions,AvailableCandidate,Used,Count)){
 					continue;
 				}
 
 				TetClusterCandidate FilledCandidate;
-				if (!GapFillBuilder.BuildCandidateForBase(AOriginalItems, AFeatures, Candidate, AOptions, Used, FilledCandidate)){
-					continue;
-				}
-
 				int NewFillerCount = 0;
-				for (int OriginalIndex : FilledCandidate.OriginalIndices){
-					if (OriginalIndex < 0 || OriginalIndex >= Count){
-						continue;
-					}
-					if (!Used[OriginalIndex]){
-						Used[OriginalIndex] = true;
-						++NewFillerCount;
+				if (GapFillBuilder.BuildCandidateForBase(AOriginalItems,AFeatures,AvailableCandidate,AOptions,Used,FilledCandidate) &&_CanAcceptClusterCandidate(AOriginalItems,AOptions,FilledCandidate,Used,Count)){
+					NewFillerCount = static_cast<int>(FilledCandidate.OriginalIndices.size() - AvailableCandidate.OriginalIndices.size());
+					if (NewFillerCount > 0){
+						GapFillerItemCount += NewFillerCount;
+						++GapFilledClusterCount;
+						std::cout << "[TEMPLATE][GAPFILL ACCEPT] BaseType=" << AvailableCandidate.ClusterType << " FilledType=" << FilledCandidate.ClusterType << " Added=" << NewFillerCount << " ChildCount=" << FilledCandidate.OriginalIndices.size() << " Score=" << FilledCandidate.Score << std::endl;
+						AvailableCandidate = std::move(FilledCandidate);
 					}
 				}
 
-				if (NewFillerCount <= 0){
-					continue;
+				for (int OriginalIndex : AvailableCandidate.OriginalIndices){
+					Used[OriginalIndex] = true;
 				}
-
-				GapFillerItemCount += NewFillerCount;
-				++GapFilledClusterCount;
-				std::cout << "[TEMPLATE][GAPFILL ACCEPT] BaseType=" << Candidate.ClusterType << " FilledType=" << FilledCandidate.ClusterType << " Added=" << NewFillerCount << " ChildCount=" << FilledCandidate.OriginalIndices.size() << " Score=" << FilledCandidate.Score << std::endl;
-				Candidate = std::move(FilledCandidate);
+				LocallyOptimizedCandidates.push_back(std::move(AvailableCandidate));
 			}
+			AcceptedCandidates = std::move(LocallyOptimizedCandidates);
 
 			int AcceptedClusterCount = 0;
 			for (const TetClusterCandidate& Candidate : AcceptedCandidates){
@@ -932,20 +971,6 @@ namespace ET {
 			if (ACandidate.ClusterWidth <= 0.0 || ACandidate.ClusterHeight <= 0.0 || ACandidate.ProxyArea <= 0.0){
 				return false;
 			}
-			if (ACandidate.BuilderName == "CustomBuilder"){
-				const double BoundingArea = ACandidate.ClusterWidth * ACandidate.ClusterHeight;
-				const double BoundingFillRatio = BoundingArea > 0.0 ? std::clamp(ACandidate.RealArea / BoundingArea,0.0,1.0) : 0.0;
-				const double BinWidth = std::max(1.0,static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth)));
-				const double BinHeight = std::max(1.0,static_cast<double>(NestUtils::ToNestCoord(AOptions.BinHeight)));
-				const double BoardSpanRatio = std::max(ACandidate.ClusterWidth / BinWidth,ACandidate.ClusterHeight / BinHeight);
-				const bool LargeSparseProxy = ACandidate.OriginalIndices.size() >= 4 &&BoardSpanRatio > 0.20 && BoundingFillRatio < 0.50;
-				const bool PoorRectangleFallback = ACandidate.ProxyMode == MetClusterProxyMode::RectangleFallback &&BoundingFillRatio < 0.58;
-				if (BoardSpanRatio > 0.45 || ACandidate.ProxyWasteRatio > 0.55 ||LargeSparseProxy || PoorRectangleFallback){
-					std::cout << "[TEMPLATE][CUSTOM REJECT] Type=" << ACandidate.ClusterType << " BoardSpanRatio=" << BoardSpanRatio << " BoundingFillRatio=" << BoundingFillRatio << " ProxyWasteRatio=" << ACandidate.ProxyWasteRatio << std::endl;
-					return false;
-				}
-			}
-
 			std::set<int> CandidateIds;
 			std::set<int> TransformIds;
 			for (int OriginalIndex : ACandidate.OriginalIndices){
@@ -994,7 +1019,7 @@ namespace ET {
 			Meta.ClusterType = ACandidate.ClusterType.empty() ? "UnknownTemplateCluster" : ACandidate.ClusterType;
 			Meta.TransformData = ACandidate.Transforms;
 			AResult.MetaItems.push_back(std::move(Meta));
-			std::cout << "[TEMPLATE][CANDIDATE ADD] Builder=" << ACandidate.BuilderName << " Type=" << ACandidate.ClusterType << " ChildCount=" << ACandidate.OriginalIndices.size() << " Width=" << ACandidate.ClusterWidth << " Height=" << ACandidate.ClusterHeight << " FillRatio=" << ACandidate.FillRatio << " Score=" << ACandidate.Score << " PackedIndex=" << PackedIndex << std::endl;
+			std::cout << "[TEMPLATE][CANDIDATE ADD] Builder=" << ACandidate.BuilderName << " Type=" << ACandidate.ClusterType << " ChildCount=" << ACandidate.OriginalIndices.size() << " Width=" << ACandidate.ClusterWidth << " Height=" << ACandidate.ClusterHeight << " FillRatio=" << ACandidate.FillRatio << " BoundingFill=" << ACandidate.BoundingFillRatio << " Reuse=" << ACandidate.SheetReuseScore << " Score=" << ACandidate.Score << " PackedIndex=" << PackedIndex << std::endl;
 			return true;
 		}
 

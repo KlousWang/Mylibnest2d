@@ -20,8 +20,8 @@ constexpr double CET_CLUSTER_HALF_PI = CET_CLUSTER_PI * 0.5;
 constexpr double CET_CLUSTER_TWO_PI = CET_CLUSTER_PI * 2.0;
 constexpr double CET_CLUSTER_THREE_HALF_PI = CET_CLUSTER_PI * 1.5;
 
-constexpr std::size_t CET_CUSTOM_MAX_CLUSTER_CHILDREN = 8;
 constexpr double CET_CUSTOM_MAX_AREA_LOSS_RATIO = 0.08;
+constexpr std::size_t CET_CUSTOM_MAX_CLUSTER_CHILDREN = 64;
 
 constexpr double CET_ARC_SIZE_TOLERANCE = 0.05;
 constexpr double CET_ARC_SWEEP_TOLERANCE = CET_CLUSTER_PI / 36.0;

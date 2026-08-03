@@ -254,6 +254,13 @@ struct TetClusterCandidate
 	double ProxyWasteArea = 0.0;
 	double ProxyWasteRatio = 0.0;
 
+	double BoundingBoxArea = 0.0;
+	double BoundingFillRatio = 0.0;
+	double CompactnessRatio = 0.0;
+	double BoardSpanRatio = 0.0;
+	double SheetReuseScore = 0.0;
+	double FragmentationRisk = 1.0;
+
 	
 	double BaselineArea = 0.0;
 

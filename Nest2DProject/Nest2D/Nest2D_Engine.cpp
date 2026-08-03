@@ -390,16 +390,7 @@ namespace ET {
 				return LocalBest;
 			}
 
-			std::size_t CustomClusteredItemCount = 0;
-			for (const TetMetaItem& Meta : AClusterResult.MetaItems){
-				if (Meta.IsCluster && Meta.ClusterType.find("CustomLayout_") == 0){
-					CustomClusteredItemCount += Meta.TransformData.size();
-				}
-			}
-			const bool HasCustomClusterMajority = AOriginalItems.size() >= 32 && CustomClusteredItemCount * 2 >= AOriginalItems.size();
-			const std::vector<MetENestOrderStrategy> Strategies = HasCustomClusterMajority
-				? std::vector<MetENestOrderStrategy>{ MetENestOrderStrategy::SmallFirst }
-				: std::vector<MetENestOrderStrategy>{
+			const std::vector<MetENestOrderStrategy> Strategies = {
 					MetENestOrderStrategy::LargeFirst,
 					MetENestOrderStrategy::SmallFirst,
 					MetENestOrderStrategy::LongSideFirst,
@@ -501,6 +492,13 @@ namespace ET {
 						<< ", layers = " << LocalBest.Eval.Layers
 						<< ", packedItems = " << LocalBest.Items.size()
 						<< std::endl;
+				}
+
+				// Once every original item is on the first layer, no later ordering can
+				// improve the objective used by IsBetterNestResult.
+				if (LocalBest.HasBest && LocalBest.Layers == 1 && LocalBest.Eval.FirstBinCount >= AOriginalItems.size()){
+					std::cout << "[NEST][EVAL][EARLY STOP] All original items fit in one layer." << std::endl;
+					break;
 				}
 			}
 

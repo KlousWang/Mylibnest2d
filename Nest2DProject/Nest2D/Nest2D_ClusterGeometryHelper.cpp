@@ -321,46 +321,51 @@ namespace ET {
             return true;
         }
 
+        bool CetClusterGeometryHelper::_HaveRequiredSpacing(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const TetItemTransform& AFirstTransform, const TetItemTransform& ASecondTransform) const
+        {
+            if (AFirstTransform.OriginalId < 0 || AFirstTransform.OriginalId >= static_cast<int>(AOriginalItems.size()) ||ASecondTransform.OriginalId < 0 || ASecondTransform.OriginalId >= static_cast<int>(AOriginalItems.size())){
+                return false;
+            }
+
+            const double SpacingCoord = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
+            CetNestItem FirstItem = AOriginalItems[AFirstTransform.OriginalId];
+            FirstItem.translation(libnest2d::Point(static_cast<ClipperLib::cInt>(std::llround(AFirstTransform.RelativeX)),static_cast<ClipperLib::cInt>(std::llround(AFirstTransform.RelativeY))));
+            FirstItem.rotation(libnest2d::Radians(AFirstTransform.RelativeRotation));
+            FirstItem.inflation(0);
+
+            CetNestItem SecondItem = AOriginalItems[ASecondTransform.OriginalId];
+            SecondItem.translation(libnest2d::Point(static_cast<ClipperLib::cInt>(std::llround(ASecondTransform.RelativeX)),static_cast<ClipperLib::cInt>(std::llround(ASecondTransform.RelativeY))));
+            SecondItem.rotation(libnest2d::Radians(ASecondTransform.RelativeRotation));
+            SecondItem.inflation(0);
+
+            if (SpacingCoord > 0.0){
+                CetNestItem InflatedFirstItem = FirstItem;
+                const auto OriginalInflation = InflatedFirstItem.inflation();
+                InflatedFirstItem.inflation(static_cast<decltype(OriginalInflation)>(SpacingCoord));
+                return !CetNestItem::intersects(InflatedFirstItem,SecondItem);
+            }
+
+            return !CetNestItem::intersects(FirstItem,SecondItem);
+        }
+
         bool CetClusterGeometryHelper::_ValidateChildSpacing(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const TetClusterCandidate& ACandidate, bool ALogRejection) const
-        {         
+        {
             const double SpacingCoord = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
 
             for (std::size_t i = 0; i < ACandidate.Transforms.size(); ++i){
-                const auto& TransformA = ACandidate.Transforms[i];
-                CetNestItem ItemA = AOriginalItems[TransformA.OriginalId];
-
-                ItemA.translation(libnest2d::Point(static_cast<ClipperLib::cInt>(std::llround(TransformA.RelativeX)), static_cast<ClipperLib::cInt>(std::llround(TransformA.RelativeY))));
-                ItemA.rotation(libnest2d::Radians(TransformA.RelativeRotation));
-
-                ItemA.inflation(0);
-
                 for (std::size_t j = i + 1; j < ACandidate.Transforms.size(); ++j){
-                    const auto& TransformB = ACandidate.Transforms[j];
-                    CetNestItem ItemB = AOriginalItems[TransformB.OriginalId];
-                    ItemB.translation(libnest2d::Point(static_cast<ClipperLib::cInt>(std::llround(TransformB.RelativeX)), static_cast<ClipperLib::cInt>(std::llround(TransformB.RelativeY))));
-                    ItemB.rotation(libnest2d::Radians(TransformB.RelativeRotation));
-                    ItemB.inflation(0);
-
-                    if (SpacingCoord > 0.0){
-                        
-                        CetNestItem InflatedItemA = ItemA;
-                        const auto OriginalInflation = InflatedItemA.inflation();
-                        InflatedItemA.inflation(static_cast<decltype(OriginalInflation)>(SpacingCoord));
-
-                        if (CetNestItem::intersects(InflatedItemA, ItemB)){
-                            if (ALogRejection){
+                    const TetItemTransform& TransformA = ACandidate.Transforms[i];
+                    const TetItemTransform& TransformB = ACandidate.Transforms[j];
+                    if (!_HaveRequiredSpacing(AOriginalItems,AOptions,TransformA,TransformB)){
+                        if (ALogRejection){
+                            if (SpacingCoord > 0.0){
                                 std::cout << "[GEOMETRY][REJECT] Child spacing violation. A=" << TransformA.OriginalId << ", B=" << TransformB.OriginalId << ", RequiredSpacing=" << AOptions.Spacing << ", SpacingCoord=" << SpacingCoord << std::endl;
                             }
-                            return false;
-                        }
-                    }
-                    else {                      
-                        if (CetNestItem::intersects(ItemA, ItemB)){
-                            if (ALogRejection){
+                            else {
                                 std::cout << "[GEOMETRY][REJECT] Child intersects. A=" << TransformA.OriginalId << ", B=" << TransformB.OriginalId << std::endl;
                             }
-                            return false;
                         }
+                        return false;
                     }
                 }
             }
@@ -409,6 +414,12 @@ namespace ET {
             ACandidate.ReservedArea = 0.0;
             ACandidate.ProxyWasteArea = 0.0;
             ACandidate.ProxyWasteRatio = 1.0;
+            ACandidate.BoundingBoxArea = 0.0;
+            ACandidate.BoundingFillRatio = 0.0;
+            ACandidate.CompactnessRatio = 0.0;
+            ACandidate.BoardSpanRatio = 0.0;
+            ACandidate.SheetReuseScore = 0.0;
+            ACandidate.FragmentationRisk = 1.0;
             ACandidate.BaselineArea = 0.0;
             ACandidate.AreaSavingRatio = 0.0;
 
@@ -506,6 +517,34 @@ namespace ET {
             ACandidate.ProxyWasteRatio = ACandidate.ProxyArea > AreaTolerance ? ACandidate.ProxyWasteArea / ACandidate.ProxyArea : 1.0;
             if (!std::isfinite(ACandidate.ProxyWasteRatio)) ACandidate.ProxyWasteRatio = 1.0;
             ACandidate.ProxyWasteRatio = std::clamp(ACandidate.ProxyWasteRatio, 0.0, 1.0);
+
+            ACandidate.BoundingBoxArea = ACandidate.ClusterWidth * ACandidate.ClusterHeight;
+            if (!std::isfinite(ACandidate.BoundingBoxArea) || ACandidate.BoundingBoxArea <= 0.0){
+                return false;
+            }
+
+            ACandidate.BoundingFillRatio = std::clamp(ACandidate.RealArea / ACandidate.BoundingBoxArea, 0.0, 1.0);
+            const double LongSide = std::max(ACandidate.ClusterWidth, ACandidate.ClusterHeight);
+            const double ShortSide = std::min(ACandidate.ClusterWidth, ACandidate.ClusterHeight);
+            ACandidate.CompactnessRatio = LongSide > 0.0 ? std::clamp(ShortSide / LongSide, 0.0, 1.0) : 0.0;
+
+            const double BinWidth = std::max(1.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth)));
+            const double BinHeight = std::max(1.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.BinHeight)));
+            ACandidate.BoardSpanRatio = std::clamp(
+                std::max(ACandidate.ClusterWidth / BinWidth, ACandidate.ClusterHeight / BinHeight),
+                0.0,
+                1.0);
+
+            // A sparse or slender cluster is more likely to leave disconnected scraps
+            // even when its exact proxy area looks efficient.
+            const double HollowRisk = 1.0 - ACandidate.BoundingFillRatio;
+            const double SlenderRisk = 1.0 - ACandidate.CompactnessRatio;
+            const double ExcessiveSpanRisk = std::clamp((ACandidate.BoardSpanRatio - 0.55) / 0.45, 0.0, 1.0);
+            ACandidate.FragmentationRisk = std::clamp(
+                HollowRisk * 0.55 + SlenderRisk * 0.30 + ExcessiveSpanRisk * 0.15,
+                0.0,
+                1.0);
+            ACandidate.SheetReuseScore = 1.0 - ACandidate.FragmentationRisk;
 
             ACandidate.ProxyContourNormalized = true;
             if (!_FitsBoardBounds(ACandidate, AOptions)) return false;

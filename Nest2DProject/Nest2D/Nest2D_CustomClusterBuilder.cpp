@@ -177,6 +177,105 @@ namespace ET {
                 }
                 return Result;
             }
+
+            std::vector<std::size_t> BuildLayoutRowCounts(std::size_t AItemCount, double ACellWidth, double ACellHeight, double AColumnPitch, double ARowPitch, double ARowStaggerRatio, const TetNestOptions& AOptions)
+            {
+                struct TetRowLayoutEstimate
+                {
+                    std::size_t RowCount = 0;
+                    double Score = 0.0;
+                };
+
+                std::vector<TetRowLayoutEstimate> Estimates;
+                if (AItemCount == 0 || ACellWidth <= 0.0 || ACellHeight <= 0.0 || AColumnPitch <= 0.0 || ARowPitch <= 0.0){
+                    return {};
+                }
+
+                const double BinWidth = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth));
+                const double BinHeight = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinHeight));
+                if (BinWidth <= 0.0 || BinHeight <= 0.0){
+                    return {};
+                }
+
+                const bool QuarterTurnAllowed = CetRotationUtils::IsAllowedRotation(CET_CLUSTER_HALF_PI,AOptions.Rotations,1e-9);
+                const double BoardAspectRatio = std::max(BinWidth,BinHeight) / std::max(1.0,std::min(BinWidth,BinHeight));
+                Estimates.reserve(AItemCount);
+
+                for (std::size_t RowCount = 1; RowCount <= AItemCount; ++RowCount){
+                    const std::size_t ColumnCount = (AItemCount + RowCount - 1) / RowCount;
+                    const double EstimatedWidth = ACellWidth + static_cast<double>(ColumnCount - 1) * AColumnPitch + (RowCount > 1 ? std::abs(ARowStaggerRatio) * AColumnPitch : 0.0);
+                    const double EstimatedHeight = ACellHeight + static_cast<double>(RowCount - 1) * ARowPitch;
+                    const bool FitsNormal = EstimatedWidth <= BinWidth && EstimatedHeight <= BinHeight;
+                    const bool FitsRotated = QuarterTurnAllowed && EstimatedHeight <= BinWidth && EstimatedWidth <= BinHeight;
+                    if (!FitsNormal && !FitsRotated){
+                        continue;
+                    }
+
+                    const std::size_t CellCount = RowCount * ColumnCount;
+                    const double EmptyCellRatio = static_cast<double>(CellCount - AItemCount) / static_cast<double>(CellCount);
+                    const double LayoutAspectRatio = std::max(EstimatedWidth,EstimatedHeight) / std::max(1.0,std::min(EstimatedWidth,EstimatedHeight));
+                    const double AspectPenalty = std::abs(std::log(std::max(1e-9,LayoutAspectRatio / BoardAspectRatio)));
+                    Estimates.push_back({ RowCount, EmptyCellRatio * 4.0 + AspectPenalty });
+                }
+
+                std::stable_sort(Estimates.begin(),Estimates.end(),[](const TetRowLayoutEstimate& AFirst, const TetRowLayoutEstimate& ASecond){
+                        if (std::abs(AFirst.Score - ASecond.Score) > 1e-9){
+                            return AFirst.Score < ASecond.Score;
+                        }
+                        return AFirst.RowCount < ASecond.RowCount;
+                    });
+
+                const std::size_t ExactRowLimit = AItemCount <= 8 ? Estimates.size() : std::min<std::size_t>(6,Estimates.size());
+                std::vector<std::size_t> Result;
+                Result.reserve(ExactRowLimit + 2);
+                for (std::size_t EstimateIndex = 0; EstimateIndex < ExactRowLimit; ++EstimateIndex){
+                    Result.push_back(Estimates[EstimateIndex].RowCount);
+                }
+                const auto AppendExtremeRowCount = [&](std::size_t ARowCount) {
+                    const auto EstimateIt = std::find_if(Estimates.begin(),Estimates.end(),[ARowCount](const TetRowLayoutEstimate& AEstimate){
+                            return AEstimate.RowCount == ARowCount;
+                        });
+                    if (EstimateIt != Estimates.end() && std::find(Result.begin(),Result.end(),ARowCount) == Result.end()){
+                        Result.push_back(ARowCount);
+                    }
+                    };
+                AppendExtremeRowCount(1);
+                AppendExtremeRowCount(AItemCount);
+                std::sort(Result.begin(),Result.end());
+                return Result;
+            }
+
+            std::vector<std::size_t> BuildCandidateChildCounts(std::size_t AItemCount)
+            {
+                const std::size_t MaxChildCount = std::min(AItemCount, CET_CUSTOM_MAX_CLUSTER_CHILDREN);
+                if (MaxChildCount < 2){
+                    return {};
+                }
+
+                std::vector<std::size_t> Result;
+                const auto AddCount = [&](std::size_t ACount) {
+                    if (ACount >= 2 && ACount <= MaxChildCount && std::find(Result.begin(), Result.end(), ACount) == Result.end()){
+                        Result.push_back(ACount);
+                    }
+                };
+
+                AddCount(MaxChildCount);
+                if (MaxChildCount > 16){
+                    AddCount((MaxChildCount * 3) / 4);
+                    AddCount(MaxChildCount / 2);
+                    AddCount(MaxChildCount / 4);
+                    AddCount(16);
+                    AddCount(8);
+                    AddCount(4);
+                }
+                else {
+                    for (std::size_t Count = 2; Count <= MaxChildCount; ++Count){
+                        AddCount(Count);
+                    }
+                }
+                AddCount(2);
+                return Result;
+            }
         }
 
         CetCustomClusterBuilder::CetCustomClusterBuilder() : CetCoreObject() {}
@@ -210,7 +309,245 @@ namespace ET {
                 }
             }
 
+            if (IndicesByShape.size() > 1){
+                TetClusterCandidate MixedCandidate;
+                if (_BuildMixedShapeCandidate(AOriginalItems,AFeatures,AIndices,AOptions,MixedCandidate)){
+                    std::cout << "[CUSTOM][MIXED CANDIDATE] ChildCount=" << MixedCandidate.OriginalIndices.size() << ", Type=" << MixedCandidate.ClusterType << ", Score=" << MixedCandidate.Score << std::endl;
+                    AOutCandidates.push_back(std::move(MixedCandidate));
+                }
+            }
+
             std::cout << "[CUSTOM][BUILD CANDIDATES] IndexCount=" << AIndices.size() << ", ShapeGroupCount=" << IndicesByShape.size() << ", NewCandidateCount=" << AOutCandidates.size() - OldCandidateCount << std::endl;
+        }
+
+        bool CetCustomClusterBuilder::_BuildMixedShapeCandidate(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const std::vector<int>& AIndices, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate)
+        {
+            AOutCandidate = TetClusterCandidate{};
+            if (AIndices.size() < 2 || AFeatures.size() != AOriginalItems.size()){
+                return false;
+            }
+
+            CetClusterGeometryHelper Geometry;
+            const double BoardWidth = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth));
+            const double BoardHeight = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinHeight));
+            const double LayoutGap = GetLayoutGap(AOptions) * 2.0;
+            if (BoardWidth <= 0.0 || BoardHeight <= 0.0 || LayoutGap <= 0.0){
+                return false;
+            }
+
+            const std::vector<double> AllowedRotations = CetRotationUtils::BuildAllowedRotations(AOptions.Rotations);
+            if (AllowedRotations.empty()){
+                return false;
+            }
+
+            std::map<int, int> GroupByIndex;
+            std::map<TetCustomShapeKey, int> GroupIds;
+            int NextGroupId = 0;
+            for (int OriginalIndex : AIndices){
+                TetCustomShapeKey ShapeKey;
+                if (OriginalIndex >= 0 && OriginalIndex < static_cast<int>(AOriginalItems.size()) && BuildShapeKey(AOriginalItems[OriginalIndex], AFeatures[OriginalIndex], ShapeKey)){
+                    auto GroupIt = GroupIds.find(ShapeKey);
+                    if (GroupIt == GroupIds.end()){
+                        GroupIt = GroupIds.emplace(std::move(ShapeKey), NextGroupId++).first;
+                    }
+                    GroupByIndex[OriginalIndex] = GroupIt->second;
+                }
+                else {
+                    GroupByIndex[OriginalIndex] = NextGroupId++;
+                }
+            }
+
+            std::vector<std::vector<int>> ShapeGroups;
+            ShapeGroups.resize(static_cast<std::size_t>(NextGroupId));
+            for (const auto& GroupEntry : GroupByIndex){
+                if (GroupEntry.second >= 0 && GroupEntry.second < static_cast<int>(ShapeGroups.size())){
+                    ShapeGroups[GroupEntry.second].push_back(GroupEntry.first);
+                }
+            }
+            for (std::vector<int>& ShapeGroup : ShapeGroups){
+                std::sort(ShapeGroup.begin(), ShapeGroup.end());
+            }
+
+            std::vector<int> Order = AIndices;
+            TetClusterCandidate BestCandidate;
+            bool HasBest = false;
+            const double TargetWidthRatios[] = { 0.50, 0.80, 1.00 };
+
+            const auto BuildTrialCounts = [](std::size_t APlacedCount) {
+                const std::size_t MaxPlacedCount = std::min(APlacedCount,CET_CUSTOM_MAX_CLUSTER_CHILDREN);
+                const std::size_t PreferredCounts[] = { 2, 4, 6, 8, 12, 16, 24, 32, 48, 64 };
+                std::vector<std::size_t> Result;
+                for (std::size_t Count : PreferredCounts){
+                    if (Count <= MaxPlacedCount && std::find(Result.begin(), Result.end(), Count) == Result.end()){
+                        Result.push_back(Count);
+                    }
+                }
+                if (MaxPlacedCount >= 2 && std::find(Result.begin(), Result.end(), MaxPlacedCount) == Result.end()){
+                    Result.push_back(MaxPlacedCount);
+                }
+                return Result;
+            };
+
+            const auto HasMultipleGroups = [&](const std::vector<int>& APlacedIndices, std::size_t ACount) {
+                if (ACount < 2 || APlacedIndices.empty()){
+                    return false;
+                }
+                const auto FirstGroupIt = GroupByIndex.find(APlacedIndices.front());
+                if (FirstGroupIt == GroupByIndex.end()){
+                    return false;
+                }
+                const int FirstGroup = FirstGroupIt->second;
+                for (std::size_t Index = 1; Index < ACount && Index < APlacedIndices.size(); ++Index){
+                    const auto GroupIt = GroupByIndex.find(APlacedIndices[Index]);
+                    if (GroupIt != GroupByIndex.end() && GroupIt->second != FirstGroup){
+                        return true;
+                    }
+                }
+                return false;
+            };
+
+            const int OrderModes[] = { 0, 3 };
+            for (int OrderMode : OrderModes){
+                if (OrderMode == 3){
+                    Order.clear();
+                    std::size_t GroupOffset = 0;
+                    bool AddedAny = true;
+                    while (AddedAny){
+                        AddedAny = false;
+                        for (const std::vector<int>& ShapeGroup : ShapeGroups){
+                            if (GroupOffset < ShapeGroup.size()){
+                                Order.push_back(ShapeGroup[GroupOffset]);
+                                AddedAny = true;
+                            }
+                        }
+                        ++GroupOffset;
+                    }
+                }
+                else {
+                    Order = AIndices;
+                    std::stable_sort(Order.begin(),Order.end(),[&](int AFirstIndex, int ASecondIndex){
+                            const TetShapeFeature& FirstFeature = AFeatures[AFirstIndex];
+                            const TetShapeFeature& SecondFeature = AFeatures[ASecondIndex];
+                            if (OrderMode == 0 && std::abs(FirstFeature.Area - SecondFeature.Area) > 1.0){
+                                return FirstFeature.Area > SecondFeature.Area;
+                            }
+                            if (OrderMode == 1 && std::abs(std::max(FirstFeature.Width,FirstFeature.Height) - std::max(SecondFeature.Width,SecondFeature.Height)) > 1.0){
+                                return std::max(FirstFeature.Width,FirstFeature.Height) > std::max(SecondFeature.Width,SecondFeature.Height);
+                            }
+                            if (OrderMode == 2 && std::abs(FirstFeature.Width - SecondFeature.Width) > 1.0){
+                                return FirstFeature.Width > SecondFeature.Width;
+                            }
+                            return AFirstIndex < ASecondIndex;
+                        });
+                }
+
+                for (double TargetWidthRatio : TargetWidthRatios){
+                    const double TargetWidth = BoardWidth * TargetWidthRatio;
+                    if (TargetWidth <= 0.0){
+                        continue;
+                    }
+
+                    std::vector<int> PlacedIndices;
+                    std::vector<TetItemTransform> Transforms;
+                    PlacedIndices.reserve(Order.size());
+                    Transforms.reserve(Order.size());
+                    double CurrentY = 0.0;
+                    double CurrentX = 0.0;
+                    double CurrentRowHeight = 0.0;
+
+                    for (int OriginalIndex : Order){
+                        if (OriginalIndex < 0 || OriginalIndex >= static_cast<int>(AOriginalItems.size())){
+                            continue;
+                        }
+
+                        std::vector<TetCustomRotationPose> Poses;
+                        Poses.reserve(AllowedRotations.size());
+                        for (double Rotation : AllowedRotations){
+                            TetCustomRotationPose Pose;
+                            if (BuildRotationPose(Geometry,AOriginalItems[OriginalIndex],Rotation,Pose)){
+                                Poses.push_back(Pose);
+                            }
+                        }
+                        if (Poses.empty()){
+                            continue;
+                        }
+
+                        const auto SelectPose = [&](bool AFitsCurrentRow, TetCustomRotationPose& AOutPose) {
+                            bool HasPose = false;
+                            for (const TetCustomRotationPose& Pose : Poses){
+                                if (AFitsCurrentRow && CurrentX > 0.0 && CurrentX + Pose.Width > TargetWidth + 1.0){
+                                    continue;
+                                }
+                                if (!HasPose || Pose.Height < AOutPose.Height - 1.0 ||(std::abs(Pose.Height - AOutPose.Height) <= 1.0 && Pose.Width < AOutPose.Width)){
+                                    AOutPose = Pose;
+                                    HasPose = true;
+                                }
+                            }
+                            return HasPose;
+                            };
+
+                        TetCustomRotationPose Pose;
+                        const bool FitsCurrentRow = SelectPose(true,Pose);
+                        if (!FitsCurrentRow && CurrentX > 0.0){
+                            CurrentY += CurrentRowHeight + LayoutGap;
+                            CurrentX = 0.0;
+                            CurrentRowHeight = 0.0;
+                            if (!SelectPose(false,Pose)){
+                                continue;
+                            }
+                        }
+                        else if (!FitsCurrentRow){
+                            continue;
+                        }
+
+                        if (CurrentY + Pose.Height > BoardHeight + 1.0){
+                            break;
+                        }
+
+                        TetItemTransform Transform;
+                        Transform.OriginalId = OriginalIndex;
+                        Transform.RelativeRotation = Pose.Rotation;
+                        Transform.RelativeX = CurrentX - Pose.MinX;
+                        Transform.RelativeY = CurrentY - Pose.MinY;
+                        PlacedIndices.push_back(OriginalIndex);
+                        Transforms.push_back(Transform);
+                        CurrentX += Pose.Width + LayoutGap;
+                        CurrentRowHeight = std::max(CurrentRowHeight,Pose.Height);
+                    }
+
+                    const std::vector<std::size_t> TrialCounts = BuildTrialCounts(Transforms.size());
+                    for (std::size_t TrialCount : TrialCounts){
+                        if (!HasMultipleGroups(PlacedIndices,TrialCount)){
+                            continue;
+                        }
+
+                        TetClusterCandidate Candidate;
+                        Candidate.BuilderName = "CustomBuilder";
+                        Candidate.ClusterType = "CustomMixedShelf_" + std::to_string(TrialCount) + "_W" + std::to_string(static_cast<int>(std::llround(TargetWidthRatio * 100.0))) + (OrderMode == 3 ? "_Interleave" : "");
+                        Candidate.OriginalIndices.assign(PlacedIndices.begin(),PlacedIndices.begin() + static_cast<std::vector<int>::difference_type>(TrialCount));
+                        Candidate.Transforms.assign(Transforms.begin(),Transforms.begin() + static_cast<std::vector<TetItemTransform>::difference_type>(TrialCount));
+                        Candidate.Confidence = OrderMode == 3 ? 0.95 : 0.92;
+                        if (!Geometry.HasValidTransformSpacing(AOriginalItems,AOptions,Candidate.Transforms) || !Geometry.FinalizeCandidate(AOriginalItems,AOptions,Candidate) || Candidate.AreaSavingRatio < -CET_CUSTOM_MAX_AREA_LOSS_RATIO){
+                            continue;
+                        }
+
+                        Candidate.Score = _CalculateScore(Candidate,AOptions);
+                        const double CandidateBoxArea = Candidate.ClusterWidth * Candidate.ClusterHeight;
+                        const double BestBoxArea = HasBest ? BestCandidate.ClusterWidth * BestCandidate.ClusterHeight : std::numeric_limits<double>::max();
+                        if (!HasBest || Candidate.Score > BestCandidate.Score || (std::abs(Candidate.Score - BestCandidate.Score) <= 1e-9 && CandidateBoxArea < BestBoxArea)){
+                            HasBest = true;
+                            BestCandidate = std::move(Candidate);
+                        }
+                    }
+                }
+            }
+
+            if (!HasBest){
+                return false;
+            }
+
+            AOutCandidate = std::move(BestCandidate);
+            return true;
         }
 
         void CetCustomClusterBuilder::_BuildSameShapeClusterCandidates(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const std::vector<int>& AIndices, const TetNestOptions& AOptions, std::vector<TetClusterCandidate>& AOutCandidates)
@@ -220,22 +557,9 @@ namespace ET {
                 return;
             }
 
-            CetClusterGeometryHelper Geometry;
-            const std::size_t MaxChildCount = std::min(AIndices.size(),CET_CUSTOM_MAX_CLUSTER_CHILDREN);
             std::size_t PreferredChildCount = 0;
             TetClusterCandidate FirstCandidate;
-            for (std::size_t TrialChildCount = MaxChildCount; TrialChildCount >= 2; --TrialChildCount){
-                std::vector<int> TrialIndices(AIndices.begin(),AIndices.begin() + static_cast<std::vector<int>::difference_type>(TrialChildCount));
-                TetClusterCandidate Candidate;
-                if (_BuildBestLayoutCandidate(AOriginalItems,TrialIndices,AOptions,Candidate)){
-                    const std::size_t RequiredCopies = std::min(CET_CLUSTER_TARGET_COPIES_PER_BOARD,AIndices.size() / TrialChildCount);
-                    if (Geometry.CanPlaceCandidateCopiesOnBoard(Candidate,AOptions,RequiredCopies)){
-                        PreferredChildCount = TrialChildCount;
-                        FirstCandidate = std::move(Candidate);
-                        break;
-                    }
-                }
-            }
+            _FindLargestBoardFitLayout(AOriginalItems,AIndices,AOptions,PreferredChildCount,FirstCandidate);
 
             if (PreferredChildCount < 2){
                 std::cout << "[CUSTOM][REJECT] No valid complete layout. GroupCount=" << AIndices.size() << std::endl;
@@ -244,26 +568,22 @@ namespace ET {
 
             std::size_t GroupOffset = 0;
             while (GroupOffset + 1 < AIndices.size()){
-                std::size_t TrialChildCount = std::min(PreferredChildCount,AIndices.size() - GroupOffset);
+                const std::size_t RemainingCount = AIndices.size() - GroupOffset;
+                std::size_t TrialChildCount = std::min(PreferredChildCount,RemainingCount);
                 bool HasCandidate = false;
                 TetClusterCandidate BestCandidate;
 
-                while (TrialChildCount >= 2){
-                    std::vector<int> TrialIndices(AIndices.begin() + static_cast<std::vector<int>::difference_type>(GroupOffset),AIndices.begin() + static_cast<std::vector<int>::difference_type>(GroupOffset + TrialChildCount));
-                    if (GroupOffset == 0 && TrialChildCount == PreferredChildCount){
-                        BestCandidate = FirstCandidate;
-                        HasCandidate = true;
-                        break;
-                    }
-                    if (TrialChildCount == PreferredChildCount && _RemapCandidateIndices(FirstCandidate,TrialIndices,BestCandidate)){
-                        HasCandidate = true;
-                        break;
-                    }
-                    if (_BuildBestLayoutCandidate(AOriginalItems,TrialIndices,AOptions,BestCandidate)){
-                        HasCandidate = true;
-                        break;
-                    }
-                    --TrialChildCount;
+                std::vector<int> RemainingIndices(AIndices.begin() + static_cast<std::vector<int>::difference_type>(GroupOffset),AIndices.end());
+                if (GroupOffset == 0){
+                    BestCandidate = FirstCandidate;
+                    HasCandidate = true;
+                }
+                else if (RemainingCount >= PreferredChildCount){
+                    std::vector<int> TrialIndices(RemainingIndices.begin(),RemainingIndices.begin() + static_cast<std::vector<int>::difference_type>(PreferredChildCount));
+                    HasCandidate = _RemapCandidateIndices(FirstCandidate,TrialIndices,BestCandidate);
+                }
+                else {
+                    HasCandidate = _FindLargestBoardFitLayout(AOriginalItems,RemainingIndices,AOptions,TrialChildCount,BestCandidate);
                 }
 
                 if (!HasCandidate){
@@ -274,6 +594,37 @@ namespace ET {
                 AOutCandidates.push_back(std::move(BestCandidate));
                 GroupOffset += TrialChildCount;
             }
+        }
+
+        bool CetCustomClusterBuilder::_FindLargestBoardFitLayout(const CetTNestItemVector& AOriginalItems, const std::vector<int>& AIndices, const TetNestOptions& AOptions, std::size_t& AOutChildCount, TetClusterCandidate& AOutCandidate)
+        {
+            AOutChildCount = 0;
+            AOutCandidate = TetClusterCandidate{};
+            if (AIndices.size() < 2){
+                return false;
+            }
+
+            bool HasBest = false;
+            const std::vector<std::size_t> CandidateCounts = BuildCandidateChildCounts(AIndices.size());
+            for (std::size_t TrialChildCount : CandidateCounts){
+                std::vector<int> TrialIndices(
+                    AIndices.begin(),
+                    AIndices.begin() + static_cast<std::vector<int>::difference_type>(TrialChildCount));
+                TetClusterCandidate Candidate;
+                if (_BuildBestLayoutCandidate(AOriginalItems,TrialIndices,AOptions,Candidate)){
+                    const bool BetterScore = !HasBest || Candidate.Score > AOutCandidate.Score + 1e-9;
+                    const bool SameScoreMoreItems = HasBest &&
+                        std::abs(Candidate.Score - AOutCandidate.Score) <= 1e-9 &&
+                        TrialChildCount > AOutChildCount;
+                    if (BetterScore || SameScoreMoreItems){
+                        HasBest = true;
+                        AOutChildCount = TrialChildCount;
+                        AOutCandidate = std::move(Candidate);
+                    }
+                }
+            }
+
+            return HasBest && AOutChildCount >= 2;
         }
 
         bool CetCustomClusterBuilder::_BuildBestLayoutCandidate(const CetTNestItemVector& AOriginalItems, const std::vector<int>& AIndices, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate)
@@ -322,7 +673,8 @@ namespace ET {
                     const double ColumnPitch = CellWidth * Pattern.ColumnPitchRatio + LayoutGap;
                     const double RowPitch = CellHeight * Pattern.RowPitchRatio + LayoutGap;
 
-                    for (std::size_t RowCount = 1; RowCount <= AIndices.size(); ++RowCount){
+                    const std::vector<std::size_t> RowCounts = BuildLayoutRowCounts(AIndices.size(),CellWidth,CellHeight,ColumnPitch,RowPitch,Pattern.RowStaggerRatio,AOptions);
+                    for (std::size_t RowCount : RowCounts){
                         const std::size_t ColumnCount = (AIndices.size() + RowCount - 1) / RowCount;
                         TetClusterCandidate Candidate;
                         Candidate.BuilderName = "CustomBuilder";
@@ -352,7 +704,7 @@ namespace ET {
                             }
                         }
 
-                        if (!Geometry.FinalizeCandidate(AOriginalItems,AOptions,Candidate) ||Candidate.AreaSavingRatio < -CET_CUSTOM_MAX_AREA_LOSS_RATIO){
+                        if (!Geometry.HasValidTransformSpacing(AOriginalItems,AOptions,Candidate.Transforms) || !Geometry.FinalizeCandidate(AOriginalItems,AOptions,Candidate) ||Candidate.AreaSavingRatio < -CET_CUSTOM_MAX_AREA_LOSS_RATIO){
                             continue;
                         }
 
@@ -400,23 +752,25 @@ namespace ET {
                 return -std::numeric_limits<double>::infinity();
             }
 
-            const double BoundingArea = ACandidate.ClusterWidth * ACandidate.ClusterHeight;
-            const double BoundingFillRatio = BoundingArea > 0.0 ? std::clamp(ACandidate.RealArea / BoundingArea,0.0,1.0) : 0.0;
-            const double BinWidth = std::max(1.0,static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth)));
-            const double BinHeight = std::max(1.0,static_cast<double>(NestUtils::ToNestCoord(AOptions.BinHeight)));
-            const double BoardSpanRatio = std::max(ACandidate.ClusterWidth / BinWidth,ACandidate.ClusterHeight / BinHeight);
-            const double FillScore = ACandidate.FillRatio * 900.0;
-            const double SavingScore = ACandidate.AreaSavingRatio * 800.0;
-            const double BoundingFillScore = BoundingFillRatio * 650.0;
-            const double ItemCountScore = static_cast<double>(ACandidate.OriginalIndices.size()) * 18.0;
-            const double LongSide = std::max(ACandidate.ClusterWidth, ACandidate.ClusterHeight);
-            const double ShortSide = std::min(ACandidate.ClusterWidth, ACandidate.ClusterHeight);
-            const double CompactScore = LongSide > 0.0 ? ShortSide / LongSide * 90.0 : 0.0;
-            const double AlternatingBonus = ACandidate.ClusterType.find("Alternating") != std::string::npos ? 35.0 : 0.0;
-            const double WastePenalty = ACandidate.ProxyWasteRatio * 180.0;
-            const double BoardSpanPenalty = BoardSpanRatio * 220.0;
+            (void)AOptions;
+            const double FillScore = ACandidate.FillRatio * 700.0;
+            const double SavingScore = ACandidate.AreaSavingRatio * 500.0;
+            const double BoundingFillScore = ACandidate.BoundingFillRatio * 1600.0;
+            const double ReuseScore = ACandidate.SheetReuseScore * 1000.0;
+            const double CompactScore = ACandidate.CompactnessRatio * 500.0;
+            const double ItemCountScore = std::sqrt(static_cast<double>(ACandidate.OriginalIndices.size())) * 35.0;
+            const double AlternatingBonus = ACandidate.ClusterType.find("Alternating") != std::string::npos ? 12.0 : 0.0;
+            const double WastePenalty = ACandidate.ProxyWasteRatio * 700.0;
+            const double FragmentationPenalty = ACandidate.FragmentationRisk * 1200.0;
+            const double LongSparsePenalty =
+                std::clamp((ACandidate.BoardSpanRatio - 0.65) / 0.35, 0.0, 1.0) *
+                std::clamp(1.0 - ACandidate.BoundingFillRatio, 0.0, 1.0) *
+                std::clamp(1.0 - ACandidate.CompactnessRatio, 0.0, 1.0) *
+                1800.0;
             const double SizePenalty = (ACandidate.ClusterWidth + ACandidate.ClusterHeight) * 0.000001;
-            return FillScore + SavingScore + BoundingFillScore + ItemCountScore + CompactScore + AlternatingBonus + ACandidate.Confidence - WastePenalty - BoardSpanPenalty - SizePenalty;
+            return FillScore + SavingScore + BoundingFillScore + ReuseScore + CompactScore +
+                ItemCountScore + AlternatingBonus + ACandidate.Confidence -
+                WastePenalty - FragmentationPenalty - LongSparsePenalty - SizePenalty;
         }
 
     }

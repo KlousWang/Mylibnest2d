@@ -38,6 +38,7 @@ namespace ET {
             bool _ValidateIndexAndTransforms(const CetTNestItemVector& AOriginalItems, const TetClusterCandidate& ACandidate) const;
             bool _ValidateChildContainment(const CetTNestItemVector& AOriginalItems, const TetClusterCandidate& ACandidate) const;
             bool _ValidateChildSpacing(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const TetClusterCandidate& ACandidate, bool ALogRejection) const;
+            bool _HaveRequiredSpacing(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const TetItemTransform& AFirstTransform, const TetItemTransform& ASecondTransform) const;
             bool _FitsBoardBounds(const TetClusterCandidate& ACandidate, const TetNestOptions& AOptions) const;
             bool _BuildTransformedChildContours(const CetTNestItemVector& AOriginalItems, const TetClusterCandidate& ACandidate, ClipperLib::Paths& AOutContours) const;
             double _CalculateUnionArea(const ClipperLib::Paths& AContours) const;
