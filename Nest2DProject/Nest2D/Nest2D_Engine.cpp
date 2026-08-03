@@ -46,7 +46,22 @@ namespace ET {
 			default:
 				return CetAlignment::BOTTOM_LEFT;
 			}
-		}	
+		}
+
+		static std::vector<MetClusterStrategy> BuildClusterStrategies(const std::vector<TetShapeFeature>& AFeatures)
+		{
+			const std::size_t CustomShapeCount = static_cast<std::size_t>(std::count_if(AFeatures.begin(), AFeatures.end(), [](const TetShapeFeature& AFeature) {
+				return AFeature.ShapeType == MetShapeType::QuadrilateralLike ||
+					AFeature.ShapeType == MetShapeType::ConvexPolygon ||
+					AFeature.ShapeType == MetShapeType::ConcavePolygon;
+				}));
+			const bool HasLargeCustomMajority = AFeatures.size() >= 32 && CustomShapeCount * 2 >= AFeatures.size();
+			if (HasLargeCustomMajority){
+				return { MetClusterStrategy::TemplateCluster };
+			}
+
+			return { MetClusterStrategy::None, MetClusterStrategy::TemplateCluster };
+		}
 		
 		int CetNest2DEngine::RunNesting_Impl(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, std::size_t* AUsedBins)
 		{
@@ -99,12 +114,7 @@ namespace ET {
 			std::vector<TetMetaItem> BestMetaItems;
 			bool BestHasCluster = false;
 
-			std::vector<MetClusterStrategy> ClusterStrategies = {
-				MetClusterStrategy::None,
-				//MetClusterStrategy::RightTrianglePair,
-				
-				MetClusterStrategy::TemplateCluster
-			};
+			const std::vector<MetClusterStrategy> ClusterStrategies = BuildClusterStrategies(Features);
 
 			for (auto ClusterStrategy : ClusterStrategies){
 				TetClusterBuildResult ClusterResult =Nest2DUtils->Nest2DCluster->BuildClusterItemsWithFeatures(OriginalItems,Features,AOptions,ClusterStrategy);
@@ -235,12 +245,7 @@ namespace ET {
 			std::vector<TetMetaItem> BestMetaItems;
 			bool BestHasCluster = false;
 			
-			std::vector<MetClusterStrategy> ClusterStrategies = {
-				 MetClusterStrategy::None,
-				 //MetClusterStrategy::RightTrianglePair,
-				
-				 MetClusterStrategy::TemplateCluster
-			};
+			const std::vector<MetClusterStrategy> ClusterStrategies = BuildClusterStrategies(Features);
 			for (auto ClusterStrategy : ClusterStrategies){
 				
 			//	TetClusterBuildResult ClusterResult = Nest2DUtils->Nest2DCluster->BuildClusterItems(OriginalItems, AOptions, ClusterStrategy);
@@ -385,12 +390,21 @@ namespace ET {
 				return LocalBest;
 			}
 
-			const std::vector<MetENestOrderStrategy> Strategies = {
-				MetENestOrderStrategy::LargeFirst,
-				MetENestOrderStrategy::SmallFirst,
-				MetENestOrderStrategy::LongSideFirst,
-				MetENestOrderStrategy::ThinFirst
-			};
+			std::size_t CustomClusteredItemCount = 0;
+			for (const TetMetaItem& Meta : AClusterResult.MetaItems){
+				if (Meta.IsCluster && Meta.ClusterType.find("CustomLayout_") == 0){
+					CustomClusteredItemCount += Meta.TransformData.size();
+				}
+			}
+			const bool HasCustomClusterMajority = AOriginalItems.size() >= 32 && CustomClusteredItemCount * 2 >= AOriginalItems.size();
+			const std::vector<MetENestOrderStrategy> Strategies = HasCustomClusterMajority
+				? std::vector<MetENestOrderStrategy>{ MetENestOrderStrategy::SmallFirst }
+				: std::vector<MetENestOrderStrategy>{
+					MetENestOrderStrategy::LargeFirst,
+					MetENestOrderStrategy::SmallFirst,
+					MetENestOrderStrategy::LongSideFirst,
+					MetENestOrderStrategy::ThinFirst
+				};
 			std::set<std::vector<std::size_t>> EvaluatedOrders;
 		
 			for (MetENestOrderStrategy Strategy : Strategies){

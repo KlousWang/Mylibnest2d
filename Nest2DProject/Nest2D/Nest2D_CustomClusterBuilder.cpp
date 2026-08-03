@@ -104,38 +104,6 @@ namespace ET {
                 return true;
             }
 
-            std::vector<TetCustomEdgeInfo> CollectLongestEdges(CetPath AContour)
-            {
-                std::vector<TetCustomEdgeInfo> Edges;
-                if (AContour.size() < 3){
-                    return Edges;
-                }
-                if (!ClipperLib::Orientation(AContour)){
-                    std::reverse(AContour.begin(), AContour.end());
-                }
-
-                Edges.reserve(AContour.size());
-                for (std::size_t Index = 0; Index < AContour.size(); ++Index){
-                    const CetInpoint& Start = AContour[Index];
-                    const CetInpoint& End = AContour[(Index + 1) % AContour.size()];
-                    const double EdgeX = static_cast<double>(End.X - Start.X);
-                    const double EdgeY = static_cast<double>(End.Y - Start.Y);
-                    const double Length = std::hypot(EdgeX, EdgeY);
-                    if (Length <= 0.0){
-                        continue;
-                    }
-                    Edges.push_back({ Start, End, Length, std::atan2(EdgeY, EdgeX) });
-                }
-
-                std::stable_sort(Edges.begin(), Edges.end(), [](const TetCustomEdgeInfo& A, const TetCustomEdgeInfo& AOther) {
-                    return A.Length > AOther.Length;
-                    });
-                if (Edges.size() > CET_CUSTOM_MAX_EDGE_CANDIDATES){
-                    Edges.resize(CET_CUSTOM_MAX_EDGE_CANDIDATES);
-                }
-                return Edges;
-            }
-
             bool GetRotatedBounds(const CetClusterGeometryHelper& AGeometry, const CetNestItem& AItem, double ARotation, double& AOutMinX, double& AOutMinY, double& AOutMaxX, double& AOutMaxY)
             {
                 const CetPath RotatedContour = AGeometry.TransformContour(AGeometry.GetIdentityContour(AItem),ARotation,0.0,0.0);
@@ -146,6 +114,68 @@ namespace ET {
             {
                 const double RequiredGap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
                 return RequiredGap + std::max(2.0, RequiredGap * 0.001);
+            }
+
+            struct TetCustomRotationPose
+            {
+                double Rotation = 0.0;
+                double MinX = 0.0;
+                double MinY = 0.0;
+                double Width = 0.0;
+                double Height = 0.0;
+            };
+
+            struct TetCustomLayoutPattern
+            {
+                const char* Name = "";
+                double ColumnPitchRatio = 1.0;
+                double RowPitchRatio = 1.0;
+                double RowStaggerRatio = 0.0;
+                bool AlternateHalfTurn = false;
+            };
+
+            bool BuildRotationPose(const CetClusterGeometryHelper& AGeometry, const CetNestItem& AItem, double ARotation, TetCustomRotationPose& AOutPose)
+            {
+                double MaxX = 0.0;
+                double MaxY = 0.0;
+                AOutPose = TetCustomRotationPose{};
+                if (!GetRotatedBounds(AGeometry,AItem,ARotation,AOutPose.MinX,AOutPose.MinY,MaxX,MaxY)){
+                    return false;
+                }
+
+                AOutPose.Rotation = ARotation;
+                AOutPose.Width = MaxX - AOutPose.MinX;
+                AOutPose.Height = MaxY - AOutPose.MinY;
+                return AOutPose.Width > 0.0 && AOutPose.Height > 0.0;
+            }
+
+            std::vector<double> BuildDistinctBaseRotations(int ARotationCount)
+            {
+                const std::vector<double> AllowedRotations = CetRotationUtils::BuildAllowedRotations(ARotationCount);
+                std::vector<double> Result;
+                std::vector<double> CanonicalRotations;
+                for (double Rotation : AllowedRotations){
+                    double CanonicalRotation = std::fmod(CetRotationUtils::NormalizeAngle(Rotation),CET_CLUSTER_PI);
+                    if (CanonicalRotation < 0.0){
+                        CanonicalRotation += CET_CLUSTER_PI;
+                    }
+
+                    bool Duplicate = false;
+                    for (double ExistingRotation : CanonicalRotations){
+                        if (std::abs(CanonicalRotation - ExistingRotation) <= 1e-9){
+                            Duplicate = true;
+                            break;
+                        }
+                    }
+                    if (!Duplicate){
+                        Result.push_back(Rotation);
+                        CanonicalRotations.push_back(CanonicalRotation);
+                    }
+                }
+                if (Result.empty()){
+                    Result.push_back(0.0);
+                }
+                return Result;
             }
         }
 
@@ -185,57 +215,55 @@ namespace ET {
 
         void CetCustomClusterBuilder::_BuildSameShapeClusterCandidates(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const std::vector<int>& AIndices, const TetNestOptions& AOptions, std::vector<TetClusterCandidate>& AOutCandidates)
         {
+            (void)AFeatures;
             if (AIndices.size() < 2){
                 return;
             }
 
-            TetClusterCandidate BasePair;
-            if (!_BuildBestPairCandidate(AOriginalItems,AIndices[0],AIndices[1],AOptions,BasePair)){
-                std::cout << "[CUSTOM][REJECT] No valid representative pair. GroupCount=" << AIndices.size() << std::endl;
-                return;
-            }
-
             CetClusterGeometryHelper Geometry;
-            std::size_t PreferredChildCount = std::min(AIndices.size(), CET_CUSTOM_MAX_CLUSTER_CHILDREN);
-            PreferredChildCount -= PreferredChildCount % 2;
+            const std::size_t MaxChildCount = std::min(AIndices.size(),CET_CUSTOM_MAX_CLUSTER_CHILDREN);
+            std::size_t PreferredChildCount = 0;
             TetClusterCandidate FirstCandidate;
-            while (PreferredChildCount >= 2){
-                std::vector<int> TrialIndices(AIndices.begin(),AIndices.begin() + static_cast<std::vector<int>::difference_type>(PreferredChildCount));
+            for (std::size_t TrialChildCount = MaxChildCount; TrialChildCount >= 2; --TrialChildCount){
+                std::vector<int> TrialIndices(AIndices.begin(),AIndices.begin() + static_cast<std::vector<int>::difference_type>(TrialChildCount));
                 TetClusterCandidate Candidate;
-                if (_BuildClusterCandidateFromPair(AOriginalItems,BasePair,TrialIndices,AOptions,Candidate)){
-                    const std::size_t RequiredCopies = std::min(CET_CLUSTER_TARGET_COPIES_PER_BOARD,AIndices.size() / PreferredChildCount);
+                if (_BuildBestLayoutCandidate(AOriginalItems,TrialIndices,AOptions,Candidate)){
+                    const std::size_t RequiredCopies = std::min(CET_CLUSTER_TARGET_COPIES_PER_BOARD,AIndices.size() / TrialChildCount);
                     if (Geometry.CanPlaceCandidateCopiesOnBoard(Candidate,AOptions,RequiredCopies)){
+                        PreferredChildCount = TrialChildCount;
                         FirstCandidate = std::move(Candidate);
                         break;
                     }
                 }
-                PreferredChildCount -= 2;
             }
 
             if (PreferredChildCount < 2){
+                std::cout << "[CUSTOM][REJECT] No valid complete layout. GroupCount=" << AIndices.size() << std::endl;
                 return;
             }
 
             std::size_t GroupOffset = 0;
             while (GroupOffset + 1 < AIndices.size()){
                 std::size_t TrialChildCount = std::min(PreferredChildCount,AIndices.size() - GroupOffset);
-                TrialChildCount -= TrialChildCount % 2;
                 bool HasCandidate = false;
                 TetClusterCandidate BestCandidate;
 
                 while (TrialChildCount >= 2){
-                    if (GroupOffset == 0 && TrialChildCount == PreferredChildCount){
-                        BestCandidate = std::move(FirstCandidate);
-                        HasCandidate = true;
-                        break;
-                    }
-
                     std::vector<int> TrialIndices(AIndices.begin() + static_cast<std::vector<int>::difference_type>(GroupOffset),AIndices.begin() + static_cast<std::vector<int>::difference_type>(GroupOffset + TrialChildCount));
-                    if (_BuildClusterCandidateFromPair(AOriginalItems,BasePair,TrialIndices,AOptions,BestCandidate)){
+                    if (GroupOffset == 0 && TrialChildCount == PreferredChildCount){
+                        BestCandidate = FirstCandidate;
                         HasCandidate = true;
                         break;
                     }
-                    TrialChildCount -= 2;
+                    if (TrialChildCount == PreferredChildCount && _RemapCandidateIndices(FirstCandidate,TrialIndices,BestCandidate)){
+                        HasCandidate = true;
+                        break;
+                    }
+                    if (_BuildBestLayoutCandidate(AOriginalItems,TrialIndices,AOptions,BestCandidate)){
+                        HasCandidate = true;
+                        break;
+                    }
+                    --TrialChildCount;
                 }
 
                 if (!HasCandidate){
@@ -248,120 +276,94 @@ namespace ET {
             }
         }
 
-        bool CetCustomClusterBuilder::_BuildBestPairCandidate(const CetTNestItemVector& AOriginalItems, int AFirstIndex, int ASecondIndex, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate)
+        bool CetCustomClusterBuilder::_BuildBestLayoutCandidate(const CetTNestItemVector& AOriginalItems, const std::vector<int>& AIndices, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate)
         {
             AOutCandidate = TetClusterCandidate{};
-            if (AFirstIndex < 0 || ASecondIndex < 0 || AFirstIndex == ASecondIndex ||AFirstIndex >= static_cast<int>(AOriginalItems.size()) || ASecondIndex >= static_cast<int>(AOriginalItems.size())){
+            if (AIndices.size() < 2 || AIndices.size() > CET_CUSTOM_MAX_CLUSTER_CHILDREN){
                 return false;
+            }
+            for (int Index : AIndices){
+                if (Index < 0 || Index >= static_cast<int>(AOriginalItems.size())){
+                    return false;
+                }
             }
 
             CetClusterGeometryHelper Geometry;
-            const CetPath FirstContour = Geometry.GetIdentityContour(AOriginalItems[AFirstIndex]);
-            const CetPath SecondContour = Geometry.GetIdentityContour(AOriginalItems[ASecondIndex]);
-            const std::vector<TetCustomEdgeInfo> FirstEdges = CollectLongestEdges(FirstContour);
-            const std::vector<TetCustomEdgeInfo> SecondEdges = CollectLongestEdges(SecondContour);
             const double LayoutGap = GetLayoutGap(AOptions);
-
-            double FirstMinX = 0.0;
-            double FirstMinY = 0.0;
-            double FirstMaxX = 0.0;
-            double FirstMaxY = 0.0;
-            if (!Geometry.GetBounds(FirstContour,FirstMinX,FirstMinY,FirstMaxX,FirstMaxY)){
-                return false;
-            }
-
+            const std::vector<double> BaseRotations = BuildDistinctBaseRotations(AOptions.Rotations);
+            const TetCustomLayoutPattern Patterns[] = {
+                { "Uniform", 1.0, 1.0, 0.0, false },
+                { "Alternating", 1.0, 1.0, 0.0, true },
+                { "AlternatingCompactX", 0.82, 1.0, 0.0, true },
+                { "AlternatingCompactY", 1.0, 0.82, 0.5, true },
+                { "AlternatingCompactXY", 0.82, 0.82, 0.5, true },
+                { "AlternatingTightX", 0.70, 1.0, 0.0, true },
+                { "AlternatingTightY", 1.0, 0.70, 0.5, true }
+            };
             bool HasBest = false;
             TetClusterCandidate BestCandidate;
-            auto TryCandidate = [&](TetItemTransform AFirstTransform, TetItemTransform ASecondTransform, const std::string& AClusterType) {
-                std::vector<TetItemTransform> Transforms = { AFirstTransform, ASecondTransform };
-                if (!Geometry.HasValidTransformSpacing(AOriginalItems,AOptions,Transforms)){
-                    return;
-                }
-
-                TetClusterCandidate Candidate;
-                Candidate.BuilderName = "CustomBuilder";
-                Candidate.ClusterType = AClusterType;
-                Candidate.OriginalIndices = { AFirstIndex, ASecondIndex };
-                Candidate.Transforms = std::move(Transforms);
-                Candidate.Confidence = 0.72;
-                if (!Geometry.FinalizeCandidate(AOriginalItems,AOptions,Candidate) ||Candidate.AreaSavingRatio < -CET_CUSTOM_MAX_AREA_LOSS_RATIO){
-                    return;
-                }
-
-                Candidate.Score = _CalculateScore(Candidate);
-                if (!HasBest || Candidate.Score > BestCandidate.Score){
-                    HasBest = true;
-                    BestCandidate = std::move(Candidate);
-                }
-                };
-
-            TetItemTransform FirstTransform;
-            FirstTransform.OriginalId = AFirstIndex;
-            FirstTransform.RelativeX = -FirstMinX;
-            FirstTransform.RelativeY = -FirstMinY;
-
-            for (const TetCustomEdgeInfo& FirstEdge : FirstEdges){
-                for (const TetCustomEdgeInfo& SecondEdge : SecondEdges){
-                    const double LengthDenominator = std::max(FirstEdge.Length, SecondEdge.Length);
-                    if (LengthDenominator <= 0.0 ||std::abs(FirstEdge.Length - SecondEdge.Length) / LengthDenominator > CET_CUSTOM_EDGE_LENGTH_TOLERANCE){
-                        continue;
-                    }
-
-                    double SecondRotation = 0.0;
-                    const double TargetRotation = FirstEdge.Angle + CET_CLUSTER_PI - SecondEdge.Angle;
-                    if (!CetRotationUtils::SnapToAllowedRotation(TargetRotation,AOptions.Rotations,SecondRotation,CET_CUSTOM_EDGE_ANGLE_TOLERANCE)){
-                        continue;
-                    }
-
-                    const double CosRotation = std::cos(SecondRotation);
-                    const double SinRotation = std::sin(SecondRotation);
-                    const double RotatedSecondStartX = static_cast<double>(SecondEdge.Start.X) * CosRotation - static_cast<double>(SecondEdge.Start.Y) * SinRotation;
-                    const double RotatedSecondStartY = static_cast<double>(SecondEdge.Start.X) * SinRotation + static_cast<double>(SecondEdge.Start.Y) * CosRotation;
-                    const double FirstEdgeX = static_cast<double>(FirstEdge.End.X - FirstEdge.Start.X);
-                    const double FirstEdgeY = static_cast<double>(FirstEdge.End.Y - FirstEdge.Start.Y);
-                    const double OutwardNormalX = FirstEdgeY / FirstEdge.Length;
-                    const double OutwardNormalY = -FirstEdgeX / FirstEdge.Length;
-                    const double DesiredSecondStartX = static_cast<double>(FirstEdge.End.X) - FirstMinX + OutwardNormalX * LayoutGap;
-                    const double DesiredSecondStartY = static_cast<double>(FirstEdge.End.Y) - FirstMinY + OutwardNormalY * LayoutGap;
-
-                    TetItemTransform SecondTransform;
-                    SecondTransform.OriginalId = ASecondIndex;
-                    SecondTransform.RelativeRotation = SecondRotation;
-                    SecondTransform.RelativeX = DesiredSecondStartX - RotatedSecondStartX;
-                    SecondTransform.RelativeY = DesiredSecondStartY - RotatedSecondStartY;
-                    TryCandidate(FirstTransform,SecondTransform,"CustomEdgePair");
-                }
-            }
-
-            const double FirstWidth = FirstMaxX - FirstMinX;
-            const double FirstHeight = FirstMaxY - FirstMinY;
-            const std::vector<double> Rotations = CetRotationUtils::BuildAllowedRotations(AOptions.Rotations);
-            const double Alignments[] = { 0.0, 0.5, 1.0 };
-            for (double SecondRotation : Rotations){
-                double SecondMinX = 0.0;
-                double SecondMinY = 0.0;
-                double SecondMaxX = 0.0;
-                double SecondMaxY = 0.0;
-                if (!GetRotatedBounds(Geometry,AOriginalItems[ASecondIndex],SecondRotation,SecondMinX,SecondMinY,SecondMaxX,SecondMaxY)){
+            for (double BaseRotation : BaseRotations){
+                TetCustomRotationPose BasePose;
+                if (!BuildRotationPose(Geometry,AOriginalItems[AIndices.front()],BaseRotation,BasePose)){
                     continue;
                 }
-                const double SecondWidth = SecondMaxX - SecondMinX;
-                const double SecondHeight = SecondMaxY - SecondMinY;
 
-                for (double Alignment : Alignments){
-                    TetItemTransform HorizontalTransform;
-                    HorizontalTransform.OriginalId = ASecondIndex;
-                    HorizontalTransform.RelativeRotation = SecondRotation;
-                    HorizontalTransform.RelativeX = FirstWidth + LayoutGap - SecondMinX;
-                    HorizontalTransform.RelativeY = Alignment * (FirstHeight - SecondHeight) - SecondMinY;
-                    TryCandidate(FirstTransform,HorizontalTransform,"CustomBoxPairHorizontal");
+                TetCustomRotationPose HalfTurnPose;
+                double HalfTurnRotation = 0.0;
+                const bool HasHalfTurn = CetRotationUtils::SnapToAllowedRotation(BaseRotation + CET_CLUSTER_PI,AOptions.Rotations,HalfTurnRotation,1e-9) &&BuildRotationPose(Geometry,AOriginalItems[AIndices.front()],HalfTurnRotation,HalfTurnPose);
 
-                    TetItemTransform VerticalTransform;
-                    VerticalTransform.OriginalId = ASecondIndex;
-                    VerticalTransform.RelativeRotation = SecondRotation;
-                    VerticalTransform.RelativeX = Alignment * (FirstWidth - SecondWidth) - SecondMinX;
-                    VerticalTransform.RelativeY = FirstHeight + LayoutGap - SecondMinY;
-                    TryCandidate(FirstTransform,VerticalTransform,"CustomBoxPairVertical");
+                for (const TetCustomLayoutPattern& Pattern : Patterns){
+                    if (Pattern.AlternateHalfTurn && !HasHalfTurn){
+                        continue;
+                    }
+
+                    const double CellWidth = Pattern.AlternateHalfTurn ? std::max(BasePose.Width,HalfTurnPose.Width) : BasePose.Width;
+                    const double CellHeight = Pattern.AlternateHalfTurn ? std::max(BasePose.Height,HalfTurnPose.Height) : BasePose.Height;
+                    const double ColumnPitch = CellWidth * Pattern.ColumnPitchRatio + LayoutGap;
+                    const double RowPitch = CellHeight * Pattern.RowPitchRatio + LayoutGap;
+
+                    for (std::size_t RowCount = 1; RowCount <= AIndices.size(); ++RowCount){
+                        const std::size_t ColumnCount = (AIndices.size() + RowCount - 1) / RowCount;
+                        TetClusterCandidate Candidate;
+                        Candidate.BuilderName = "CustomBuilder";
+                        Candidate.ClusterType = "CustomLayout_" + std::to_string(AIndices.size()) + "_R" + std::to_string(RowCount) + "_" + Pattern.Name;
+                        Candidate.OriginalIndices = AIndices;
+                        Candidate.Confidence = Pattern.AlternateHalfTurn ? 0.86 : 0.80;
+                        Candidate.Transforms.reserve(AIndices.size());
+
+                        std::size_t ItemOffset = 0;
+                        for (std::size_t Row = 0; Row < RowCount && ItemOffset < AIndices.size(); ++Row){
+                            const std::size_t RowItemCount = std::min(ColumnCount,AIndices.size() - ItemOffset);
+                            double RowOffsetX = static_cast<double>(ColumnCount - RowItemCount) * ColumnPitch * 0.5;
+                            if ((Row % 2) != 0){
+                                RowOffsetX += Pattern.RowStaggerRatio * ColumnPitch;
+                            }
+
+                            for (std::size_t Column = 0; Column < RowItemCount; ++Column){
+                                const bool UseHalfTurn = Pattern.AlternateHalfTurn && ((Row + Column) % 2) != 0;
+                                const TetCustomRotationPose& Pose = UseHalfTurn ? HalfTurnPose : BasePose;
+                                TetItemTransform Transform;
+                                Transform.OriginalId = AIndices[ItemOffset];
+                                Transform.RelativeRotation = Pose.Rotation;
+                                Transform.RelativeX = RowOffsetX + static_cast<double>(Column) * ColumnPitch + (CellWidth - Pose.Width) * 0.5 - Pose.MinX;
+                                Transform.RelativeY = static_cast<double>(Row) * RowPitch + (CellHeight - Pose.Height) * 0.5 - Pose.MinY;
+                                Candidate.Transforms.push_back(Transform);
+                                ++ItemOffset;
+                            }
+                        }
+
+                        if (!Geometry.FinalizeCandidate(AOriginalItems,AOptions,Candidate) ||Candidate.AreaSavingRatio < -CET_CUSTOM_MAX_AREA_LOSS_RATIO){
+                            continue;
+                        }
+
+                        Candidate.Score = _CalculateScore(Candidate,AOptions);
+                        const double CandidateBoxArea = Candidate.ClusterWidth * Candidate.ClusterHeight;
+                        const double BestBoxArea = BestCandidate.ClusterWidth * BestCandidate.ClusterHeight;
+                        if (!HasBest || Candidate.Score > BestCandidate.Score ||(std::abs(Candidate.Score - BestCandidate.Score) <= 1e-9 && CandidateBoxArea < BestBoxArea)){
+                            HasBest = true;
+                            BestCandidate = std::move(Candidate);
+                        }
+                    }
                 }
             }
 
@@ -372,77 +374,18 @@ namespace ET {
             return true;
         }
 
-        bool CetCustomClusterBuilder::_BuildClusterCandidateFromPair(const CetTNestItemVector& AOriginalItems, const TetClusterCandidate& ABasePair, const std::vector<int>& AIndices, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate)
+        bool CetCustomClusterBuilder::_RemapCandidateIndices(const TetClusterCandidate& ASourceCandidate, const std::vector<int>& AIndices, TetClusterCandidate& AOutCandidate)
         {
             AOutCandidate = TetClusterCandidate{};
-            if (!ABasePair.Valid || ABasePair.Transforms.size() != 2 || AIndices.size() < 2 ||AIndices.size() > CET_CUSTOM_MAX_CLUSTER_CHILDREN || (AIndices.size() % 2) != 0){
+            if (!ASourceCandidate.Valid || AIndices.size() != ASourceCandidate.Transforms.size() || AIndices.size() < 2){
                 return false;
             }
 
-            CetClusterGeometryHelper Geometry;
-            const std::size_t PairCount = AIndices.size() / 2;
-            const double CellGap = GetLayoutGap(AOptions);
-            bool HasBest = false;
-            TetClusterCandidate BestCandidate;
-
-            for (std::size_t RowCount = 1; RowCount <= PairCount; ++RowCount){
-                const std::size_t ColumnCount = (PairCount + RowCount - 1) / RowCount;
-                TetClusterCandidate Candidate;
-                Candidate.BuilderName = "CustomBuilder";
-                Candidate.ClusterType = "CustomPairGrid_" + std::to_string(AIndices.size()) + "_R" + std::to_string(RowCount);
-                Candidate.OriginalIndices = AIndices;
-                Candidate.Confidence = 0.76;
-                Candidate.Transforms.reserve(AIndices.size());
-
-                bool LayoutValid = true;
-                for (std::size_t PairIndex = 0; PairIndex < PairCount && LayoutValid; ++PairIndex){
-                    const std::size_t Row = PairIndex / ColumnCount;
-                    const std::size_t Column = PairIndex % ColumnCount;
-                    const double CellOffsetX = static_cast<double>(Column) * (ABasePair.ClusterWidth + CellGap);
-                    const double CellOffsetY = static_cast<double>(Row) * (ABasePair.ClusterHeight + CellGap);
-
-                    for (std::size_t Role = 0; Role < 2; ++Role){
-                        const TetItemTransform& ReferenceTransform = ABasePair.Transforms[Role];
-                        const int OriginalIndex = AIndices[PairIndex * 2 + Role];
-
-                        const CetPath ReferenceContour = Geometry.TransformContour(Geometry.GetIdentityContour(AOriginalItems[ReferenceTransform.OriginalId]),ReferenceTransform.RelativeRotation,ReferenceTransform.RelativeX,ReferenceTransform.RelativeY);
-                        double ReferenceMinX = 0.0;
-                        double ReferenceMinY = 0.0;
-                        double ReferenceMaxX = 0.0;
-                        double ReferenceMaxY = 0.0;
-                        double CurrentMinX = 0.0;
-                        double CurrentMinY = 0.0;
-                        double CurrentMaxX = 0.0;
-                        double CurrentMaxY = 0.0;
-                        if (!Geometry.GetBounds(ReferenceContour,ReferenceMinX,ReferenceMinY,ReferenceMaxX,ReferenceMaxY) ||!GetRotatedBounds(Geometry,AOriginalItems[OriginalIndex],ReferenceTransform.RelativeRotation,CurrentMinX,CurrentMinY,CurrentMaxX,CurrentMaxY)){
-                            LayoutValid = false;
-                            break;
-                        }
-
-                        TetItemTransform Transform;
-                        Transform.OriginalId = OriginalIndex;
-                        Transform.RelativeRotation = ReferenceTransform.RelativeRotation;
-                        Transform.RelativeX = CellOffsetX + ReferenceMinX - CurrentMinX;
-                        Transform.RelativeY = CellOffsetY + ReferenceMinY - CurrentMinY;
-                        Candidate.Transforms.push_back(Transform);
-                    }
-                }
-
-                if (!LayoutValid || !Geometry.HasValidTransformSpacing(AOriginalItems,AOptions,Candidate.Transforms) ||!Geometry.FinalizeCandidate(AOriginalItems,AOptions,Candidate) ||Candidate.AreaSavingRatio < -CET_CUSTOM_MAX_AREA_LOSS_RATIO){
-                    continue;
-                }
-
-                Candidate.Score = _CalculateScore(Candidate);
-                if (!HasBest || Candidate.Score > BestCandidate.Score){
-                    HasBest = true;
-                    BestCandidate = std::move(Candidate);
-                }
+            AOutCandidate = ASourceCandidate;
+            AOutCandidate.OriginalIndices = AIndices;
+            for (std::size_t IndexOffset = 0; IndexOffset < AIndices.size(); ++IndexOffset){
+                AOutCandidate.Transforms[IndexOffset].OriginalId = AIndices[IndexOffset];
             }
-
-            if (!HasBest){
-                return false;
-            }
-            AOutCandidate = std::move(BestCandidate);
             return true;
         }
 
@@ -451,22 +394,29 @@ namespace ET {
             return (AFeature.ShapeType == MetShapeType::QuadrilateralLike ||AFeature.ShapeType == MetShapeType::ConvexPolygon ||AFeature.ShapeType == MetShapeType::ConcavePolygon) &&AFeature.VertexCount >= 3 && AFeature.Area > 0.0 && AFeature.Width > 0.0 && AFeature.Height > 0.0;
         }
 
-        double CetCustomClusterBuilder::_CalculateScore(const TetClusterCandidate& ACandidate)
+        double CetCustomClusterBuilder::_CalculateScore(const TetClusterCandidate& ACandidate, const TetNestOptions& AOptions)
         {
             if (!ACandidate.Valid || ACandidate.OriginalIndices.size() < 2 ||ACandidate.ProxyArea <= 0.0 || ACandidate.ClusterWidth <= 0.0 || ACandidate.ClusterHeight <= 0.0){
                 return -std::numeric_limits<double>::infinity();
             }
 
-            const double FillScore = ACandidate.FillRatio * 1050.0;
-            const double SavingScore = ACandidate.AreaSavingRatio * 950.0;
-            const double ItemCountScore = static_cast<double>(ACandidate.OriginalIndices.size()) * 45.0;
+            const double BoundingArea = ACandidate.ClusterWidth * ACandidate.ClusterHeight;
+            const double BoundingFillRatio = BoundingArea > 0.0 ? std::clamp(ACandidate.RealArea / BoundingArea,0.0,1.0) : 0.0;
+            const double BinWidth = std::max(1.0,static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth)));
+            const double BinHeight = std::max(1.0,static_cast<double>(NestUtils::ToNestCoord(AOptions.BinHeight)));
+            const double BoardSpanRatio = std::max(ACandidate.ClusterWidth / BinWidth,ACandidate.ClusterHeight / BinHeight);
+            const double FillScore = ACandidate.FillRatio * 900.0;
+            const double SavingScore = ACandidate.AreaSavingRatio * 800.0;
+            const double BoundingFillScore = BoundingFillRatio * 650.0;
+            const double ItemCountScore = static_cast<double>(ACandidate.OriginalIndices.size()) * 18.0;
             const double LongSide = std::max(ACandidate.ClusterWidth, ACandidate.ClusterHeight);
             const double ShortSide = std::min(ACandidate.ClusterWidth, ACandidate.ClusterHeight);
-            const double CompactScore = LongSide > 0.0 ? ShortSide / LongSide * 40.0 : 0.0;
-            const double EdgePairBonus = ACandidate.ClusterType.find("EdgePair") != std::string::npos ? 90.0 : 0.0;
-            const double WastePenalty = ACandidate.ProxyWasteRatio * 160.0;
+            const double CompactScore = LongSide > 0.0 ? ShortSide / LongSide * 90.0 : 0.0;
+            const double AlternatingBonus = ACandidate.ClusterType.find("Alternating") != std::string::npos ? 35.0 : 0.0;
+            const double WastePenalty = ACandidate.ProxyWasteRatio * 180.0;
+            const double BoardSpanPenalty = BoardSpanRatio * 220.0;
             const double SizePenalty = (ACandidate.ClusterWidth + ACandidate.ClusterHeight) * 0.000001;
-            return FillScore + SavingScore + ItemCountScore + CompactScore + EdgePairBonus + ACandidate.Confidence - WastePenalty - SizePenalty;
+            return FillScore + SavingScore + BoundingFillScore + ItemCountScore + CompactScore + AlternatingBonus + ACandidate.Confidence - WastePenalty - BoardSpanPenalty - SizePenalty;
         }
 
     }

@@ -322,52 +322,27 @@ namespace ET {
         }
 
         bool CetClusterGeometryHelper::_ValidateChildSpacing(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const TetClusterCandidate& ACandidate, bool ALogRejection) const
-        {
-            
-
-
-
-
-
-
+        {         
             const double SpacingCoord = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
 
             for (std::size_t i = 0; i < ACandidate.Transforms.size(); ++i){
                 const auto& TransformA = ACandidate.Transforms[i];
                 CetNestItem ItemA = AOriginalItems[TransformA.OriginalId];
 
-                
-
-
                 ItemA.translation(libnest2d::Point(static_cast<ClipperLib::cInt>(std::llround(TransformA.RelativeX)), static_cast<ClipperLib::cInt>(std::llround(TransformA.RelativeY))));
                 ItemA.rotation(libnest2d::Radians(TransformA.RelativeRotation));
-
-                
-
-
 
                 ItemA.inflation(0);
 
                 for (std::size_t j = i + 1; j < ACandidate.Transforms.size(); ++j){
                     const auto& TransformB = ACandidate.Transforms[j];
                     CetNestItem ItemB = AOriginalItems[TransformB.OriginalId];
-
-                    
-
-
                     ItemB.translation(libnest2d::Point(static_cast<ClipperLib::cInt>(std::llround(TransformB.RelativeX)), static_cast<ClipperLib::cInt>(std::llround(TransformB.RelativeY))));
                     ItemB.rotation(libnest2d::Radians(TransformB.RelativeRotation));
                     ItemB.inflation(0);
 
                     if (SpacingCoord > 0.0){
                         
-
-
-
-
-
-
-
                         CetNestItem InflatedItemA = ItemA;
                         const auto OriginalInflation = InflatedItemA.inflation();
                         InflatedItemA.inflation(static_cast<decltype(OriginalInflation)>(SpacingCoord));

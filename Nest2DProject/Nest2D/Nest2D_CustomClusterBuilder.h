@@ -35,10 +35,10 @@ namespace ET {
 
         protected:
             void _BuildSameShapeClusterCandidates(const CetTNestItemVector& AOriginalItems,const std::vector<TetShapeFeature>& AFeatures,const std::vector<int>& AIndices,const TetNestOptions& AOptions,std::vector<TetClusterCandidate>& AOutCandidates);
-            bool _BuildBestPairCandidate(const CetTNestItemVector& AOriginalItems,int AFirstIndex,int ASecondIndex,const TetNestOptions& AOptions,TetClusterCandidate& AOutCandidate);
-            bool _BuildClusterCandidateFromPair(const CetTNestItemVector& AOriginalItems,const TetClusterCandidate& ABasePair,const std::vector<int>& AIndices,const TetNestOptions& AOptions,TetClusterCandidate& AOutCandidate);
+            bool _BuildBestLayoutCandidate(const CetTNestItemVector& AOriginalItems,const std::vector<int>& AIndices,const TetNestOptions& AOptions,TetClusterCandidate& AOutCandidate);
+            bool _RemapCandidateIndices(const TetClusterCandidate& ASourceCandidate,const std::vector<int>& AIndices,TetClusterCandidate& AOutCandidate);
             bool _IsSupportedCustomShape(const TetShapeFeature& AFeature);
-            double _CalculateScore(const TetClusterCandidate& ACandidate);
+            double _CalculateScore(const TetClusterCandidate& ACandidate,const TetNestOptions& AOptions);
         };
 
     }

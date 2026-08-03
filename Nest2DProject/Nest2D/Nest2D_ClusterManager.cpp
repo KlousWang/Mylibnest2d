@@ -330,8 +330,23 @@ namespace ET {
 
 			int GapFilledClusterCount = 0;
 			int GapFillerItemCount = 0;
+			std::size_t CustomClusteredItemCount = 0;
+			for (const TetClusterCandidate& Candidate : AcceptedCandidates){
+				if (Candidate.BuilderName == "CustomBuilder"){
+					CustomClusteredItemCount += Candidate.OriginalIndices.size();
+				}
+			}
+			const bool SkipGapFillForCustomMajority = Count >= 32 && CustomClusteredItemCount * 2 >= static_cast<std::size_t>(Count);
+			if (SkipGapFillForCustomMajority){
+				std::cout << "[TEMPLATE][GAPFILL SKIP] CustomClusteredItems=" << CustomClusteredItemCount << ", OriginalItems=" << Count << std::endl;
+			}
+
 			CetGapFillClusterBuilder GapFillBuilder;
 			for (TetClusterCandidate& Candidate : AcceptedCandidates){
+				if (SkipGapFillForCustomMajority || Candidate.BuilderName == "CustomBuilder"){
+					continue;
+				}
+
 				TetClusterCandidate FilledCandidate;
 				if (!GapFillBuilder.BuildCandidateForBase(AOriginalItems, AFeatures, Candidate, AOptions, Used, FilledCandidate)){
 					continue;
@@ -908,7 +923,6 @@ namespace ET {
 
 		bool CetClusterManager::_CanAcceptClusterCandidate(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const TetClusterCandidate& ACandidate, const std::vector<bool>& AUsed, int AOriginalCount)
 		{
-			(void)AOptions;
 			if (AOriginalCount < 0 || AOriginalItems.size() != static_cast<std::size_t>(AOriginalCount)){
 				return false;
 			}
@@ -917,6 +931,19 @@ namespace ET {
 			}
 			if (ACandidate.ClusterWidth <= 0.0 || ACandidate.ClusterHeight <= 0.0 || ACandidate.ProxyArea <= 0.0){
 				return false;
+			}
+			if (ACandidate.BuilderName == "CustomBuilder"){
+				const double BoundingArea = ACandidate.ClusterWidth * ACandidate.ClusterHeight;
+				const double BoundingFillRatio = BoundingArea > 0.0 ? std::clamp(ACandidate.RealArea / BoundingArea,0.0,1.0) : 0.0;
+				const double BinWidth = std::max(1.0,static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth)));
+				const double BinHeight = std::max(1.0,static_cast<double>(NestUtils::ToNestCoord(AOptions.BinHeight)));
+				const double BoardSpanRatio = std::max(ACandidate.ClusterWidth / BinWidth,ACandidate.ClusterHeight / BinHeight);
+				const bool LargeSparseProxy = ACandidate.OriginalIndices.size() >= 4 &&BoardSpanRatio > 0.20 && BoundingFillRatio < 0.50;
+				const bool PoorRectangleFallback = ACandidate.ProxyMode == MetClusterProxyMode::RectangleFallback &&BoundingFillRatio < 0.58;
+				if (BoardSpanRatio > 0.45 || ACandidate.ProxyWasteRatio > 0.55 ||LargeSparseProxy || PoorRectangleFallback){
+					std::cout << "[TEMPLATE][CUSTOM REJECT] Type=" << ACandidate.ClusterType << " BoardSpanRatio=" << BoardSpanRatio << " BoundingFillRatio=" << BoundingFillRatio << " ProxyWasteRatio=" << ACandidate.ProxyWasteRatio << std::endl;
+					return false;
+				}
 			}
 
 			std::set<int> CandidateIds;

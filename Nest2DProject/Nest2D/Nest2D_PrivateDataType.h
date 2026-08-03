@@ -21,9 +21,6 @@ constexpr double CET_CLUSTER_TWO_PI = CET_CLUSTER_PI * 2.0;
 constexpr double CET_CLUSTER_THREE_HALF_PI = CET_CLUSTER_PI * 1.5;
 
 constexpr std::size_t CET_CUSTOM_MAX_CLUSTER_CHILDREN = 8;
-constexpr std::size_t CET_CUSTOM_MAX_EDGE_CANDIDATES = 12;
-constexpr double CET_CUSTOM_EDGE_LENGTH_TOLERANCE = 0.01;
-constexpr double CET_CUSTOM_EDGE_ANGLE_TOLERANCE = CET_CLUSTER_PI / 90.0;
 constexpr double CET_CUSTOM_MAX_AREA_LOSS_RATIO = 0.08;
 
 constexpr double CET_ARC_SIZE_TOLERANCE = 0.05;
@@ -166,13 +163,6 @@ struct TetCustomShapeKey
     }
 };
 
-struct TetCustomEdgeInfo
-{
-    CetInpoint Start;
-    CetInpoint End;
-    double Length = 0.0;
-    double Angle = 0.0;
-};
 struct TetShapeBucketKey {
     MetShapeType Type = MetShapeType::Unknown;
     long long ShortSideBucket = 0;
