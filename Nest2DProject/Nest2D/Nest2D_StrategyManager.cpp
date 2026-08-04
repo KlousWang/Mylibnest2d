@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Nest2D_StrategyManager.h"
+//#include"Nest2D_PrivateDataType.h"
 #include "NestUtils.h"
 
 #include <algorithm>
@@ -11,7 +12,7 @@
 using namespace libnest2d;
 
 namespace {
-	constexpr std::size_t CET_REMNANT_SKYLINE_SAMPLES = 64;
+	/*constexpr std::size_t CET_REMNANT_SKYLINE_SAMPLES = 64;
 	constexpr double CET_LARGE_ANCHOR_RATIO = 0.15;
 	constexpr std::size_t CET_LARGE_ANCHOR_MAX_COUNT = 8;
 
@@ -21,7 +22,7 @@ namespace {
 		double MinY = 0.0;
 		double MaxX = 0.0;
 		double MaxY = 0.0;
-	};
+	};*/
 
 	bool AreMetricValuesDifferent(double AFirst, double ASecond)
 	{
@@ -58,17 +59,19 @@ bool ET::NEST2DMANAGERLIB::CetStrategyManager::IsBetterNestResult(const TetTNest
 	}
 
 	if (A.HasRemnantMetrics && AB.HasRemnantMetrics){
-		if (AreMetricValuesDifferent(A.ReusableRemnantArea,AB.ReusableRemnantArea)){
-			return A.ReusableRemnantArea > AB.ReusableRemnantArea;
-		}
-		if (AreMetricValuesDifferent(A.ReusableRemnantShortSide,AB.ReusableRemnantShortSide)){
-			return A.ReusableRemnantShortSide > AB.ReusableRemnantShortSide;
-		}
+		// For equal board counts, prefer the layout with fewer internal skyline
+		// gaps and a shallower occupied envelope before maximizing stock remnant.
 		if (AreMetricValuesDifferent(A.SkylineWasteArea,AB.SkylineWasteArea)){
 			return A.SkylineWasteArea < AB.SkylineWasteArea;
 		}
 		if (AreMetricValuesDifferent(A.UsedDepth,AB.UsedDepth)){
 			return A.UsedDepth < AB.UsedDepth;
+		}
+		if (AreMetricValuesDifferent(A.ReusableRemnantArea,AB.ReusableRemnantArea)){
+			return A.ReusableRemnantArea > AB.ReusableRemnantArea;
+		}
+		if (AreMetricValuesDifferent(A.ReusableRemnantShortSide,AB.ReusableRemnantShortSide)){
+			return A.ReusableRemnantShortSide > AB.ReusableRemnantShortSide;
 		}
 	}
 
@@ -341,4 +344,3 @@ TetTNestEvalResult ET::NEST2DMANAGERLIB::CetStrategyManager::EvaluatePackedResul
 		<< std::endl;
 	return Result;
 }
-

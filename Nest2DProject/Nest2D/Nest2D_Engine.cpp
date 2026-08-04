@@ -387,132 +387,83 @@ namespace ET {
 			return Layers;
 		}
 
+		bool CetNest2DEngine::_HasClusterItems(const std::vector<TetMetaItem>& AMetaItems) const
+		{
+			return std::any_of(AMetaItems.begin(), AMetaItems.end(), [](const TetMetaItem& AMeta) { return AMeta.IsCluster; });
+		}
+
+		std::vector<std::size_t> CetNest2DEngine::_BuildPriorityOrder(CetTNestItemVector& AItems, MetENestOrderStrategy AStrategy) const
+		{
+			Nest2DUtils->Nest2DStrategy->ApplyNestPriorityStrategy(AItems, AStrategy);
+			std::vector<std::size_t> Indices(AItems.size());
+			std::iota(Indices.begin(), Indices.end(), 0);
+			std::stable_sort(Indices.begin(), Indices.end(), [&](std::size_t A, std::size_t AB) {
+				const int PriorityA = AItems[A].priority();
+				const int PriorityB = AItems[AB].priority();
+				if (PriorityA != PriorityB) return PriorityA > PriorityB;
+				const double AreaA = std::abs(static_cast<double>(AItems[A].area()));
+				const double AreaB = std::abs(static_cast<double>(AItems[AB].area()));
+				return std::abs(AreaA - AreaB) > 1e-6 ? AreaA > AreaB : A < AB;
+			});
+			return Indices;
+		}
+
+		void CetNest2DEngine::_BuildSortedTestData(CetTNestItemVector& APriorityItems, const std::vector<TetMetaItem>& AMetaItems, const std::vector<std::size_t>& ASortedIndices, CetTNestItemVector& AOutItems, std::vector<TetMetaItem>& AOutMetaItems) const
+		{
+			AOutItems.reserve(APriorityItems.size());
+			AOutMetaItems.reserve(AMetaItems.size());
+			for (std::size_t Index : ASortedIndices){
+				AOutItems.push_back(std::move(APriorityItems[Index]));
+				AOutMetaItems.push_back(AMetaItems[Index]);
+				AOutMetaItems.back().PackedItemIndex = static_cast<int>(AOutMetaItems.size() - 1);
+			}
+		}
+
+		void CetNest2DEngine::_UpdateLocalBest(TetLocalBestResult& ALocalBest, TetTNestEvalResult AEvaluation, std::size_t ALayers, CetTNestItemVector& AItems, std::vector<TetMetaItem>& AMetaItems, bool AHasCluster) const
+		{
+			bool Better = !ALocalBest.HasBest;
+			if (!Better && Nest2DUtils->Nest2DStrategy->IsBetterNestResult(AEvaluation, ALocalBest.Eval)) Better = true;
+			if (!Better && AHasCluster && !ALocalBest.HasCluster) Better = !Nest2DUtils->Nest2DStrategy->IsBetterNestResult(ALocalBest.Eval, AEvaluation);
+			if (!Better) return;
+			ALocalBest.HasBest = true;
+			ALocalBest.Eval = AEvaluation;
+			ALocalBest.Layers = ALayers;
+			ALocalBest.Items = std::move(AItems);
+			ALocalBest.MetaItems = std::move(AMetaItems);
+			ALocalBest.HasCluster = AHasCluster;
+			std::cout << "[NEST][LOCAL BEST UPDATE] HasCluster = " << ALocalBest.HasCluster << ", count = " << ALocalBest.Eval.FirstBinCount << ", area = " << ALocalBest.Eval.FirstBinArea << ", layers = " << ALocalBest.Eval.Layers << ", packedItems = " << ALocalBest.Items.size() << std::endl;
+		}
+
 		TetLocalBestResult CetNest2DEngine::EvaluateSortingStrategies(const TetClusterBuildResult& AClusterResult, const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker)
 		{
 			TetLocalBestResult LocalBest;
-
-			const bool UsePolygonBoard = AOptions.Board.Enabled && AOptions.Board.Vertices.size() >= 3;
-			bool CurrentHasCluster = false;
-			for (const auto& Meta : AClusterResult.MetaItems){
-				if (Meta.IsCluster){
-					CurrentHasCluster = true;
-					break;
-				}
-			}
-
 			if (AClusterResult.NestItems.size() != AClusterResult.MetaItems.size()){
-				std::cout << "[NEST][EVAL][ERROR] Cluster NestItems size != MetaItems size. " << "NestItems = " << AClusterResult.NestItems.size() << ", MetaItems = " << AClusterResult.MetaItems.size() << std::endl;
+				std::cout << "[NEST][EVAL][ERROR] Cluster NestItems size != MetaItems size. NestItems = " << AClusterResult.NestItems.size() << ", MetaItems = " << AClusterResult.MetaItems.size() << std::endl;
 				return LocalBest;
 			}
-
-			const std::vector<MetENestOrderStrategy> Strategies = {
-					MetENestOrderStrategy::LargeFirst,
-					MetENestOrderStrategy::SmallFirst,
-					MetENestOrderStrategy::LongSideFirst,
-					MetENestOrderStrategy::ThinFirst
-				};
+			const bool UsePolygonBoard = AOptions.Board.Enabled && AOptions.Board.Vertices.size() >= 3;
+			const bool CurrentHasCluster = _HasClusterItems(AClusterResult.MetaItems);
+			const std::vector<MetENestOrderStrategy> Strategies = { MetENestOrderStrategy::LargeFirst, MetENestOrderStrategy::SmallFirst, MetENestOrderStrategy::LongSideFirst, MetENestOrderStrategy::ThinFirst };
 			std::set<std::vector<std::size_t>> EvaluatedOrders;
-		
 			for (MetENestOrderStrategy Strategy : Strategies){
 				CetTNestItemVector PriorityItems = AClusterResult.NestItems;
-				Nest2DUtils->Nest2DStrategy->ApplyNestPriorityStrategy(PriorityItems, Strategy);
-
-				std::vector<std::size_t> SortedIndices(PriorityItems.size());
-				std::iota(SortedIndices.begin(), SortedIndices.end(), 0);
-				std::stable_sort(SortedIndices.begin(), SortedIndices.end(), [&](std::size_t A, std::size_t AB) {
-					const int PriorityA = PriorityItems[A].priority();
-					const int PriorityB = PriorityItems[AB].priority();
-					if (PriorityA != PriorityB){
-						return PriorityA > PriorityB;
-					}
-
-					const double AreaA = std::abs(static_cast<double>(PriorityItems[A].area()));
-					const double AreaB = std::abs(static_cast<double>(PriorityItems[AB].area()));
-					if (std::abs(AreaA - AreaB) > 1e-6){
-						return AreaA > AreaB;
-					}
-
-					return A < AB;
-				});
+				const std::vector<std::size_t> SortedIndices = _BuildPriorityOrder(PriorityItems, Strategy);
 				if (!EvaluatedOrders.insert(SortedIndices).second){
 					std::cout << "[NEST][EVAL][SKIP] Strategy = " << static_cast<int>(Strategy) << ", reason = duplicate item order" << std::endl;
 					continue;
 				}
-
 				CetTNestItemVector TestItems;
-				TestItems.reserve(PriorityItems.size());
 				std::vector<TetMetaItem> TestMetaItems;
-				TestMetaItems.reserve(AClusterResult.MetaItems.size());
-				for (std::size_t SortedIndex : SortedIndices){
-					TestItems.push_back(std::move(PriorityItems[SortedIndex]));
-					TestMetaItems.push_back(AClusterResult.MetaItems[SortedIndex]);
-					TestMetaItems.back().PackedItemIndex = static_cast<int>(TestMetaItems.size() - 1);
-				}
-
-				std::size_t Layers = 0;
-				if (UsePolygonBoard){
-					 Layers = RunPolygonNestOnce(TestItems, AOptions, ATracker);
-				}
-				else{
-					 Layers = RunRectangleNestOnce(TestItems, AOptions, ATracker);
-				}	
-
-				if (CurrentHasCluster && !Nest2DUtils->Nest2DCluster->ValidatePackedResultNoOverlap(AOriginalItems,TestItems,TestMetaItems)){
+				_BuildSortedTestData(PriorityItems, AClusterResult.MetaItems, SortedIndices, TestItems, TestMetaItems);
+				const std::size_t Layers = UsePolygonBoard ? RunPolygonNestOnce(TestItems, AOptions, ATracker) : RunRectangleNestOnce(TestItems, AOptions, ATracker);
+				if (CurrentHasCluster && !Nest2DUtils->Nest2DCluster->ValidatePackedResultNoOverlap(AOriginalItems, TestItems, TestMetaItems)){
 					std::cout << "[NEST][EVAL][SKIP] Strategy = " << static_cast<int>(Strategy) << ", reason = expanded cluster overlap" << std::endl;
 					continue;
 				}
-
-				TetTNestEvalResult Eval = Nest2DUtils->Nest2DStrategy->EvaluatePackedResultWithMeta(TestItems,TestMetaItems,AOriginalItems,AOptions,Layers);
-
-				std::cout << "[NEST][EVAL] Strategy = " << static_cast<int>(Strategy)
-					<< ", HasCluster = " << CurrentHasCluster
-					<< ", Eval.FirstBinCount = " << Eval.FirstBinCount
-					<< ", Eval.FirstBinArea = " << Eval.FirstBinArea
-					<< ", Eval.Layers = " << Eval.Layers
-					<< ", Eval.RemnantArea = " << Eval.ReusableRemnantArea
-					<< ", Eval.RemnantShortSide = " << Eval.ReusableRemnantShortSide
-					<< ", Eval.SkylineWaste = " << Eval.SkylineWasteArea
-					<< ", Eval.RemnantDirection = " << (Eval.RemnantIsTopStrip ? "Top" : "Right")
-					<< ", LocalBest.FirstBinCount = " << LocalBest.Eval.FirstBinCount
-					<< ", LocalBest.FirstBinArea = " << LocalBest.Eval.FirstBinArea
-					<< ", LocalBest.Layers = " << LocalBest.Eval.Layers
-					<< std::endl;
-
-				bool Better = false;
-				if (!LocalBest.HasBest){
-					Better = true;
-				}
-				else if (Nest2DUtils->Nest2DStrategy->IsBetterNestResult(Eval, LocalBest.Eval)){
-					Better = true;
-				}
-				else {
-				const bool Equivalent = !Nest2DUtils->Nest2DStrategy->IsBetterNestResult(LocalBest.Eval,Eval);
-
-				if (Equivalent){
-						if (CurrentHasCluster && !LocalBest.HasCluster){
-							Better = true;
-						}
-					}
-				}
-
-				if (Better){
-					LocalBest.HasBest = true;
-					LocalBest.Eval = Eval;
-					LocalBest.Layers = Layers;
-					LocalBest.Items = std::move(TestItems);
-					LocalBest.MetaItems = std::move(TestMetaItems);
-					LocalBest.HasCluster = CurrentHasCluster;
-
-					std::cout << "[NEST][LOCAL BEST UPDATE] HasCluster = " << LocalBest.HasCluster
-						<< ", count = " << LocalBest.Eval.FirstBinCount
-						<< ", area = " << LocalBest.Eval.FirstBinArea
-						<< ", layers = " << LocalBest.Eval.Layers
-						<< ", packedItems = " << LocalBest.Items.size()
-						<< std::endl;
-				}
-
+				TetTNestEvalResult Eval = Nest2DUtils->Nest2DStrategy->EvaluatePackedResultWithMeta(TestItems, TestMetaItems, AOriginalItems, AOptions, Layers);
+				std::cout << "[NEST][EVAL] Strategy = " << static_cast<int>(Strategy) << ", HasCluster = " << CurrentHasCluster << ", Eval.FirstBinCount = " << Eval.FirstBinCount << ", Eval.FirstBinArea = " << Eval.FirstBinArea << ", Eval.Layers = " << Eval.Layers << ", Eval.RemnantArea = " << Eval.ReusableRemnantArea << ", Eval.RemnantShortSide = " << Eval.ReusableRemnantShortSide << ", Eval.SkylineWaste = " << Eval.SkylineWasteArea << ", Eval.RemnantDirection = " << (Eval.RemnantIsTopStrip ? "Top" : "Right") << ", LocalBest.FirstBinCount = " << LocalBest.Eval.FirstBinCount << ", LocalBest.FirstBinArea = " << LocalBest.Eval.FirstBinArea << ", LocalBest.Layers = " << LocalBest.Eval.Layers << std::endl;
+				_UpdateLocalBest(LocalBest, Eval, Layers, TestItems, TestMetaItems, CurrentHasCluster);
 			}
-
 			return LocalBest;
 		}
 		bool CetNest2DEngine::ShoouldUpdateGlobalBest(const TetLocalBestResult& ALocalResult, bool AHasBest, const TetTNestEvalResult& ABestEval, std::size_t ABestLayers, bool ABestHasCluster)

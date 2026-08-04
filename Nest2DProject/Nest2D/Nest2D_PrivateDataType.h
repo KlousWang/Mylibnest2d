@@ -20,6 +20,31 @@ constexpr double CET_CLUSTER_HALF_PI = CET_CLUSTER_PI * 0.5;
 constexpr double CET_CLUSTER_TWO_PI = CET_CLUSTER_PI * 2.0;
 constexpr double CET_CLUSTER_THREE_HALF_PI = CET_CLUSTER_PI * 1.5;
 
+constexpr double CET_CIRCLE_SIZE_TOLERANCE = 0.01;
+constexpr double CET_CIRCLE_HONEYCOMB_ROW_RATIO = 0.86602540378443864676;
+constexpr double CET_ELLIPSE_SIZE_TOLERANCE = 0.05;
+constexpr double CET_ELLIPSE_HONEYCOMB_ROW_RATIO = 0.90;
+constexpr double CET_RECT_SIZE_TOLERANCE = 0.05;
+constexpr double CET_RECT_SQUARE_TOLERANCE = 0.01;
+constexpr double CET_RECT_MAX_AREA_LOSS_RATIO = 0.10;
+constexpr std::size_t CET_RECT_MAX_CLUSTER_CHILDREN = 32;
+constexpr std::size_t CET_TRIANGLE_MAX_CLUSTER_CHILDREN = 32;
+constexpr std::size_t CET_GENERAL_TRIANGLE_MAX_CLUSTER_CHILDREN = 32;
+constexpr int CET_TRIANGLE_PAIR_PITCH_SEARCH_STEPS = 20;
+constexpr double CET_ROTATION_DUPLICATE_TOLERANCE = 1e-12;
+constexpr double CET_SHAPE_EPSILON = 1e-9;
+constexpr double CET_GENERAL_ARC_MIN_SWEEP = CET_CLUSTER_PI / 18.0;
+constexpr double CET_GENERAL_ARC_MAX_SWEEP = CET_CLUSTER_TWO_PI - CET_CLUSTER_PI / 36.0;
+constexpr double CET_GENERAL_ARC_SEMI_TOLERANCE = CET_CLUSTER_PI / 36.0;
+constexpr int CET_CLUSTER_BOUNDARY_OFFSET_ATTEMPTS = 5;
+constexpr double CET_CLUSTER_BOUNDARY_AREA_TOLERANCE = 16.0;
+constexpr double CET_CLUSTER_BOUNDARY_RELATIVE_AREA_TOLERANCE = 1e-10;
+constexpr double CET_CLUSTER_GEOMETRY_AREA_TOLERANCE = 16.0;
+constexpr double CET_CLUSTER_GEOMETRY_RELATIVE_AREA_TOLERANCE = 1e-10;
+constexpr std::size_t CET_REMNANT_SKYLINE_SAMPLES = 64;
+constexpr double CET_LARGE_ANCHOR_RATIO = 0.15;
+constexpr std::size_t CET_LARGE_ANCHOR_MAX_COUNT = 8;
+
 constexpr double CET_CUSTOM_MAX_AREA_LOSS_RATIO = 0.08;
 constexpr std::size_t CET_CUSTOM_MAX_CLUSTER_CHILDREN = 64;
 
@@ -35,8 +60,53 @@ constexpr double CET_RECTANGLE_FILL_POSITION_TOLERANCE = 1.0;
 
 struct TetLib2DItemDataType
 {
-
+    CetTNestItemVector NestItems;
 };
+
+struct TetRemnantPartBounds
+{
+    double MinX = 0.0;
+    double MinY = 0.0;
+    double MaxX = 0.0;
+    double MaxY = 0.0;
+};
+
+struct TetCustomRotationPose
+{
+    double Rotation = 0.0;
+    double MinX = 0.0;
+    double MinY = 0.0;
+    double Width = 0.0;
+    double Height = 0.0;
+};
+
+struct TetCustomLayoutPattern
+{
+    const char* Name = "";
+    double ColumnPitchRatio = 1.0;
+    double RowPitchRatio = 1.0;
+    double RowStaggerRatio = 0.0;
+    bool AlternateHalfTurn = false;
+};
+
+struct TetRowLayoutEstimate
+{
+    std::size_t RowCount = 0;
+    double Score = 0.0;
+};
+
+struct TetRectangleGridLayout
+{
+    int Rows = 0;
+    int Cols = 0;
+    double Width = 0.0;
+    double Height = 0.0;
+    double Area = 0.0;
+    double AspectPenalty = 0.0;
+};
+
+using TetRightTriangleRectangleLayout = TetRectangleGridLayout;
+using TetGeneralTriangleLayout = TetRectangleGridLayout;
 struct TetCircleExportPoint
 {
     double X = 0.0;

@@ -11,9 +11,6 @@ namespace ET {
     namespace NEST2DMANAGERLIB {
 
         namespace {
-            constexpr int CET_CLUSTER_BOUNDARY_OFFSET_ATTEMPTS = 5;
-            constexpr double CET_CLUSTER_BOUNDARY_AREA_TOLERANCE = 16.0;
-            constexpr double CET_CLUSTER_BOUNDARY_RELATIVE_AREA_TOLERANCE = 1e-10;
         }
 
         CetClusterBoundary::CetClusterBoundary() : CetCoreObject()

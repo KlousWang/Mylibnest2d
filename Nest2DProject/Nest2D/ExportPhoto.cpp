@@ -48,6 +48,29 @@ namespace {
 
         return ss.str();
     }
+
+    std::vector<libnest2d::Item> BuildSvgItemsForBin(const std::vector<TetNestPolygon>& AItems, int ABin)
+    {
+        std::vector<libnest2d::Item> Result;
+        for (const auto& Item : AItems){
+            if (Item.Out_bin != ABin){ continue; }
+            Path Outer; for (const auto& PointData : Item.Vertices){ Outer.push_back(Point(NestUtils::ToNestCoord(PointData.X), NestUtils::ToNestCoord(PointData.Y))); }
+            if (Outer.size() < 3){ continue; }
+            if (!ClipperLib::Orientation(Outer)){ std::reverse(Outer.begin(), Outer.end()); }
+            Paths Holes;
+            for (const auto& HoleData : Item.Holes){
+                if (HoleData.size() < 3){ continue; }
+                Path Inner; for (const auto& PointData : HoleData){ Inner.push_back(Point(NestUtils::ToNestCoord(PointData.X), NestUtils::ToNestCoord(PointData.Y))); }
+                if (ClipperLib::Orientation(Inner)){ std::reverse(Inner.begin(), Inner.end()); }
+                Holes.push_back(std::move(Inner));
+            }
+            CetPolygonImpl Polygon(std::move(Outer), std::move(Holes));
+            libnest2d::Item SvgItem(Polygon);
+            SvgItem.rotation(Item.Out_angle); SvgItem.translation(Point(NestUtils::ToNestCoord(Item.Out_x), NestUtils::ToNestCoord(Item.Out_y))); SvgItem.binId(Item.Out_bin);
+            Result.push_back(std::move(SvgItem));
+        }
+        return Result;
+    }
 }
 
 namespace ET {
@@ -92,48 +115,7 @@ namespace ET {
                 SvgWriter svgw(conf);
                 svgw.setSize(binSize);
 
-                std::vector<libnest2d::Item> currentBinItems;
-
-                for (const auto& item : AItems){
-                    if (item.Out_bin == currentBin){
-                        Path outerPoints;
-                        outerPoints.reserve(item.Vertices.size());
-
-                        for (const auto& pt : item.Vertices){
-                            outerPoints.push_back(Point(NestUtils::ToNestCoord(pt.X),NestUtils::ToNestCoord(pt.Y)));
-                        }
-
-                        if (outerPoints.size() < 3){
-                            continue;
-                        }
-
-                        if (ClipperLib::Orientation(outerPoints) == false){
-                            std::reverse(outerPoints.begin(), outerPoints.end());
-                        }
-                        Paths holes;
-                        holes.reserve(item.Holes.size());
-                        for (const auto& holePts : item.Holes){
-                            if (holePts.size() < 3){
-                                continue;
-                            }
-                            Path innerPoints;
-                            innerPoints.reserve(holePts.size());
-                            for (const auto& pt : holePts){
-                                innerPoints.push_back(Point(NestUtils::ToNestCoord(pt.X),NestUtils::ToNestCoord(pt.Y)));
-                            }
-                            if (ClipperLib::Orientation(innerPoints) == true){
-                                std::reverse(innerPoints.begin(), innerPoints.end());
-                            }
-                            holes.push_back(std::move(innerPoints));
-                        }
-                        CetPolygonImpl poly(std::move(outerPoints), std::move(holes));
-                        libnest2d::Item svgItem(poly);
-                        svgItem.rotation(item.Out_angle);
-                        svgItem.translation(Point(NestUtils::ToNestCoord(item.Out_x),NestUtils::ToNestCoord(item.Out_y)));
-                        svgItem.binId(item.Out_bin);
-                        currentBinItems.push_back(std::move(svgItem));
-                    }
-                }
+                std::vector<libnest2d::Item> currentBinItems = BuildSvgItemsForBin(AItems, currentBin);
                 
                 if (currentBinItems.empty()){
                     std::cout << "[WARN] Skip empty bin: " << currentBin << std::endl;

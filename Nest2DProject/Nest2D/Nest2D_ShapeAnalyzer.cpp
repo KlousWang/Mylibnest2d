@@ -10,12 +10,8 @@
 #include <vector>
 namespace ET {
 	namespace NEST2DMANAGERLIB {
-		constexpr double CET_SHAPE_EPSILON = 1e-9;
 
         namespace {
-            constexpr double CET_GENERAL_ARC_MIN_SWEEP = CET_CLUSTER_PI / 18.0;
-            constexpr double CET_GENERAL_ARC_MAX_SWEEP = CET_CLUSTER_TWO_PI - CET_CLUSTER_PI / 36.0;
-            constexpr double CET_GENERAL_ARC_SEMI_TOLERANCE = CET_CLUSTER_PI / 36.0;
 
             TetCircleFitResult FitCircleCenterFromThreePoints(const ClipperLib::IntPoint& AFirstPoint, const ClipperLib::IntPoint& AMiddlePoint, const ClipperLib::IntPoint& ALastPoint)
             {

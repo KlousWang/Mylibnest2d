@@ -22,23 +22,22 @@ namespace ET {
 
 		static CetTNestItemVector* AsNestItems(TetLib2DItemDataType* AData)
 		{
-			return reinterpret_cast<CetTNestItemVector*>(AData);
+			return AData != nullptr ? &AData->NestItems : nullptr;
 		}
 
 		static const CetTNestItemVector* AsNestItems(const TetLib2DItemDataType* AData)
 		{
-			return reinterpret_cast<const CetTNestItemVector*>(AData);
+			return AData != nullptr ? &AData->NestItems : nullptr;
 		}
 		CetNest2DManager::CetNest2DManager():CetCoreObject()
 		{
-			//_Lib2DItemDataType = reinterpret_cast<TetLib2DItemDataType*>(new CetTNestItemVector());
-			_Lib2DItemDataType = (TetLib2DItemDataType*)(new CetTNestItemVector());
+			_Lib2DItemDataType = new TetLib2DItemDataType();
 			
 			std::cout << "CetNest2DManager Constructor" << std::endl;
 		}
 		CetNest2DManager::~CetNest2DManager()
 		{
-			delete AsNestItems(_Lib2DItemDataType);
+			delete _Lib2DItemDataType;
 			_Lib2DItemDataType = nullptr;
 		}
         static std::size_t RecalcUsedBinsFromItems(  std::vector<TetNestPolygon>& AItems )
@@ -65,6 +64,45 @@ namespace ET {
             return static_cast<std::size_t>(NextBin);
         }
 
+        static void BuildSortedItems(const std::vector<TetNestPolygon>& AItems, std::vector<TetNestPolygon>& AOutItems, std::vector<std::size_t>& AOutOriginalIndices)
+        {
+            std::vector<std::pair<std::size_t, TetNestPolygon>> SortedPairs;
+            SortedPairs.reserve(AItems.size());
+            for (std::size_t ItemIndex = 0; ItemIndex < AItems.size(); ++ItemIndex){
+                SortedPairs.push_back({ ItemIndex, AItems[ItemIndex] });
+            }
+
+            std::stable_sort(SortedPairs.begin(), SortedPairs.end(), [](const auto& ALeft, const auto& ARight) {
+                const bool LeftBeforeRight = Nest2DUtils->Nest2DGeometryUtils->ComparePolygonAreaDesc(ALeft.second, ARight.second);
+                const bool RightBeforeLeft = Nest2DUtils->Nest2DGeometryUtils->ComparePolygonAreaDesc(ARight.second, ALeft.second);
+                return LeftBeforeRight != RightBeforeLeft ? LeftBeforeRight : ALeft.first < ARight.first;
+            });
+
+            AOutItems.clear();
+            AOutOriginalIndices.clear();
+            AOutItems.reserve(SortedPairs.size());
+            AOutOriginalIndices.reserve(SortedPairs.size());
+            for (const auto& Entry : SortedPairs){
+                AOutOriginalIndices.push_back(Entry.first);
+                AOutItems.push_back(Entry.second);
+            }
+        }
+
+        static void ApplySortedResults(const std::vector<TetNestPolygon>& ASortedItems, const std::vector<std::size_t>& ASortedToOriginal, std::vector<TetNestPolygon>& AItems)
+        {
+            const std::size_t ResultCount = std::min(ASortedItems.size(), ASortedToOriginal.size());
+            for (std::size_t SortedIndex = 0; SortedIndex < ResultCount; ++SortedIndex){
+                const std::size_t OriginalIndex = ASortedToOriginal[SortedIndex];
+                if (OriginalIndex >= AItems.size()){
+                    continue;
+                }
+                AItems[OriginalIndex].Out_bin = ASortedItems[SortedIndex].Out_bin;
+                AItems[OriginalIndex].Out_x = ASortedItems[SortedIndex].Out_x;
+                AItems[OriginalIndex].Out_y = ASortedItems[SortedIndex].Out_y;
+                AItems[OriginalIndex].Out_angle = ASortedItems[SortedIndex].Out_angle;
+            }
+        }
+
 		int CetNest2DManager::PerformNestingEx(std::vector<TetNestPolygon>& AItems, const TetNestOptions& AOptions, TetNestResult* AResult)
 		{
 		
@@ -83,31 +121,10 @@ namespace ET {
 			if (NestItemsPtr == nullptr)return NEST2D_ERR_CORE_NESTING_FAILED;
 			CetTNestItemVector& NestItems = *NestItemsPtr;
 			NestItems.clear();
-			// ==================== 对源数据进行排序 ====================
 			std::cout << "[NEST] Sorting working copy by Bounding Box Area (Descending)..." << std::endl;
-			std::vector<std::pair<std::size_t, TetNestPolygon>> SortedPairs;
-			SortedPairs.reserve(AItems.size());
-			for (std::size_t ItemIndex = 0; ItemIndex < AItems.size(); ++ItemIndex){
-				SortedPairs.push_back({ ItemIndex, AItems[ItemIndex] });
-			}
-			std::stable_sort(SortedPairs.begin(), SortedPairs.end(), [&](const auto& ALeft, const auto& ARight) {
-				const bool LeftBeforeRight = Nest2DUtils->Nest2DGeometryUtils->ComparePolygonAreaDesc(ALeft.second, ARight.second);
-				const bool RightBeforeLeft = Nest2DUtils->Nest2DGeometryUtils->ComparePolygonAreaDesc(ARight.second, ALeft.second);
-				if (LeftBeforeRight != RightBeforeLeft){
-					return LeftBeforeRight;
-				}
-				return ALeft.first < ARight.first;
-				});
-
 			std::vector<TetNestPolygon> SortedItems;
 			std::vector<std::size_t> SortedToOriginal;
-			SortedItems.reserve(SortedPairs.size());
-			SortedToOriginal.reserve(SortedPairs.size());
-			for (const auto& Entry : SortedPairs){
-				SortedToOriginal.push_back(Entry.first);
-				SortedItems.push_back(Entry.second);
-			}
-			// ==========================================================================
+			BuildSortedItems(AItems, SortedItems, SortedToOriginal);
 
 			Nest2DUtils->NestDataMapperIns->BuildNestItems(SortedItems,NestItems);
             std::cout << "[DEBUG] SortedItems.size = " << SortedItems.size() << ", NestItems.size = " << NestItems.size() << std::endl;
@@ -129,16 +146,7 @@ namespace ET {
 			if (NestCode != Nest2D_Success)return NestCode;
 
 			Nest2DUtils->NestDataMapperIns->ApplyResults(NestItems, SortedItems);
-			for (std::size_t SortedIndex = 0; SortedIndex < SortedItems.size() && SortedIndex < SortedToOriginal.size(); ++SortedIndex){
-				const std::size_t OriginalIndex = SortedToOriginal[SortedIndex];
-				if (OriginalIndex >= AItems.size()){
-					continue;
-				}
-				AItems[OriginalIndex].Out_bin = SortedItems[SortedIndex].Out_bin;
-				AItems[OriginalIndex].Out_x = SortedItems[SortedIndex].Out_x;
-				AItems[OriginalIndex].Out_y = SortedItems[SortedIndex].Out_y;
-				AItems[OriginalIndex].Out_angle = SortedItems[SortedIndex].Out_angle;
-			}
+			ApplySortedResults(SortedItems, SortedToOriginal, AItems);
             for (const auto& Item : AItems){
                 std::cout << "[RESULT] item id = " << Item.Id << ", bin = " << Item.Out_bin << ", x = " << Item.Out_x << ", y = " << Item.Out_y << ", angle = " << Item.Out_angle << std::endl;
             }

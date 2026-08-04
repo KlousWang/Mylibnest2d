@@ -17,8 +17,6 @@ namespace ET {
     namespace NEST2DMANAGERLIB {
 
         namespace {
-            constexpr double CET_ELLIPSE_SIZE_TOLERANCE = 0.05;
-            constexpr double CET_ELLIPSE_HONEYCOMB_ROW_RATIO = 0.90;
 
             bool IsValidEllipseFeature(const TetShapeFeature& AFeature)
             {

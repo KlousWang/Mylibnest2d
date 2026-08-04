@@ -8,7 +8,6 @@ namespace ET {
     namespace NEST2DMANAGERLIB {
 
         namespace {
-            constexpr double CET_ROTATION_DUPLICATE_TOLERANCE = 1e-12;
 
             double GetAngleDistance(double ALeftAngle, double ARightAngle)
             {

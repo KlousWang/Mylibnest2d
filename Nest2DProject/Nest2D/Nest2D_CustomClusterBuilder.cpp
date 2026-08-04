@@ -116,24 +116,6 @@ namespace ET {
                 return RequiredGap + std::max(2.0, RequiredGap * 0.001);
             }
 
-            struct TetCustomRotationPose
-            {
-                double Rotation = 0.0;
-                double MinX = 0.0;
-                double MinY = 0.0;
-                double Width = 0.0;
-                double Height = 0.0;
-            };
-
-            struct TetCustomLayoutPattern
-            {
-                const char* Name = "";
-                double ColumnPitchRatio = 1.0;
-                double RowPitchRatio = 1.0;
-                double RowStaggerRatio = 0.0;
-                bool AlternateHalfTurn = false;
-            };
-
             bool BuildRotationPose(const CetClusterGeometryHelper& AGeometry, const CetNestItem& AItem, double ARotation, TetCustomRotationPose& AOutPose)
             {
                 double MaxX = 0.0;
@@ -180,12 +162,6 @@ namespace ET {
 
             std::vector<std::size_t> BuildLayoutRowCounts(std::size_t AItemCount, double ACellWidth, double ACellHeight, double AColumnPitch, double ARowPitch, double ARowStaggerRatio, const TetNestOptions& AOptions)
             {
-                struct TetRowLayoutEstimate
-                {
-                    std::size_t RowCount = 0;
-                    double Score = 0.0;
-                };
-
                 std::vector<TetRowLayoutEstimate> Estimates;
                 if (AItemCount == 0 || ACellWidth <= 0.0 || ACellHeight <= 0.0 || AColumnPitch <= 0.0 || ARowPitch <= 0.0){
                     return {};

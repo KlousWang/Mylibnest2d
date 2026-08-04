@@ -17,8 +17,6 @@ namespace ET {
     namespace NEST2DMANAGERLIB {
 
         namespace {
-            constexpr double CET_CIRCLE_SIZE_TOLERANCE = 0.01;
-            constexpr double CET_CIRCLE_HONEYCOMB_ROW_RATIO = 0.86602540378443864676;
 
             double GetCircleSizeKey(const TetShapeFeature& AFeature)
             {
