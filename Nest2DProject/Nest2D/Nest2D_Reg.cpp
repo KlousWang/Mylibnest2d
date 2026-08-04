@@ -17,7 +17,7 @@
 #include"Nest2D_TriangleClusterBuilder.h"
 //#include"Nest2D_ClusterInvokeFunctor.h"
 #include"Nest2D_CircleClusterBuilder.h"
-#include"Nest2D_GapFillClusterBuilder.h"
+#include"Nest2D_RectangleFillClusterBuilder.h"
 namespace ET {
 	namespace NEST2DMANAGERLIB {
 		using namespace ET::CORE;
@@ -41,7 +41,7 @@ namespace ET {
 		Reg_EtCore_Obj_Str(Nest2D_ShapeAnalyzer, CetShapeAnalyzer)
 		Reg_EtCore_Obj_Str(Nest2D_TriangleClusterBuilder, CetTriangleClusterBuilder)
 		Reg_EtCore_Obj_Str(Nest2D_CircleClusterBuilder, CetCircleClusterBuilder)
-		Reg_EtCore_Obj_Str(Nest2D_GapFillClusterBuilder, CetGapFillClusterBuilder)
+		Reg_EtCore_Obj_Str(Nest2D_RectangleFillClusterBuilder, CetRectangleFillClusterBuilder)
 		//Reg_EtCore_Obj_Str(File_Load, CetFile)
 	}
 

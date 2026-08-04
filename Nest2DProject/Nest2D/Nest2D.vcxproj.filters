@@ -108,7 +108,7 @@
     <ClInclude Include="Nest2D_RectangleClusterBuilder.h">
       <Filter>头文件\Cluster</Filter>
     </ClInclude>
-    <ClInclude Include="Nest2D_GapFillClusterBuilder.h">
+    <ClInclude Include="Nest2D_RectangleFillClusterBuilder.h">
       <Filter>头文件\Cluster</Filter>
     </ClInclude>
     <ClInclude Include="Nest2D_ClusterManager.h">
@@ -212,7 +212,7 @@
     <ClCompile Include="Nest2D_AreaUsageCalculator.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Nest2D_GapFillClusterBuilder.cpp">
+    <ClCompile Include="Nest2D_RectangleFillClusterBuilder.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Nest2D_RotationUtils.cpp">

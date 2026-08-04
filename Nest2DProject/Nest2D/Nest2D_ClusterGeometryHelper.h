@@ -30,8 +30,10 @@ namespace ET {
             bool IsContourFullyContained(const CetPath& AChildContour, const CetPath& AProxyContour, double AAreaTolerance) const;
             bool FinalizeCandidate(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetClusterCandidate& ACandidate) const;
             bool FinalizeCandidate(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetClusterCandidate& ACandidate, bool AForceRectangleProxy) const;
+            bool FinalizeCandidateInRectangle(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetClusterCandidate& ACandidate, double AEnvelopeWidth, double AEnvelopeHeight) const;
             bool ValidateCandidateGeometry(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const TetClusterCandidate& ACandidate) const;
             bool HasValidTransformSpacing(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const std::vector<TetItemTransform>& ATransforms) const;
+            bool CanAppendTransformWithSpacing(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const std::vector<TetItemTransform>& AExistingTransforms, const TetItemTransform& ANewTransform) const;
             bool CanPlaceCandidateCopiesOnBoard(const TetClusterCandidate& ACandidate, const TetNestOptions& AOptions, std::size_t ARequiredCopies) const;
 
         protected:

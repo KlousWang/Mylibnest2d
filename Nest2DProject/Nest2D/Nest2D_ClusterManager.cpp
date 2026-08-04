@@ -3,7 +3,7 @@
 #include "Nest2D_PrivateDataType.h"
 #include "Nest2D_TriangleClusterBuilder.h"
 #include "Nest2D_CircleClusterBuilder.h"
-#include "Nest2D_GapFillClusterBuilder.h"
+#include "Nest2D_RectangleFillClusterBuilder.h"
 #include "Nest2D_EllipseClusterBuilder.h"
 #include "Nest2D_RectangleClusterBuilder.h"
 #include "Nest2D_ArcClusterBuilder.h"
@@ -331,8 +331,8 @@ namespace ET {
 				std::cout << "[TEMPLATE][BASE ACCEPT] Builder=" << Candidate.BuilderName << " Type=" << Candidate.ClusterType << " ChildCount=" << Candidate.OriginalIndices.size() << " Score=" << Candidate.Score << std::endl;
 			}
 
-			int GapFilledClusterCount = 0;
-			int GapFillerItemCount = 0;
+			int RectangleFilledClusterCount = 0;
+			int RectangleFillerItemCount = 0;
 			const auto GetLargestChildArea = [&](const TetClusterCandidate& ACandidate) {
 				double LargestArea = 0.0;
 				for (int OriginalIndex : ACandidate.OriginalIndices){
@@ -364,7 +364,7 @@ namespace ET {
 			std::vector<TetClusterCandidate> LocallyOptimizedCandidates;
 			LocallyOptimizedCandidates.reserve(AcceptedCandidates.size());
 
-			CetGapFillClusterBuilder GapFillBuilder;
+			CetRectangleFillClusterBuilder RectangleFillBuilder;
 			CetClusterGeometryHelper Geometry;
 			for (const TetClusterCandidate& BaseCandidate : AcceptedCandidates){
 				TetClusterCandidate AvailableCandidate = BaseCandidate;
@@ -394,15 +394,14 @@ namespace ET {
 				}
 
 				TetClusterCandidate FilledCandidate;
-				int NewFillerCount = 0;
-				if (GapFillBuilder.BuildCandidateForBase(AOriginalItems,AFeatures,AvailableCandidate,AOptions,Used,FilledCandidate) &&_CanAcceptClusterCandidate(AOriginalItems,AOptions,FilledCandidate,Used,Count)){
-					NewFillerCount = static_cast<int>(FilledCandidate.OriginalIndices.size() - AvailableCandidate.OriginalIndices.size());
+				if (RectangleFillBuilder.BuildCandidateForBase(AOriginalItems,AFeatures,AvailableCandidate,AOptions,Used,FilledCandidate) && _CanAcceptClusterCandidate(AOriginalItems,AOptions,FilledCandidate,Used,Count)){
+					const int NewFillerCount = static_cast<int>(FilledCandidate.OriginalIndices.size() - AvailableCandidate.OriginalIndices.size());
+					RectangleFillerItemCount += std::max(0, NewFillerCount);
 					if (NewFillerCount > 0){
-						GapFillerItemCount += NewFillerCount;
-						++GapFilledClusterCount;
-						std::cout << "[TEMPLATE][GAPFILL ACCEPT] BaseType=" << AvailableCandidate.ClusterType << " FilledType=" << FilledCandidate.ClusterType << " Added=" << NewFillerCount << " ChildCount=" << FilledCandidate.OriginalIndices.size() << " Score=" << FilledCandidate.Score << std::endl;
-						AvailableCandidate = std::move(FilledCandidate);
+						++RectangleFilledClusterCount;
+						std::cout << "[TEMPLATE][RECT_FILL ACCEPT] BaseType=" << AvailableCandidate.ClusterType << " FilledType=" << FilledCandidate.ClusterType << " Added=" << NewFillerCount << " ChildCount=" << FilledCandidate.OriginalIndices.size() << " Score=" << FilledCandidate.Score << std::endl;
 					}
+					AvailableCandidate = std::move(FilledCandidate);
 				}
 
 				for (int OriginalIndex : AvailableCandidate.OriginalIndices){
@@ -434,7 +433,7 @@ namespace ET {
 			}
 
 			const bool CoverageValid = _ValidateBuildResultCoverage(Result, Count);
-			std::cout << "[TEMPLATE][SUMMARY] OriginalCount=" << Count << " BaseCandidateCount=" << BaseCandidates.size() << " AcceptedClusterCount=" << AcceptedClusterCount << " GapFilledClusterCount=" << GapFilledClusterCount << " GapFillerItemCount=" << GapFillerItemCount << " SingleCount=" << SingleCount << " PackedItemCount=" << Result.NestItems.size() << " MetaItemCount=" << Result.MetaItems.size() << " CoverageValid=" << CoverageValid << std::endl;
+			std::cout << "[TEMPLATE][SUMMARY] OriginalCount=" << Count << " BaseCandidateCount=" << BaseCandidates.size() << " AcceptedClusterCount=" << AcceptedClusterCount << " RectangleFilledClusterCount=" << RectangleFilledClusterCount << " RectangleFillerItemCount=" << RectangleFillerItemCount << " SingleCount=" << SingleCount << " PackedItemCount=" << Result.NestItems.size() << " MetaItemCount=" << Result.MetaItems.size() << " CoverageValid=" << CoverageValid << std::endl;
 			if (!CoverageValid){
 				std::cout << "[TEMPLATE][FALLBACK] Coverage invalid, use all singles." << std::endl;
 				return _BuildAllSingles(AOriginalItems);

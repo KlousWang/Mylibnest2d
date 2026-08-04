@@ -396,6 +396,22 @@ namespace ET {
             return _ValidateIndexAndTransforms(AOriginalItems, Candidate) && _ValidateChildSpacing(AOriginalItems, AOptions, Candidate, false);
         }
 
+        bool CetClusterGeometryHelper::CanAppendTransformWithSpacing(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const std::vector<TetItemTransform>& AExistingTransforms, const TetItemTransform& ANewTransform) const
+        {
+            if (ANewTransform.OriginalId < 0 || ANewTransform.OriginalId >= static_cast<int>(AOriginalItems.size()) || !std::isfinite(ANewTransform.RelativeX) || !std::isfinite(ANewTransform.RelativeY) || !std::isfinite(ANewTransform.RelativeRotation)){
+                return false;
+            }
+            for (const TetItemTransform& ExistingTransform : AExistingTransforms){
+                if (ExistingTransform.OriginalId < 0 || ExistingTransform.OriginalId >= static_cast<int>(AOriginalItems.size()) || ExistingTransform.OriginalId == ANewTransform.OriginalId){
+                    return false;
+                }
+                if (!_HaveRequiredSpacing(AOriginalItems, AOptions, ExistingTransform, ANewTransform)){
+                    return false;
+                }
+            }
+            return true;
+        }
+
         bool CetClusterGeometryHelper::FinalizeCandidate(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetClusterCandidate& ACandidate) const
         {
             return FinalizeCandidate(AOriginalItems, AOptions, ACandidate, false);
@@ -549,6 +565,75 @@ namespace ET {
             ACandidate.ProxyContourNormalized = true;
             if (!_FitsBoardBounds(ACandidate, AOptions)) return false;
             if (!ValidateCandidateGeometry(AOriginalItems, AOptions, ACandidate)) return false;
+
+            const double WasteSafetyPenalty = ACandidate.ProxyWasteRatio > 0.60 ? (ACandidate.ProxyWasteRatio - 0.60) * 50.0 : 0.0;
+            ACandidate.Score = ACandidate.AreaSavingRatio * 1000.0 + ACandidate.FillRatio * 100.0 + static_cast<double>(ACandidate.OriginalIndices.size()) * 10.0 + ACandidate.Confidence - WasteSafetyPenalty;
+            ACandidate.Valid = true;
+            return true;
+        }
+
+        bool CetClusterGeometryHelper::FinalizeCandidateInRectangle(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetClusterCandidate& ACandidate, double AEnvelopeWidth, double AEnvelopeHeight) const
+        {
+            if (!std::isfinite(AEnvelopeWidth) || !std::isfinite(AEnvelopeHeight) || AEnvelopeWidth <= 0.0 || AEnvelopeHeight <= 0.0){
+                return false;
+            }
+
+            if (!FinalizeCandidate(AOriginalItems, AOptions, ACandidate, true)){
+                return false;
+            }
+
+            const double DimensionTolerance = std::max(1.0, std::max(AEnvelopeWidth, AEnvelopeHeight) * 1e-9);
+            if (ACandidate.ClusterWidth > AEnvelopeWidth + DimensionTolerance || ACandidate.ClusterHeight > AEnvelopeHeight + DimensionTolerance){
+                return false;
+            }
+
+            ACandidate.ProxyContour = MakeRectangleContour(AEnvelopeWidth, AEnvelopeHeight);
+            if (ACandidate.ProxyContour.size() < 4){
+                return false;
+            }
+            ACandidate.ProxyMode = MetClusterProxyMode::RectangleFallback;
+            ACandidate.ProxyContourNormalized = true;
+
+            double ProxyMinX = 0.0;
+            double ProxyMinY = 0.0;
+            double ProxyMaxX = 0.0;
+            double ProxyMaxY = 0.0;
+            if (!GetBounds(ACandidate.ProxyContour, ProxyMinX, ProxyMinY, ProxyMaxX, ProxyMaxY)){
+                return false;
+            }
+
+            ACandidate.ClusterWidth = ProxyMaxX - ProxyMinX;
+            ACandidate.ClusterHeight = ProxyMaxY - ProxyMinY;
+            ACandidate.ProxyArea = std::abs(static_cast<double>(ClipperLib::Area(ACandidate.ProxyContour)));
+            if (ACandidate.ClusterWidth <= 0.0 || ACandidate.ClusterHeight <= 0.0 || ACandidate.ProxyArea <= 0.0 || !std::isfinite(ACandidate.ProxyArea)){
+                return false;
+            }
+
+            const double AreaTolerance = _GetAreaTolerance(ACandidate.ProxyArea);
+            ACandidate.FillRatio = ACandidate.ProxyArea > AreaTolerance ? std::clamp(ACandidate.RealArea / ACandidate.ProxyArea, 0.0, 1.0) : 0.0;
+            ACandidate.AreaSavingRatio = ACandidate.BaselineArea > AreaTolerance ? 1.0 - ACandidate.ProxyArea / ACandidate.BaselineArea : 0.0;
+            ACandidate.ProxyWasteArea = std::max(0.0, ACandidate.ProxyArea - ACandidate.ReservedArea);
+            ACandidate.ProxyWasteRatio = ACandidate.ProxyArea > AreaTolerance ? ACandidate.ProxyWasteArea / ACandidate.ProxyArea : 1.0;
+            ACandidate.ProxyWasteRatio = std::clamp(ACandidate.ProxyWasteRatio, 0.0, 1.0);
+
+            ACandidate.BoundingBoxArea = ACandidate.ClusterWidth * ACandidate.ClusterHeight;
+            ACandidate.BoundingFillRatio = ACandidate.BoundingBoxArea > AreaTolerance ? std::clamp(ACandidate.RealArea / ACandidate.BoundingBoxArea, 0.0, 1.0) : 0.0;
+            const double LongSide = std::max(ACandidate.ClusterWidth, ACandidate.ClusterHeight);
+            const double ShortSide = std::min(ACandidate.ClusterWidth, ACandidate.ClusterHeight);
+            ACandidate.CompactnessRatio = LongSide > 0.0 ? std::clamp(ShortSide / LongSide, 0.0, 1.0) : 0.0;
+
+            const double BinWidth = std::max(1.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth)));
+            const double BinHeight = std::max(1.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.BinHeight)));
+            ACandidate.BoardSpanRatio = std::clamp(std::max(ACandidate.ClusterWidth / BinWidth, ACandidate.ClusterHeight / BinHeight), 0.0, 1.0);
+            const double HollowRisk = 1.0 - ACandidate.BoundingFillRatio;
+            const double SlenderRisk = 1.0 - ACandidate.CompactnessRatio;
+            const double ExcessiveSpanRisk = std::clamp((ACandidate.BoardSpanRatio - 0.55) / 0.45, 0.0, 1.0);
+            ACandidate.FragmentationRisk = std::clamp(HollowRisk * 0.55 + SlenderRisk * 0.30 + ExcessiveSpanRisk * 0.15, 0.0, 1.0);
+            ACandidate.SheetReuseScore = 1.0 - ACandidate.FragmentationRisk;
+
+            if (!_FitsBoardBounds(ACandidate, AOptions) || !ValidateCandidateGeometry(AOriginalItems, AOptions, ACandidate)){
+                return false;
+            }
 
             const double WasteSafetyPenalty = ACandidate.ProxyWasteRatio > 0.60 ? (ACandidate.ProxyWasteRatio - 0.60) * 50.0 : 0.0;
             ACandidate.Score = ACandidate.AreaSavingRatio * 1000.0 + ACandidate.FillRatio * 100.0 + static_cast<double>(ACandidate.OriginalIndices.size()) * 10.0 + ACandidate.Confidence - WasteSafetyPenalty;

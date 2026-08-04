@@ -28,6 +28,11 @@ constexpr double CET_ARC_SWEEP_TOLERANCE = CET_CLUSTER_PI / 36.0;
 constexpr double CET_ARC_SAFETY_GAP_RATIO = 0.05;
 constexpr std::size_t CET_ARC_MAX_CLUSTER_CHILDREN = 32;
 
+constexpr int CET_RECTANGLE_FILL_GRID_PROBE_COUNT = 9;
+constexpr std::size_t CET_RECTANGLE_FILL_MAX_AXIS_COORDINATES = 20;
+constexpr std::size_t CET_RECTANGLE_FILL_MAX_PROBE_COUNT = 192;
+constexpr double CET_RECTANGLE_FILL_POSITION_TOLERANCE = 1.0;
+
 struct TetLib2DItemDataType
 {
 
@@ -239,12 +244,6 @@ struct TetCircleIndexInfo
     double SizeKey = 0.0;
 };
 
-struct TetGapFillCircleCenter
-{
-    double X = 0.0;
-    double Y = 0.0;
-    double Size = 0.0;
-};
 struct TetEllipseIndexInfo
 {
     int Index = -1;
