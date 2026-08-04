@@ -166,6 +166,13 @@ namespace ET {
 			else {
 				std::cout << "[POLYGON][FINAL BEST] Use cluster expand." << std::endl;
 			}
+			const long double CoordinateScale = NestUtils::NestScale();
+			std::cout << "[POLYGON][FINAL REMNANT] MetricsAvailable=" << BestEval.HasRemnantMetrics
+				<< ", AreaMm2=" << static_cast<double>(BestEval.ReusableRemnantArea / (CoordinateScale * CoordinateScale))
+				<< ", ShortSideMm=" << static_cast<double>(BestEval.ReusableRemnantShortSide / CoordinateScale)
+				<< ", UsedDepthMm=" << static_cast<double>(BestEval.UsedDepth / CoordinateScale)
+				<< ", Direction=" << (BestEval.RemnantIsTopStrip ? "Top" : "Right")
+				<< std::endl;
 			// Sorting strategies reorder packed items, so metadata restoration is required for singles and clusters.
 			Nest2DUtils->Nest2DCluster->ExpandClusterResultToOriginalItems(OriginalItems,BestItems,BestMetaItems,ANestItems);
 			
@@ -290,6 +297,14 @@ namespace ET {
 				else {
 					std::cout << "[NEST][FINAL BEST] Use cluster expand." << std::endl;
 				}
+				const long double CoordinateScale = NestUtils::NestScale();
+				std::cout << "[NEST][FINAL REMNANT] MetricsAvailable=" << BestEval.HasRemnantMetrics
+					<< ", AreaMm2=" << static_cast<double>(BestEval.ReusableRemnantArea / (CoordinateScale * CoordinateScale))
+					<< ", ShortSideMm=" << static_cast<double>(BestEval.ReusableRemnantShortSide / CoordinateScale)
+					<< ", SkylineWasteMm2=" << static_cast<double>(BestEval.SkylineWasteArea / (CoordinateScale * CoordinateScale))
+					<< ", UsedDepthMm=" << static_cast<double>(BestEval.UsedDepth / CoordinateScale)
+					<< ", Direction=" << (BestEval.RemnantIsTopStrip ? "Top" : "Right")
+					<< std::endl;
 				// Sorting strategies reorder packed items, so metadata restoration is required for singles and clusters.
 				Nest2DUtils->Nest2DCluster->ExpandClusterResultToOriginalItems(OriginalItems, BestItems, BestMetaItems, ANestItems);
 			}
@@ -447,13 +462,17 @@ namespace ET {
 					continue;
 				}
 
-				TetTNestEvalResult Eval = Nest2DUtils->Nest2DStrategy->EvaluatePackedResultWithMeta(TestItems,TestMetaItems,AOriginalItems,Layers);
+				TetTNestEvalResult Eval = Nest2DUtils->Nest2DStrategy->EvaluatePackedResultWithMeta(TestItems,TestMetaItems,AOriginalItems,AOptions,Layers);
 
 				std::cout << "[NEST][EVAL] Strategy = " << static_cast<int>(Strategy)
 					<< ", HasCluster = " << CurrentHasCluster
 					<< ", Eval.FirstBinCount = " << Eval.FirstBinCount
 					<< ", Eval.FirstBinArea = " << Eval.FirstBinArea
 					<< ", Eval.Layers = " << Eval.Layers
+					<< ", Eval.RemnantArea = " << Eval.ReusableRemnantArea
+					<< ", Eval.RemnantShortSide = " << Eval.ReusableRemnantShortSide
+					<< ", Eval.SkylineWaste = " << Eval.SkylineWasteArea
+					<< ", Eval.RemnantDirection = " << (Eval.RemnantIsTopStrip ? "Top" : "Right")
 					<< ", LocalBest.FirstBinCount = " << LocalBest.Eval.FirstBinCount
 					<< ", LocalBest.FirstBinArea = " << LocalBest.Eval.FirstBinArea
 					<< ", LocalBest.Layers = " << LocalBest.Eval.Layers
@@ -467,11 +486,9 @@ namespace ET {
 					Better = true;
 				}
 				else {
-					bool SameCount = (Eval.FirstBinCount == LocalBest.Eval.FirstBinCount);
-					bool SameLayers = (Eval.Layers == LocalBest.Eval.Layers);
-					bool SameArea = std::abs(Eval.FirstBinArea - LocalBest.Eval.FirstBinArea) <= 1e-6;
+				const bool Equivalent = !Nest2DUtils->Nest2DStrategy->IsBetterNestResult(LocalBest.Eval,Eval);
 
-					if (SameCount && SameLayers && SameArea){
+				if (Equivalent){
 						if (CurrentHasCluster && !LocalBest.HasCluster){
 							Better = true;
 						}
@@ -494,12 +511,6 @@ namespace ET {
 						<< std::endl;
 				}
 
-				// Once every original item is on the first layer, no later ordering can
-				// improve the objective used by IsBetterNestResult.
-				if (LocalBest.HasBest && LocalBest.Layers == 1 && LocalBest.Eval.FirstBinCount >= AOriginalItems.size()){
-					std::cout << "[NEST][EVAL][EARLY STOP] All original items fit in one layer." << std::endl;
-					break;
-				}
 			}
 
 			return LocalBest;
@@ -521,11 +532,9 @@ namespace ET {
 			}
 
 			
-			bool SameCount = (ALocalResult.Eval.FirstBinCount == ABestEval.FirstBinCount);
-			bool SameLayers = (ALocalResult.Layers == ABestLayers);
-			bool SameArea = std::abs(ALocalResult.Eval.FirstBinArea - ABestEval.FirstBinArea) <= 1e-6;
+			const bool Equivalent = !Nest2DUtils->Nest2DStrategy->IsBetterNestResult(ABestEval,ALocalResult.Eval);
 
-			if (SameCount && SameLayers && SameArea){
+			if (Equivalent){
 				
 				if (ALocalResult.HasCluster && !ABestHasCluster){
 					return true;

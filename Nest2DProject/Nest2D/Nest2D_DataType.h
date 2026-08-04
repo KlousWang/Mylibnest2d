@@ -131,7 +131,15 @@ struct TetTNestEvalResult
 {
 	int FirstBinCount = 0;
 	double FirstBinArea = 0.0;
+	int LastBinCount = 0;
+	double LastBinArea = 0.0;
 	std::size_t Layers = 0;
+	bool HasRemnantMetrics = false;
+	double ReusableRemnantArea = 0.0;
+	double ReusableRemnantShortSide = 0.0;
+	double SkylineWasteArea = 0.0;
+	double UsedDepth = 0.0;
+	bool RemnantIsTopStrip = true;
 };
 
 struct TetItemTransform
