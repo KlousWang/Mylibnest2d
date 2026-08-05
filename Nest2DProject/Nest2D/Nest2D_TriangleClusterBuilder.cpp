@@ -374,7 +374,7 @@ namespace ET {
                 return false;
             }
             const double RequiredGap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
-            const double SafetyGap = RequiredGap > 0.0 ? std::max(10.0, RequiredGap * 0.001) : 0.0;
+            const double SafetyGap = RequiredGap > 0.0 ? std::max(CET_CLUSTER_MIN_SAFETY_GAP, RequiredGap * 0.001) : 0.0;
             const double ValidationGap = RequiredGap + SafetyGap;
             const double AxisGap = _CalcTrianglePairAxisGap(BaseWidth, BaseHeight, ValidationGap);
             const double CellWidth = BaseWidth + AxisGap;
@@ -686,7 +686,7 @@ namespace ET {
                 return false;
             }
             const double RequiredGap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
-            const double SafetyGap = RequiredGap > 0.0 ? std::max(10.0, RequiredGap * 0.001) : 0.0;
+            const double SafetyGap = RequiredGap > 0.0 ? std::max(CET_CLUSTER_MIN_SAFETY_GAP, RequiredGap * 0.001) : 0.0;
             const double CellGap = RequiredGap + SafetyGap;
             const int PairCount = static_cast<int>(PairCandidates.size());
             const double BinWidth = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth));
@@ -889,7 +889,7 @@ namespace ET {
             const double UnitX = EdgeDX / EdgeLen;
             const double UnitY = EdgeDY / EdgeLen;
             const double RequiredGap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
-            const double SafetyGap = RequiredGap > 0.0 ? std::max(10.0, RequiredGap * 0.001) : 0.0;
+            const double SafetyGap = RequiredGap > 0.0 ? std::max(CET_CLUSTER_MIN_SAFETY_GAP, RequiredGap * 0.001) : 0.0;
             const double Gap = RequiredGap + SafetyGap;
             const CetInpoint RotatedBStart = _RotatePoint(EdgeB.Start, RotationB);
             const CetInpoint RotatedBEnd = _RotatePoint(EdgeB.End, RotationB);
@@ -1015,7 +1015,7 @@ namespace ET {
             if (!Geometry.GetBounds(PathA, AMinX, AMinY, AMaxX, AMaxY)) return false;
             if (!Geometry.GetBounds(PathB, BMinX, BMinY, BMaxX, BMaxY)) return false;
             const double RequiredGap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
-            const double SafetyGap = RequiredGap > 0.0 ? std::max(10.0, RequiredGap * 0.001) : 0.0;
+            const double SafetyGap = RequiredGap > 0.0 ? std::max(CET_CLUSTER_MIN_SAFETY_GAP, RequiredGap * 0.001) : 0.0;
             const double Gap = RequiredGap + SafetyGap;
             TetItemTransform TransformA;
             TransformA.OriginalId = AAIndex;

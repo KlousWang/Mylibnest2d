@@ -627,7 +627,10 @@ std::cout << "[SHAPE] Index=" << Feature.OriginalIndex << " Type=" << static_cas
             if (AFeature.VertexCount == 3) return MetShapeType::TriangleLike;
             if (AFeature.IsRotatedRectangle) return MetShapeType::RectangleLike;
             if (!AFeature.HasHoles && AFeature.ArcType != MetArcType::None) return MetShapeType::ArcLike;
-            if (!AFeature.HasHoles && AFeature.IsConvex && AFeature.Circularity >= 0.88 && AFeature.AspectRatio <= 1.12)
+            // Keep the circle and ellipse aspect-ratio ranges disjoint.  Otherwise
+            // near-circular ellipses in the overlap are consumed by the circle
+            // branch and receive a circular cluster layout.
+            if (!AFeature.HasHoles && AFeature.IsConvex && AFeature.Circularity >= 0.88 && AFeature.AspectRatio <= 1.08)
                 return MetShapeType::CircleLike;
             if (!AFeature.HasHoles && AFeature.IsConvex && AFeature.EllipseFitError <= 0.12 && AFeature.AspectRatio > 1.08)
                 return MetShapeType::EllipseLike;

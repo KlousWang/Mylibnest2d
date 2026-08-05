@@ -343,6 +343,17 @@ namespace ET {
 				return LargestArea;
 				};
 			std::stable_sort(AcceptedCandidates.begin(),AcceptedCandidates.end(),[&](const TetClusterCandidate& AFirstCandidate, const TetClusterCandidate& ASecondCandidate){
+					// Fill the physically largest usable void first.  Ranking by waste
+					// ratio alone let compact arc clusters consume the small mixed parts
+					// that are needed by a larger ellipse or irregular-shape void.
+					if (std::abs(AFirstCandidate.ProxyWasteArea - ASecondCandidate.ProxyWasteArea) > 1.0){
+						return AFirstCandidate.ProxyWasteArea > ASecondCandidate.ProxyWasteArea;
+					}
+					const double FirstFillPriority = AFirstCandidate.ProxyWasteArea / std::max(1.0,AFirstCandidate.ProxyArea);
+					const double SecondFillPriority = ASecondCandidate.ProxyWasteArea / std::max(1.0,ASecondCandidate.ProxyArea);
+					if (std::abs(FirstFillPriority - SecondFillPriority) > 1e-9){
+						return FirstFillPriority > SecondFillPriority;
+					}
 					if (std::abs(AFirstCandidate.SheetReuseScore - ASecondCandidate.SheetReuseScore) > 1e-9){
 						return AFirstCandidate.SheetReuseScore > ASecondCandidate.SheetReuseScore;
 					}
@@ -353,9 +364,6 @@ namespace ET {
 					const double SecondLargestArea = GetLargestChildArea(ASecondCandidate);
 					if (std::abs(FirstLargestArea - SecondLargestArea) > 1.0){
 						return FirstLargestArea > SecondLargestArea;
-					}
-					if (std::abs(AFirstCandidate.ProxyWasteArea - ASecondCandidate.ProxyWasteArea) > 1.0){
-						return AFirstCandidate.ProxyWasteArea > ASecondCandidate.ProxyWasteArea;
 					}
 					return AFirstCandidate.Score > ASecondCandidate.Score;
 				});
@@ -510,7 +518,7 @@ namespace ET {
 			const std::vector<TetEdgeInfo> EdgesB = _CollectEdges(ContourB);
 			if (EdgesA.empty() || EdgesB.empty()) return false;
 			double SpacingCoord = static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing));
-			TetEdgePairContext ctx = { AOriginalItems, AIndex, ABIndex, AOptions, std::max(0.0, SpacingCoord) + std::max(2.0, SpacingCoord * 0.001), std::max(1.0, std::min(std::max(_GetItemWidth(AOriginalItems[AIndex]), _GetItemHeight(AOriginalItems[AIndex])), std::max(_GetItemWidth(AOriginalItems[ABIndex]), _GetItemHeight(AOriginalItems[ABIndex])))), _IsSimilarTriangleByEdges(EdgesA, EdgesB) };
+			TetEdgePairContext ctx = { AOriginalItems, AIndex, ABIndex, AOptions, std::max(0.0, SpacingCoord) + std::max(CET_CLUSTER_MIN_SAFETY_GAP, SpacingCoord * 0.001), std::max(1.0, std::min(std::max(_GetItemWidth(AOriginalItems[AIndex]), _GetItemHeight(AOriginalItems[AIndex])), std::max(_GetItemWidth(AOriginalItems[ABIndex]), _GetItemHeight(AOriginalItems[ABIndex])))), _IsSimilarTriangleByEdges(EdgesA, EdgesB) };
 			bool Found = false;
 			for (const TetEdgeInfo& EdgeA : EdgesA){
 				for (const TetEdgeInfo& EdgeB : EdgesB){

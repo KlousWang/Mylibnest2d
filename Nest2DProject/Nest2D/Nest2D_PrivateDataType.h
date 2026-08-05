@@ -50,13 +50,21 @@ constexpr std::size_t CET_CUSTOM_MAX_CLUSTER_CHILDREN = 64;
 
 constexpr double CET_ARC_SIZE_TOLERANCE = 0.05;
 constexpr double CET_ARC_SWEEP_TOLERANCE = CET_CLUSTER_PI / 36.0;
-constexpr double CET_ARC_SAFETY_GAP_RATIO = 0.05;
+constexpr double CET_ARC_SAFETY_GAP_RATIO = 0.001;
+// Coordinates are scaled to integer nesting units.  One unit keeps paired
+// contours numerically separate without turning the requested spacing into an
+// extra visible clearance.
+constexpr double CET_CLUSTER_MIN_SAFETY_GAP = 1.0;
 constexpr std::size_t CET_ARC_MAX_CLUSTER_CHILDREN = 32;
 
-constexpr int CET_RECTANGLE_FILL_GRID_PROBE_COUNT = 9;
-constexpr std::size_t CET_RECTANGLE_FILL_MAX_AXIS_COORDINATES = 20;
-constexpr std::size_t CET_RECTANGLE_FILL_MAX_PROBE_COUNT = 192;
+constexpr int CET_RECTANGLE_FILL_GRID_PROBE_COUNT = 7;
+constexpr std::size_t CET_RECTANGLE_FILL_MAX_AXIS_COORDINATES = 14;
+constexpr std::size_t CET_RECTANGLE_FILL_MAX_PROBE_COUNT = 96;
+constexpr std::size_t CET_RECTANGLE_FILL_MAX_CANDIDATE_ITEMS = 64;
 constexpr double CET_RECTANGLE_FILL_POSITION_TOLERANCE = 1.0;
+
+constexpr std::size_t CET_NEST_FULL_STRATEGY_ITEM_LIMIT = 96;
+constexpr std::size_t CET_NEST_REDUCED_STRATEGY_ITEM_LIMIT = 256;
 
 struct TetLib2DItemDataType
 {
@@ -184,8 +192,8 @@ struct TetAutoPairGridConfig {
 };
 struct TetEdgeInfo
 {
-    ClipperLib::IntPoint Start;
-    ClipperLib::IntPoint End;
+   CetInpoint Start;
+   CetInpoint End;
 
     double Length = 0.0;
     double Angle = 0.0;
@@ -260,8 +268,8 @@ struct TetArcCandidateLocal
     double FitError = 1.0;
     double ChordAngle = 0.0;
     int BulgeSign = 0;
-    ClipperLib::IntPoint ChordStart;
-    ClipperLib::IntPoint ChordEnd;
+   CetInpoint ChordStart;
+   CetInpoint ChordEnd;
 };
 
 struct TetRectanglePose
@@ -425,11 +433,8 @@ struct TetShapeFeature
 {
     int OriginalIndex = -1;
     MetShapeType ShapeType = MetShapeType::Unknown;
-
-    
-    
+  
     CetPath NormalizedContour;
-
     bool HasHoles = false;
     int HoleCount = 0;
 
@@ -459,18 +464,11 @@ struct TetShapeFeature
     double OrientedAngle = 0.0;
     double OrientedBoxArea = 0.0;
     double OrientedFillRatio = 0.0;
-
     
-    MetTriangleSideType TriangleSideType =
-        MetTriangleSideType::Unknown;
-
-    MetTriangleAngleType TriangleAngleType =
-        MetTriangleAngleType::Unknown;
-
+    MetTriangleSideType TriangleSideType =MetTriangleSideType::Unknown;
+    MetTriangleAngleType TriangleAngleType =MetTriangleAngleType::Unknown;
     
-    std::array<double, 3> TriangleSides{};
-
-    
+    std::array<double, 3> TriangleSides{};   
     std::array<double, 3> TriangleAngles{};
 
     int LongestSideIndex = -1;
@@ -484,9 +482,9 @@ struct TetShapeFeature
     
     MetArcType ArcType = MetArcType::None;
 
-    ClipperLib::IntPoint ArcChordStart{};
-    ClipperLib::IntPoint ArcChordEnd{};
-    ClipperLib::IntPoint ArcCenter{};
+   CetInpoint ArcChordStart{};
+   CetInpoint ArcChordEnd{};
+   CetInpoint ArcCenter{};
 
     double ArcChordLength = 0.0;
     double ArcRadius = 0.0;

@@ -443,7 +443,16 @@ namespace ET {
 			}
 			const bool UsePolygonBoard = AOptions.Board.Enabled && AOptions.Board.Vertices.size() >= 3;
 			const bool CurrentHasCluster = _HasClusterItems(AClusterResult.MetaItems);
-			const std::vector<MetENestOrderStrategy> Strategies = { MetENestOrderStrategy::LargeFirst, MetENestOrderStrategy::SmallFirst, MetENestOrderStrategy::LongSideFirst, MetENestOrderStrategy::ThinFirst };
+			std::vector<MetENestOrderStrategy> Strategies;
+			if (AClusterResult.NestItems.size() > CET_NEST_REDUCED_STRATEGY_ITEM_LIMIT){
+				Strategies = { MetENestOrderStrategy::LargeFirst };
+			}
+			else if (AClusterResult.NestItems.size() > CET_NEST_FULL_STRATEGY_ITEM_LIMIT){
+				Strategies = { MetENestOrderStrategy::LargeFirst, MetENestOrderStrategy::LongSideFirst };
+			}
+			else {
+				Strategies = { MetENestOrderStrategy::LargeFirst, MetENestOrderStrategy::SmallFirst, MetENestOrderStrategy::LongSideFirst, MetENestOrderStrategy::ThinFirst };
+			}
 			std::set<std::vector<std::size_t>> EvaluatedOrders;
 			for (MetENestOrderStrategy Strategy : Strategies){
 				CetTNestItemVector PriorityItems = AClusterResult.NestItems;

@@ -30,6 +30,10 @@ namespace ET {
             TetClusterCandidate CurrentCandidate = ABaseCandidate;
             const double EnvelopeWidth = ABaseCandidate.ClusterWidth;
             const double EnvelopeHeight = ABaseCandidate.ClusterHeight;
+            const double BaseAreaTolerance = std::max(1.0, ABaseCandidate.ProxyArea * 1e-9);
+            if (ABaseCandidate.ProxyWasteArea <= BaseAreaTolerance){
+                return false;
+            }
             if (EnvelopeWidth <= 0.0 || EnvelopeHeight <= 0.0 || !Geometry.FinalizeCandidateInRectangle(AOriginalItems, AOptions, CurrentCandidate, EnvelopeWidth, EnvelopeHeight)){
                 return false;
             }
@@ -46,6 +50,9 @@ namespace ET {
                 if (AFeatures[Index].Area <= 0.0 || AFeatures[Index].Width <= 0.0 || AFeatures[Index].Height <= 0.0){
                     continue;
                 }
+                if (_GetFeatureArea(AOriginalItems[Index], AFeatures[Index]) > CurrentCandidate.ProxyWasteArea + BaseAreaTolerance){
+                    continue;
+                }
                 FillerIndices.push_back(Index);
             }
 
@@ -53,10 +60,13 @@ namespace ET {
                 const double FirstArea = _GetFeatureArea(AOriginalItems[AFirstIndex], AFeatures[AFirstIndex]);
                 const double SecondArea = _GetFeatureArea(AOriginalItems[ASecondIndex], AFeatures[ASecondIndex]);
                 if (std::abs(FirstArea - SecondArea) > 1.0){
-                    return FirstArea > SecondArea;
+                    return FirstArea < SecondArea;
                 }
                 return AFirstIndex < ASecondIndex;
             });
+            if (FillerIndices.size() > CET_RECTANGLE_FILL_MAX_CANDIDATE_ITEMS){
+                FillerIndices.resize(CET_RECTANGLE_FILL_MAX_CANDIDATE_ITEMS);
+            }
 
             bool AddedFiller = true;
             while (AddedFiller){
@@ -263,13 +273,6 @@ namespace ET {
         {
             const double ContactTolerance = ARequiredGap + CET_RECTANGLE_FILL_POSITION_TOLERANCE;
             double Score = -(AFillerTop + AFillerLeft) / std::max(1.0, ACandidate.ClusterWidth + ACandidate.ClusterHeight);
-            if (AFillerLeft <= CET_RECTANGLE_FILL_POSITION_TOLERANCE || ACandidate.ClusterWidth - AFillerRight <= CET_RECTANGLE_FILL_POSITION_TOLERANCE){
-                Score += 1.0;
-            }
-            if (AFillerTop <= CET_RECTANGLE_FILL_POSITION_TOLERANCE || ACandidate.ClusterHeight - AFillerBottom <= CET_RECTANGLE_FILL_POSITION_TOLERANCE){
-                Score += 1.0;
-            }
-
             CetClusterGeometryHelper Geometry;
             for (const TetItemTransform& Transform : ACandidate.Transforms){
                 if (Transform.OriginalId < 0 || Transform.OriginalId >= static_cast<int>(AOriginalItems.size())){
@@ -288,10 +291,10 @@ namespace ET {
                 const double HorizontalGap = std::max({ MinX - AFillerRight, AFillerLeft - MaxX, 0.0 });
                 const double VerticalGap = std::max({ MinY - AFillerBottom, AFillerTop - MaxY, 0.0 });
                 if (VerticalOverlap && HorizontalGap <= ContactTolerance){
-                    Score += 2.0;
+                    Score += 3.0;
                 }
                 if (HorizontalOverlap && VerticalGap <= ContactTolerance){
-                    Score += 2.0;
+                    Score += 3.0;
                 }
             }
             return Score;

@@ -113,7 +113,7 @@ namespace ET {
             double GetLayoutGap(const TetNestOptions& AOptions)
             {
                 const double RequiredGap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
-                return RequiredGap + std::max(2.0, RequiredGap * 0.001);
+                return RequiredGap + std::max(CET_CLUSTER_MIN_SAFETY_GAP, RequiredGap * 0.001);
             }
 
             bool BuildRotationPose(const CetClusterGeometryHelper& AGeometry, const CetNestItem& AItem, double ARotation, TetCustomRotationPose& AOutPose)
@@ -306,7 +306,7 @@ namespace ET {
             CetClusterGeometryHelper Geometry;
             const double BoardWidth = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth));
             const double BoardHeight = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinHeight));
-            const double LayoutGap = GetLayoutGap(AOptions) * 2.0;
+            const double LayoutGap = GetLayoutGap(AOptions);
             if (BoardWidth <= 0.0 || BoardHeight <= 0.0 || LayoutGap <= 0.0){
                 return false;
             }

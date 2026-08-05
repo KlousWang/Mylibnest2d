@@ -203,7 +203,7 @@ namespace ET {
             }
             if (CellWidth <= 0.0 || CellHeight <= 0.0){ return false; }
             const double RequiredGap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
-            const double SafetyGap = RequiredGap > 0.0 ? std::max(10.0, RequiredGap * 0.001) : 0.0;
+            const double SafetyGap = RequiredGap > 0.0 ? std::max(CET_CLUSTER_MIN_SAFETY_GAP, RequiredGap * 0.001) : 0.0;
             const double CellGap = RequiredGap + SafetyGap;
             const double BinWidth = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth));
             const double BinHeight = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinHeight));
