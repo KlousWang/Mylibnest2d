@@ -333,6 +333,8 @@ namespace ET {
 
 			int RectangleFilledClusterCount = 0;
 			int RectangleFillerItemCount = 0;
+			std::size_t GapFillAttemptCount = 0;
+			std::size_t GapFillSkippedClusterCount = 0;
 			const auto GetLargestChildArea = [&](const TetClusterCandidate& ACandidate) {
 				double LargestArea = 0.0;
 				for (int OriginalIndex : ACandidate.OriginalIndices){
@@ -343,11 +345,13 @@ namespace ET {
 				return LargestArea;
 				};
 			std::stable_sort(AcceptedCandidates.begin(),AcceptedCandidates.end(),[&](const TetClusterCandidate& AFirstCandidate, const TetClusterCandidate& ASecondCandidate){
-					// Fill the physically largest usable void first.  Ranking by waste
-					// ratio alone let compact arc clusters consume the small mixed parts
-					// that are needed by a larger ellipse or irregular-shape void.
-					if (std::abs(AFirstCandidate.ProxyWasteArea - ASecondCandidate.ProxyWasteArea) > 1.0){
-						return AFirstCandidate.ProxyWasteArea > ASecondCandidate.ProxyWasteArea;
+					// Exact proxy contours exclude usable holes inside the cluster's
+					// bounding envelope. Give the physically largest fill opportunity
+					// first access to the bounded mixed-shape filler pool.
+					const double FirstEnvelopeFreeArea = std::max(0.0,AFirstCandidate.BoundingBoxArea - AFirstCandidate.ReservedArea);
+					const double SecondEnvelopeFreeArea = std::max(0.0,ASecondCandidate.BoundingBoxArea - ASecondCandidate.ReservedArea);
+					if (std::abs(FirstEnvelopeFreeArea - SecondEnvelopeFreeArea) > 1.0){
+						return FirstEnvelopeFreeArea > SecondEnvelopeFreeArea;
 					}
 					const double FirstFillPriority = AFirstCandidate.ProxyWasteArea / std::max(1.0,AFirstCandidate.ProxyArea);
 					const double SecondFillPriority = ASecondCandidate.ProxyWasteArea / std::max(1.0,ASecondCandidate.ProxyArea);
@@ -374,6 +378,9 @@ namespace ET {
 
 			CetRectangleFillClusterBuilder RectangleFillBuilder;
 			CetClusterGeometryHelper Geometry;
+			const std::size_t GapFillAttemptLimit = Count > static_cast<int>(CET_NEST_FULL_STRATEGY_ITEM_LIMIT)
+				? CET_RECTANGLE_FILL_LARGE_ORDER_MAX_BASE_CANDIDATES
+				: CET_RECTANGLE_FILL_MAX_BASE_CANDIDATES;
 			for (const TetClusterCandidate& BaseCandidate : AcceptedCandidates){
 				TetClusterCandidate AvailableCandidate = BaseCandidate;
 				bool RemovedUsedChild = false;
@@ -402,7 +409,14 @@ namespace ET {
 				}
 
 				TetClusterCandidate FilledCandidate;
-				if (RectangleFillBuilder.BuildCandidateForBase(AOriginalItems,AFeatures,AvailableCandidate,AOptions,Used,FilledCandidate) && _CanAcceptClusterCandidate(AOriginalItems,AOptions,FilledCandidate,Used,Count)){
+				const bool TryGapFill = GapFillAttemptCount < GapFillAttemptLimit;
+				if (TryGapFill){
+					++GapFillAttemptCount;
+				}
+				else {
+					++GapFillSkippedClusterCount;
+				}
+				if (TryGapFill && RectangleFillBuilder.BuildCandidateForBase(AOriginalItems,AFeatures,AvailableCandidate,AOptions,Used,FilledCandidate) && _CanAcceptClusterCandidate(AOriginalItems,AOptions,FilledCandidate,Used,Count)){
 					const int NewFillerCount = static_cast<int>(FilledCandidate.OriginalIndices.size() - AvailableCandidate.OriginalIndices.size());
 					RectangleFillerItemCount += std::max(0, NewFillerCount);
 					if (NewFillerCount > 0){
@@ -441,7 +455,7 @@ namespace ET {
 			}
 
 			const bool CoverageValid = _ValidateBuildResultCoverage(Result, Count);
-			std::cout << "[TEMPLATE][SUMMARY] OriginalCount=" << Count << " BaseCandidateCount=" << BaseCandidates.size() << " AcceptedClusterCount=" << AcceptedClusterCount << " RectangleFilledClusterCount=" << RectangleFilledClusterCount << " RectangleFillerItemCount=" << RectangleFillerItemCount << " SingleCount=" << SingleCount << " PackedItemCount=" << Result.NestItems.size() << " MetaItemCount=" << Result.MetaItems.size() << " CoverageValid=" << CoverageValid << std::endl;
+			std::cout << "[TEMPLATE][SUMMARY] OriginalCount=" << Count << " BaseCandidateCount=" << BaseCandidates.size() << " AcceptedClusterCount=" << AcceptedClusterCount << " GapFillAttemptCount=" << GapFillAttemptCount << " GapFillSkippedClusterCount=" << GapFillSkippedClusterCount << " RectangleFilledClusterCount=" << RectangleFilledClusterCount << " RectangleFillerItemCount=" << RectangleFillerItemCount << " SingleCount=" << SingleCount << " PackedItemCount=" << Result.NestItems.size() << " MetaItemCount=" << Result.MetaItems.size() << " CoverageValid=" << CoverageValid << std::endl;
 			if (!CoverageValid){
 				std::cout << "[TEMPLATE][FALLBACK] Coverage invalid, use all singles." << std::endl;
 				return _BuildAllSingles(AOriginalItems);

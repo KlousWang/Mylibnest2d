@@ -22,6 +22,11 @@ constexpr double CET_CLUSTER_THREE_HALF_PI = CET_CLUSTER_PI * 1.5;
 
 constexpr double CET_CIRCLE_SIZE_TOLERANCE = 0.01;
 constexpr double CET_CIRCLE_HONEYCOMB_ROW_RATIO = 0.86602540378443864676;
+constexpr double CET_CIRCLE_FILLER_MIN_SIZE_RATIO = 2.0;
+constexpr std::size_t CET_CIRCLE_FILLER_SINGLE_RESERVE_MIN = 8;
+constexpr std::size_t CET_CIRCLE_FILLER_SINGLE_RESERVE_MAX = 24;
+constexpr std::size_t CET_CIRCLE_FILL_MAX_PAIR_PROBES = 32;
+constexpr std::size_t CET_CIRCLE_GAP_FILL_MAX_ACCEPTED_ITEMS = 8;
 constexpr double CET_ELLIPSE_SIZE_TOLERANCE = 0.05;
 constexpr double CET_ELLIPSE_HONEYCOMB_ROW_RATIO = 0.90;
 constexpr double CET_RECT_SIZE_TOLERANCE = 0.05;
@@ -47,6 +52,10 @@ constexpr std::size_t CET_LARGE_ANCHOR_MAX_COUNT = 8;
 
 constexpr double CET_CUSTOM_MAX_AREA_LOSS_RATIO = 0.08;
 constexpr std::size_t CET_CUSTOM_MAX_CLUSTER_CHILDREN = 64;
+// Geometry validation is quadratic in the number of children. Larger orders
+// reuse the selected layout in multiple clusters instead of searching a single
+// oversized custom cluster.
+constexpr std::size_t CET_CUSTOM_SEARCH_MAX_CHILDREN = 16;
 
 constexpr double CET_ARC_SIZE_TOLERANCE = 0.05;
 constexpr double CET_ARC_SWEEP_TOLERANCE = CET_CLUSTER_PI / 36.0;
@@ -60,7 +69,13 @@ constexpr std::size_t CET_ARC_MAX_CLUSTER_CHILDREN = 32;
 constexpr int CET_RECTANGLE_FILL_GRID_PROBE_COUNT = 7;
 constexpr std::size_t CET_RECTANGLE_FILL_MAX_AXIS_COORDINATES = 14;
 constexpr std::size_t CET_RECTANGLE_FILL_MAX_PROBE_COUNT = 96;
+constexpr std::size_t CET_RECTANGLE_FILL_LARGE_ORDER_MAX_PROBE_COUNT = 56;
 constexpr std::size_t CET_RECTANGLE_FILL_MAX_CANDIDATE_ITEMS = 64;
+constexpr std::size_t CET_RECTANGLE_FILL_MAX_BASE_CANDIDATES = 8;
+constexpr std::size_t CET_RECTANGLE_FILL_LARGE_ORDER_MAX_BASE_CANDIDATES = 3;
+constexpr std::size_t CET_RECTANGLE_FILL_MAX_ACCEPTED_ITEMS_PER_BASE = 8;
+constexpr std::size_t CET_RECTANGLE_FILL_MEDIUM_BASE_MAX_ACCEPTED_ITEMS = 4;
+constexpr std::size_t CET_RECTANGLE_FILL_LARGE_BASE_MAX_ACCEPTED_ITEMS = 2;
 constexpr double CET_RECTANGLE_FILL_POSITION_TOLERANCE = 1.0;
 
 constexpr std::size_t CET_NEST_FULL_STRATEGY_ITEM_LIMIT = 96;

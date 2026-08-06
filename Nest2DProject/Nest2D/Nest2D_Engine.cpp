@@ -48,8 +48,129 @@ namespace ET {
 			}
 		}
 
+		// Refill sheets with complete cluster proxies. Children stay glued through
+		// their metadata and are expanded only after this multi-sheet pass.
+		static std::size_t BackfillClusterSheets(CetTNestItemVector& AItems, const TetNestOptions& AOptions, std::size_t ALayers)
+		{
+			if (ALayers <= 1 || AItems.empty()) return ALayers;
+			using Placer = placers::_BottomLeftPlacer<CetPolygonImpl>;
+			const auto Width = NestUtils::ToNestCoord(AOptions.BinWidth);
+			const auto Height = NestUtils::ToNestCoord(AOptions.BinHeight);
+			Box Bin(Width, Height, { Width / 2, Height / 2 });
+			placers::BLConfig<CetPolygonImpl> Config;
+			Config.min_obj_distance = NestUtils::ToNestCoord(AOptions.Spacing);
+			Config.epsilon = 1;
+			Config.allow_rotations = CetRotationUtils::IsAllowedRotation(CET_CLUSTER_HALF_PI, AOptions.Rotations, 1e-9);
+			std::set<int> AffectedBins;
+			std::size_t Moved = 0;
+
+			for (std::size_t Target = 0; Target + 1 < ALayers; ++Target){
+				std::vector<std::size_t> TargetIndices;
+				for (std::size_t Index = 0; Index < AItems.size(); ++Index){
+					if (AItems[Index].binId() == static_cast<int>(Target)) TargetIndices.push_back(Index);
+				}
+
+				std::vector<std::size_t> Candidates;
+				for (std::size_t Index = 0; Index < AItems.size(); ++Index){
+					if (AItems[Index].binId() > static_cast<int>(Target)) Candidates.push_back(Index);
+				}
+				std::stable_sort(Candidates.begin(), Candidates.end(), [&](std::size_t A, std::size_t B) {
+					return AItems[A].area() < AItems[B].area();
+				});
+				std::size_t Attempts = 0;
+				for (std::size_t Index : Candidates){
+					if (Attempts++ >= 32) break;
+					if (AItems[Index].binId() <= static_cast<int>(Target)) continue;
+					const int Source = AItems[Index].binId();
+					std::vector<std::size_t> TrialIndices = TargetIndices;
+					TrialIndices.push_back(Index);
+					// Repack the target and candidate together. A preloaded layout can
+					// hide a valid fit behind an avoidable skyline; this bounded trial
+					// lets the complete proxies move while their children stay glued.
+					CetTNestItemVector Repacked;
+					Repacked.reserve(TrialIndices.size());
+					for (std::size_t TrialIndex : TrialIndices){
+						CetNestItem Copy = AItems[TrialIndex];
+						Copy.translation(ClipperLib::IntPoint(0,0));
+						Copy.rotation(0.0);
+						Copy.inflation(0);
+						Repacked.push_back(std::move(Copy));
+					}
+					Placer Repacker(Bin);
+					Repacker.configure(Config);
+					bool Success = true;
+					for (CetNestItem& Item : Repacked){
+						if (!Repacker.pack(Item)){ Success = false; break; }
+					}
+					if (!Success) continue;
+					for (std::size_t Position = 0; Position < TrialIndices.size(); ++Position){
+						Repacked[Position].binId(static_cast<int>(Target));
+						AItems[TrialIndices[Position]] = std::move(Repacked[Position]);
+					}
+					TargetIndices.push_back(Index);
+					AffectedBins.insert(Source);
+					++Moved;
+				}
+				std::cout << "[NEST][CLUSTER BACKFILL] Target=" << Target
+					<< ", Attempts=" << Attempts << std::endl;
+			}
+
+			// Repack only source sheets affected by proxy moves. All proxies remain
+			// intact, so their child spacing and glued geometry are preserved.
+			for (int SourceBin : AffectedBins){
+				std::vector<std::size_t> Indices;
+				for (std::size_t Index = 0; Index < AItems.size(); ++Index){
+					if (AItems[Index].binId() == SourceBin) Indices.push_back(Index);
+				}
+				CetTNestItemVector Repacked;
+				Repacked.reserve(Indices.size());
+				for (std::size_t Index : Indices){
+					CetNestItem Copy = AItems[Index];
+					Copy.translation(ClipperLib::IntPoint(0,0));
+					Copy.rotation(0.0);
+					Copy.inflation(0);
+					Repacked.push_back(std::move(Copy));
+				}
+				Placer Repacker(Bin);
+				Repacker.configure(Config);
+				bool Success = true;
+				for (CetNestItem& Item : Repacked){
+					if (!Repacker.pack(Item)){ Success = false; break; }
+					Item.binId(SourceBin);
+				}
+				if (Success){
+					for (std::size_t Position = 0; Position < Indices.size(); ++Position){
+						AItems[Indices[Position]] = std::move(Repacked[Position]);
+					}
+				}
+				std::cout << "[NEST][CLUSTER REPACK] Bin=" << SourceBin
+					<< ", Items=" << Indices.size()
+					<< ", Applied=" << (Success ? 1 : 0) << std::endl;
+			}
+
+			std::set<int> UsedBins;
+			for (const CetNestItem& Item : AItems) if (Item.binId() >= 0) UsedBins.insert(Item.binId());
+			std::map<int,int> Dense;
+			int NextBin = 0;
+			for (int BinId : UsedBins) Dense[BinId] = NextBin++;
+			for (CetNestItem& Item : AItems){
+				auto It = Dense.find(Item.binId());
+				if (It != Dense.end()) Item.binId(It->second);
+			}
+			std::cout << "[NEST][CLUSTER BACKFILL SUMMARY] Moved=" << Moved
+				<< ", LayersBefore=" << ALayers
+				<< ", LayersAfter=" << UsedBins.size() << std::endl;
+			return UsedBins.size();
+		}
+
 		static std::vector<MetClusterStrategy> BuildClusterStrategies(const std::vector<TetShapeFeature>& AFeatures)
 		{
+			if (AFeatures.size() > CET_NEST_FULL_STRATEGY_ITEM_LIMIT){
+				// TemplateCluster preserves every unclustered item as a single and
+				// validates full coverage. Avoid an additional full NFP pass over a
+				// large original order before evaluating the reduced proxy set.
+				return { MetClusterStrategy::TemplateCluster };
+			}
 			const std::size_t CustomShapeCount = static_cast<std::size_t>(std::count_if(AFeatures.begin(), AFeatures.end(), [](const TetShapeFeature& AFeature) {
 				return AFeature.ShapeType == MetShapeType::QuadrilateralLike ||
 					AFeature.ShapeType == MetShapeType::ConvexPolygon ||
@@ -199,6 +320,7 @@ namespace ET {
 			CetPolygonImpl BinPoly = Nest2DUtils->Nest2DBord->BuildBinPolygonFromOptions(AOptions,BoardBinWidth,BoardBinHeight);
 
 			using CetMyPlacer = placers::_NofitPolyPlacer<CetPolygonImpl, CetPolygonImpl>;
+			// Keep the primary ordering stable; expanded items are backfilled after nesting.
 			using CetMySelector = selections::_FirstFitSelection<CetPolygonImpl>;
 
 			NestConfig<CetMyPlacer, CetMySelector> cfg;
@@ -306,6 +428,19 @@ namespace ET {
 					<< ", Direction=" << (BestEval.RemnantIsTopStrip ? "Top" : "Right")
 					<< std::endl;
 				// Sorting strategies reorder packed items, so metadata restoration is required for singles and clusters.
+				const CetTNestItemVector ItemsBeforeBackfill = BestItems;
+				const std::size_t LayersBeforeBackfill = BestLayers;
+				BestLayers = BackfillClusterSheets(BestItems, AOptions, BestLayers);
+				if (!Nest2DUtils->Nest2DCluster->ValidatePackedResultNoOverlap(OriginalItems, BestItems, BestMetaItems)){
+					std::cout << "[NEST][CLUSTER BACKFILL][ROLLBACK] Expanded validation failed." << std::endl;
+					BestItems = ItemsBeforeBackfill;
+					BestLayers = LayersBeforeBackfill;
+				}
+				else {
+					BestEval = Nest2DUtils->Nest2DStrategy->EvaluatePackedResultWithMeta(BestItems, BestMetaItems, OriginalItems, AOptions, BestLayers);
+					std::cout << "[NEST][CLUSTER BACKFILL][VALID] FirstBinCount=" << BestEval.FirstBinCount
+						<< ", Layers=" << BestEval.Layers << std::endl;
+				}
 				Nest2DUtils->Nest2DCluster->ExpandClusterResultToOriginalItems(OriginalItems, BestItems, BestMetaItems, ANestItems);
 			}
 			//if(BestLayers > 0) {
@@ -335,6 +470,7 @@ namespace ET {
 
 			//using CetMyPlacer = placers::_NofitPolyPlacer<CetPolygonImpl, Box>;
 			using CetMyPlacer = placers::_BottomLeftPlacer<CetPolygonImpl>;
+			// Keep the primary ordering stable; expanded items are backfilled after nesting.
 			using CetMySelector = selections::_FirstFitSelection<CetPolygonImpl>;
 			//using CetMySelector = selections::_FillerSelection<CetPolygonImpl>;
 			//using CetMySelector = selections::_DJDHeuristic<CetPolygonImpl>;
@@ -472,6 +608,14 @@ namespace ET {
 				TetTNestEvalResult Eval = Nest2DUtils->Nest2DStrategy->EvaluatePackedResultWithMeta(TestItems, TestMetaItems, AOriginalItems, AOptions, Layers);
 				std::cout << "[NEST][EVAL] Strategy = " << static_cast<int>(Strategy) << ", HasCluster = " << CurrentHasCluster << ", Eval.FirstBinCount = " << Eval.FirstBinCount << ", Eval.FirstBinArea = " << Eval.FirstBinArea << ", Eval.Layers = " << Eval.Layers << ", Eval.RemnantArea = " << Eval.ReusableRemnantArea << ", Eval.RemnantShortSide = " << Eval.ReusableRemnantShortSide << ", Eval.SkylineWaste = " << Eval.SkylineWasteArea << ", Eval.RemnantDirection = " << (Eval.RemnantIsTopStrip ? "Top" : "Right") << ", LocalBest.FirstBinCount = " << LocalBest.Eval.FirstBinCount << ", LocalBest.FirstBinArea = " << LocalBest.Eval.FirstBinArea << ", LocalBest.Layers = " << LocalBest.Eval.Layers << std::endl;
 				_UpdateLocalBest(LocalBest, Eval, Layers, TestItems, TestMetaItems, CurrentHasCluster);
+				if (AOriginalItems.size() > CET_NEST_FULL_STRATEGY_ITEM_LIMIT && LocalBest.HasBest && LocalBest.Layers == 1){
+					// One sheet is already the minimum possible. On large orders a
+					// second full NFP pass can cost minutes for only a secondary
+					// remnant-shape comparison; the clustered strategy is still
+					// evaluated separately and can replace this result.
+					std::cout << "[NEST][EVAL][SKIP REMAINING] OriginalCount=" << AOriginalItems.size() << ", PackedCount=" << AClusterResult.NestItems.size() << ", reason=one-sheet optimum at large-order limit" << std::endl;
+					break;
+				}
 			}
 			return LocalBest;
 		}

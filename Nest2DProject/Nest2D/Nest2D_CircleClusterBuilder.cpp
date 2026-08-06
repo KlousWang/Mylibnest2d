@@ -289,8 +289,41 @@ namespace ET {
 
             const std::size_t OldCandidateCount = AOutCandidates.size();
 
-            for (const std::vector<int>& Group : Groups){
-                _BuildSameSizeClusterCandidates(AOriginalItems, AFeatures, Group, AOptions, AOutCandidates);
+            for (std::size_t GroupIndex = 0; GroupIndex < Groups.size(); ++GroupIndex){
+                const std::vector<int>& Group = Groups[GroupIndex];
+                std::vector<int> ClusterIndices = Group;
+
+                // Keep a bounded tail of a substantially smaller circle family
+                // as singles. These circles are useful for concave envelope
+                // voids and for filling already-open sheets; a single large
+                // honeycomb proxy cannot be inserted into either location.
+                bool HasLargerCircleFamily = false;
+                const double GroupSize = Group.empty() ? 0.0 : GetCircleSizeKey(AFeatures[Group.front()]);
+                for (std::size_t LargerGroupIndex = GroupIndex + 1; LargerGroupIndex < Groups.size(); ++LargerGroupIndex){
+                    const std::vector<int>& LargerGroup = Groups[LargerGroupIndex];
+                    if (LargerGroup.empty()){
+                        continue;
+                    }
+                    const double LargerSize = GetCircleSizeKey(AFeatures[LargerGroup.front()]);
+                    if (GroupSize > 0.0 && LargerSize >= GroupSize * CET_CIRCLE_FILLER_MIN_SIZE_RATIO){
+                        HasLargerCircleFamily = true;
+                        break;
+                    }
+                }
+
+                if (HasLargerCircleFamily && Group.size() >= CET_CIRCLE_FILLER_SINGLE_RESERVE_MIN * 2){
+                    const std::size_t ReservedSingleCount = std::min(
+                        CET_CIRCLE_FILLER_SINGLE_RESERVE_MAX,
+                        std::max(CET_CIRCLE_FILLER_SINGLE_RESERVE_MIN, Group.size() / 4));
+                    if (ClusterIndices.size() > ReservedSingleCount){
+                        ClusterIndices.resize(ClusterIndices.size() - ReservedSingleCount);
+                        std::cout << "[CIRCLE][FILLER RESERVE] Diameter=" << GroupSize
+                            << ", Clustered=" << ClusterIndices.size()
+                            << ", Singles=" << ReservedSingleCount << std::endl;
+                    }
+                }
+
+                _BuildSameSizeClusterCandidates(AOriginalItems, AFeatures, ClusterIndices, AOptions, AOutCandidates);
             }
 
             std::cout << "[CIRCLE][BUILD CANDIDATES] GroupCount = " << Groups.size() << ", NewCandidateCount = " << AOutCandidates.size() - OldCandidateCount << std::endl;

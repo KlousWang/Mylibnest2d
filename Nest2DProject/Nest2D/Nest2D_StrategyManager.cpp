@@ -59,19 +59,25 @@ bool ET::NEST2DMANAGERLIB::CetStrategyManager::IsBetterNestResult(const TetTNest
 	}
 
 	if (A.HasRemnantMetrics && AB.HasRemnantMetrics){
-		// For equal board counts, prefer the layout with fewer internal skyline
-		// gaps and a shallower occupied envelope before maximizing stock remnant.
-		if (AreMetricValuesDifferent(A.SkylineWasteArea,AB.SkylineWasteArea)){
-			return A.SkylineWasteArea < AB.SkylineWasteArea;
+		// Fill completed sheets first. With a fixed total part area this also
+		// minimizes the material consumed on the final sheet.
+		if (AreMetricValuesDifferent(A.FirstBinArea,AB.FirstBinArea)){
+			return A.FirstBinArea > AB.FirstBinArea;
 		}
-		if (AreMetricValuesDifferent(A.UsedDepth,AB.UsedDepth)){
-			return A.UsedDepth < AB.UsedDepth;
+		if (A.FirstBinCount != AB.FirstBinCount){
+			return A.FirstBinCount > AB.FirstBinCount;
 		}
 		if (AreMetricValuesDifferent(A.ReusableRemnantArea,AB.ReusableRemnantArea)){
 			return A.ReusableRemnantArea > AB.ReusableRemnantArea;
 		}
 		if (AreMetricValuesDifferent(A.ReusableRemnantShortSide,AB.ReusableRemnantShortSide)){
 			return A.ReusableRemnantShortSide > AB.ReusableRemnantShortSide;
+		}
+		if (AreMetricValuesDifferent(A.SkylineWasteArea,AB.SkylineWasteArea)){
+			return A.SkylineWasteArea < AB.SkylineWasteArea;
+		}
+		if (AreMetricValuesDifferent(A.UsedDepth,AB.UsedDepth)){
+			return A.UsedDepth < AB.UsedDepth;
 		}
 	}
 

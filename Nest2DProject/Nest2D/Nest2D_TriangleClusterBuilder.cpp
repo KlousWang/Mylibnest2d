@@ -550,7 +550,10 @@ namespace ET {
             std::vector<int> RemainingIndices = AIndices;
             std::sort(RemainingIndices.begin(), RemainingIndices.end());
             RemainingIndices.erase(std::unique(RemainingIndices.begin(), RemainingIndices.end()), RemainingIndices.end());
-            const std::size_t MaxPairCount = std::min((RemainingIndices.size() - (RemainingIndices.size() % 2)) / 2,CET_GENERAL_TRIANGLE_MAX_CLUSTER_CHILDREN / 2);
+            // Non-right triangles benefit from smaller, interleavable grids;
+            // right-triangle rectangle pairs keep their separate fast path.
+            constexpr std::size_t MaxGeneralTrianglePairsPerCluster = 8;
+            const std::size_t MaxPairCount = std::min((RemainingIndices.size() - (RemainingIndices.size() % 2)) / 2,MaxGeneralTrianglePairsPerCluster);
             if (MaxPairCount == 0){
                 return;
             }

@@ -5,6 +5,7 @@
 #include "NestUtils.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <iostream>
 #include <limits>
@@ -223,7 +224,13 @@ namespace ET {
 
             std::vector<std::size_t> BuildCandidateChildCounts(std::size_t AItemCount)
             {
-                const std::size_t MaxChildCount = std::min(AItemCount, CET_CUSTOM_MAX_CLUSTER_CHILDREN);
+                if (AItemCount > CET_CUSTOM_SEARCH_MAX_CHILDREN){
+                    // Search a small reusable template for large repeated orders.
+                    // _BuildSameShapeClusterCandidates remaps the chosen geometry
+                    // over the rest of the group without repeating this search.
+                    return { 4, 2 };
+                }
+                const std::size_t MaxChildCount = std::min({ AItemCount, CET_CUSTOM_MAX_CLUSTER_CHILDREN, CET_CUSTOM_SEARCH_MAX_CHILDREN });
                 if (MaxChildCount < 2){
                     return {};
                 }
@@ -236,18 +243,8 @@ namespace ET {
                 };
 
                 AddCount(MaxChildCount);
-                if (MaxChildCount > 16){
-                    AddCount((MaxChildCount * 3) / 4);
-                    AddCount(MaxChildCount / 2);
-                    AddCount(MaxChildCount / 4);
-                    AddCount(16);
-                    AddCount(8);
-                    AddCount(4);
-                }
-                else {
-                    for (std::size_t Count = 2; Count <= MaxChildCount; ++Count){
-                        AddCount(Count);
-                    }
+                for (std::size_t Count = 2; Count <= MaxChildCount; ++Count){
+                    AddCount(Count);
                 }
                 AddCount(2);
                 return Result;
@@ -285,7 +282,7 @@ namespace ET {
                 }
             }
 
-            if (IndicesByShape.size() > 1){
+            if (IndicesByShape.size() > 1 && AIndices.size() <= CET_CUSTOM_SEARCH_MAX_CHILDREN){
                 TetClusterCandidate MixedCandidate;
                 if (_BuildMixedShapeCandidate(AOriginalItems,AFeatures,AIndices,AOptions,MixedCandidate)){
                     std::cout << "[CUSTOM][MIXED CANDIDATE] ChildCount=" << MixedCandidate.OriginalIndices.size() << ", Type=" << MixedCandidate.ClusterType << ", Score=" << MixedCandidate.Score << std::endl;
@@ -350,7 +347,7 @@ namespace ET {
             const double TargetWidthRatios[] = { 0.50, 0.80, 1.00 };
 
             const auto BuildTrialCounts = [](std::size_t APlacedCount) {
-                const std::size_t MaxPlacedCount = std::min(APlacedCount,CET_CUSTOM_MAX_CLUSTER_CHILDREN);
+                const std::size_t MaxPlacedCount = std::min({ APlacedCount,CET_CUSTOM_MAX_CLUSTER_CHILDREN,CET_CUSTOM_SEARCH_MAX_CHILDREN });
                 const std::size_t PreferredCounts[] = { 2, 4, 6, 8, 12, 16, 24, 32, 48, 64 };
                 std::vector<std::size_t> Result;
                 for (std::size_t Count : PreferredCounts){
@@ -603,6 +600,138 @@ namespace ET {
             return HasBest && AOutChildCount >= 2;
         }
 
+        bool CetCustomClusterBuilder::_BuildBestEdgePairCandidate(const CetTNestItemVector& AOriginalItems, const std::vector<int>& AIndices, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate)
+        {
+            AOutCandidate = TetClusterCandidate{};
+            if (AIndices.size() != 2){
+                return false;
+            }
+
+            const int FirstIndex = AIndices[0];
+            const int SecondIndex = AIndices[1];
+            if (FirstIndex < 0 || SecondIndex < 0 || FirstIndex >= static_cast<int>(AOriginalItems.size()) || SecondIndex >= static_cast<int>(AOriginalItems.size())){
+                return false;
+            }
+
+            CetClusterGeometryHelper Geometry;
+            const CetPath FirstContour = Geometry.GetIdentityContour(AOriginalItems[FirstIndex]);
+            const CetPath SecondContour = Geometry.GetIdentityContour(AOriginalItems[SecondIndex]);
+            if (FirstContour.size() < 3 || SecondContour.size() < 3){
+                return false;
+            }
+
+            const std::vector<double> AllowedRotations = CetRotationUtils::BuildAllowedRotations(AOptions.Rotations);
+            const double RequiredGap = GetLayoutGap(AOptions);
+            constexpr double MIN_EDGE_LENGTH_RATIO = 0.80;
+            constexpr double OPPOSITE_EDGE_COSINE = -0.9986295347545738; // cos(177 degrees)
+
+            bool HasBest = false;
+            TetClusterCandidate BestCandidate;
+            for (double SecondRotation : AllowedRotations){
+                const double CosRotation = std::cos(SecondRotation);
+                const double SinRotation = std::sin(SecondRotation);
+                const auto RotatePoint = [&](const CetInpoint& APoint) {
+                    return std::pair<double, double>{
+                        static_cast<double>(APoint.X) * CosRotation - static_cast<double>(APoint.Y) * SinRotation,
+                        static_cast<double>(APoint.X) * SinRotation + static_cast<double>(APoint.Y) * CosRotation
+                    };
+                };
+
+                for (std::size_t FirstEdgeIndex = 0; FirstEdgeIndex < FirstContour.size(); ++FirstEdgeIndex){
+                    const CetInpoint& FirstStart = FirstContour[FirstEdgeIndex];
+                    const CetInpoint& FirstEnd = FirstContour[(FirstEdgeIndex + 1) % FirstContour.size()];
+                    const double FirstDX = static_cast<double>(FirstEnd.X - FirstStart.X);
+                    const double FirstDY = static_cast<double>(FirstEnd.Y - FirstStart.Y);
+                    const double FirstLength = std::hypot(FirstDX,FirstDY);
+                    if (FirstLength <= 0.0){
+                        continue;
+                    }
+
+                    const double NormalX = -FirstDY / FirstLength;
+                    const double NormalY = FirstDX / FirstLength;
+                    for (std::size_t SecondEdgeIndex = 0; SecondEdgeIndex < SecondContour.size(); ++SecondEdgeIndex){
+                        const auto RotatedSecondStart = RotatePoint(SecondContour[SecondEdgeIndex]);
+                        const auto RotatedSecondEnd = RotatePoint(SecondContour[(SecondEdgeIndex + 1) % SecondContour.size()]);
+                        const double SecondDX = RotatedSecondEnd.first - RotatedSecondStart.first;
+                        const double SecondDY = RotatedSecondEnd.second - RotatedSecondStart.second;
+                        const double SecondLength = std::hypot(SecondDX,SecondDY);
+                        if (SecondLength <= 0.0){
+                            continue;
+                        }
+
+                        const double LengthRatio = std::min(FirstLength,SecondLength) / std::max(FirstLength,SecondLength);
+                        const double DirectionCosine = (FirstDX * SecondDX + FirstDY * SecondDY) / (FirstLength * SecondLength);
+                        if (LengthRatio < MIN_EDGE_LENGTH_RATIO || DirectionCosine > OPPOSITE_EDGE_COSINE){
+                            continue;
+                        }
+
+                        const double FirstMidX = (static_cast<double>(FirstStart.X) + static_cast<double>(FirstEnd.X)) * 0.5;
+                        const double FirstMidY = (static_cast<double>(FirstStart.Y) + static_cast<double>(FirstEnd.Y)) * 0.5;
+                        const double SecondMidX = (RotatedSecondStart.first + RotatedSecondEnd.first) * 0.5;
+                        const double SecondMidY = (RotatedSecondStart.second + RotatedSecondEnd.second) * 0.5;
+                        std::vector<std::pair<double, double>> BaseOffsets;
+                        const auto AppendBaseOffset = [&](double AX, double AY) {
+                            const auto Existing = std::find_if(BaseOffsets.begin(),BaseOffsets.end(),[&](const auto& AOffset) {
+                                    return std::abs(AOffset.first - AX) <= 1.0 && std::abs(AOffset.second - AY) <= 1.0;
+                                });
+                            if (Existing == BaseOffsets.end()){
+                                BaseOffsets.emplace_back(AX,AY);
+                            }
+                        };
+                        AppendBaseOffset(FirstMidX - SecondMidX,FirstMidY - SecondMidY);
+                        AppendBaseOffset(static_cast<double>(FirstStart.X) - RotatedSecondEnd.first,static_cast<double>(FirstStart.Y) - RotatedSecondEnd.second);
+                        AppendBaseOffset(static_cast<double>(FirstEnd.X) - RotatedSecondStart.first,static_cast<double>(FirstEnd.Y) - RotatedSecondStart.second);
+                        const double TangentX = FirstDX / FirstLength;
+                        const double TangentY = FirstDY / FirstLength;
+                        const double MatchedLength = std::min(FirstLength,SecondLength);
+                        constexpr std::array<double, 5> TANGENT_SHIFT_RATIOS = {{ -0.25, -0.125, 0.0, 0.125, 0.25 }};
+
+                        for (double NormalDirection : { -1.0, 1.0 }){
+                            for (const auto& BaseOffset : BaseOffsets){
+                                for (double TangentShiftRatio : TANGENT_SHIFT_RATIOS){
+                                    const double TangentShift = MatchedLength * TangentShiftRatio;
+                                    TetClusterCandidate Candidate;
+                                    Candidate.BuilderName = "CustomBuilder";
+                                    Candidate.ClusterType = "CustomEdgePair";
+                                    Candidate.OriginalIndices = AIndices;
+                                    Candidate.Confidence = 0.96;
+
+                                    TetItemTransform FirstTransform;
+                                    FirstTransform.OriginalId = FirstIndex;
+                                    Candidate.Transforms.push_back(FirstTransform);
+
+                                    TetItemTransform SecondTransform;
+                                    SecondTransform.OriginalId = SecondIndex;
+                                    SecondTransform.RelativeRotation = SecondRotation;
+                                    SecondTransform.RelativeX = BaseOffset.first + NormalX * RequiredGap * NormalDirection + TangentX * TangentShift;
+                                    SecondTransform.RelativeY = BaseOffset.second + NormalY * RequiredGap * NormalDirection + TangentY * TangentShift;
+                                    Candidate.Transforms.push_back(SecondTransform);
+
+                                    if (!Geometry.HasValidTransformSpacing(AOriginalItems,AOptions,Candidate.Transforms) || !Geometry.FinalizeCandidate(AOriginalItems,AOptions,Candidate) || Candidate.AreaSavingRatio < -CET_CUSTOM_MAX_AREA_LOSS_RATIO){
+                                        continue;
+                                    }
+
+                                    Candidate.Score = _CalculateScore(Candidate,AOptions) + LengthRatio * 40.0;
+                                    const double CandidateBoxArea = Candidate.ClusterWidth * Candidate.ClusterHeight;
+                                    const double BestBoxArea = HasBest ? BestCandidate.ClusterWidth * BestCandidate.ClusterHeight : std::numeric_limits<double>::max();
+                                    if (!HasBest || CandidateBoxArea < BestBoxArea - 1.0 || (std::abs(CandidateBoxArea - BestBoxArea) <= 1.0 && Candidate.Score > BestCandidate.Score)){
+                                        HasBest = true;
+                                        BestCandidate = std::move(Candidate);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!HasBest){
+                return false;
+            }
+            AOutCandidate = std::move(BestCandidate);
+            return true;
+        }
+
         bool CetCustomClusterBuilder::_BuildBestLayoutCandidate(const CetTNestItemVector& AOriginalItems, const std::vector<int>& AIndices, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate)
         {
             AOutCandidate = TetClusterCandidate{};
@@ -629,6 +758,13 @@ namespace ET {
             };
             bool HasBest = false;
             TetClusterCandidate BestCandidate;
+            if (AIndices.size() == 2){
+                TetClusterCandidate EdgePairCandidate;
+                if (_BuildBestEdgePairCandidate(AOriginalItems,AIndices,AOptions,EdgePairCandidate)){
+                    HasBest = true;
+                    BestCandidate = std::move(EdgePairCandidate);
+                }
+            }
             for (double BaseRotation : BaseRotations){
                 TetCustomRotationPose BasePose;
                 if (!BuildRotationPose(Geometry,AOriginalItems[AIndices.front()],BaseRotation,BasePose)){
@@ -696,6 +832,9 @@ namespace ET {
             }
 
             if (!HasBest){
+                return false;
+            }
+            if (BestCandidate.BoardSpanRatio > 0.50 && BestCandidate.BoundingFillRatio < 0.60){
                 return false;
             }
             AOutCandidate = std::move(BestCandidate);
