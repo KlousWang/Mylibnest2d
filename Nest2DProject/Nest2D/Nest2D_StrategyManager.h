@@ -31,6 +31,13 @@ namespace ET {
 			void ApplyNestPriorityStrategy(CetTNestItemVector& AItems, MetENestOrderStrategy AStrategy);
 			void PrintBinCount(const CetTNestItemVector& AItems);
 			TetTNestEvalResult EvaluatePackedResultWithMeta(const CetTNestItemVector& AItems, const std::vector<TetMetaItem>& AMetaItems, const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, std::size_t ALayers);
+	
+		protected:
+			// 1. 展开 Meta 信息，提取最后一块板上所有零件的包围盒，并统计基础面积
+			std::vector<TetRemnantPartBounds> _ExtractLastBinBounds(const CetTNestItemVector& AItems,const std::vector<TetMetaItem>& AMetaItems,const CetTNestItemVector& AOriginalItems,int ALastBinId,TetTNestEvalResult& AOutResult) const;
+
+			// 2. 基于天际线算法计算余料的各项指标
+			void _CalculateRemnantMetrics(const std::vector<TetRemnantPartBounds>& ALastBinBounds,const TetNestOptions& AOptions,TetTNestEvalResult& AOutResult) const;
 		};
 	}
 }

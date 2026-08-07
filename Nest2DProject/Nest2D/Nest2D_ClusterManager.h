@@ -36,6 +36,12 @@ namespace ET {
 
         protected:
             TetClusterBuildResult _BuildTemplateClusters(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions);
+            void _CollectTemplateShapeIndices(const std::vector<TetShapeFeature>& AFeatures, std::map<MetShapeType, std::vector<int>>& AIndicesByType);
+            void _BuildTemplateCandidates(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions, const std::map<MetShapeType, std::vector<int>>& AIndicesByType, std::vector<TetClusterCandidate>& ABaseCandidates);
+            std::vector<TetClusterCandidate> _SelectTemplateCandidates(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const std::vector<TetClusterCandidate>& ABaseCandidates, std::vector<bool>& AUsed);
+            void _OptimizeTemplateCandidatesWithFill(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions, std::vector<bool>& AUsed, std::vector<TetClusterCandidate>& ACandidates);
+           // void _AppendTemplateSingles(const CetTNestItemVector& AOriginalItems, std::vector<bool>& AUsed, TetClusterBuildResult& AResult);
+
             TetClusterBuildResult _BuildAllSingles(const CetTNestItemVector& AOriginalItems);
             bool _ValidateBuildResultCoverage(const TetClusterBuildResult& AResult, int AOriginalCount);
             void _AddSingleItem(const CetTNestItemVector& AOriginalItems, int AOriginalIndex, TetClusterBuildResult& AResult);

@@ -36,31 +36,31 @@ namespace ET {
 			TetClusterBuildResult Result;
 			Result.NestItems.reserve(AOriginalItems.size());
 			Result.MetaItems.reserve(AOriginalItems.size());
-			if (AOriginalItems.empty()){
+			if (AOriginalItems.empty()) {
 				return Result;
 			}
 			//zanshibuzuhe
-			if (AStrategy == MetClusterStrategy::None){
-				for (int i = 0; i < static_cast<int>(AOriginalItems.size()); ++i){
+			if (AStrategy == MetClusterStrategy::None) {
+				for (int i = 0; i < static_cast<int>(AOriginalItems.size()); ++i) {
 					_AddSingleItem(AOriginalItems, i, Result);
 				}
 				return Result;
 			}
-			
-			
-			if (AStrategy == MetClusterStrategy::RightTrianglePair){
+
+
+			if (AStrategy == MetClusterStrategy::RightTrianglePair) {
 				std::vector<bool> Used(AOriginalItems.size(), false);
-				for (int i = 0; i < static_cast<int>(AOriginalItems.size()); ++i){
-					if (Used[i]){
+				for (int i = 0; i < static_cast<int>(AOriginalItems.size()); ++i) {
+					if (Used[i]) {
 						continue;
 					}
 					bool Paired = false;
-					for (int j = i + 1; j < static_cast<int>(AOriginalItems.size()); ++j){
-						if (Used[j]){
+					for (int j = i + 1; j < static_cast<int>(AOriginalItems.size()); ++j) {
+						if (Used[j]) {
 							continue;
 						}
 						// if (_TryMakeRightTrianglePair(AOriginalItems, i, j, AOptions, Result)) 
-						if (Nest2DUtils->Nest2dClusterTri->TryMakeRightTrianglePair(AOriginalItems, i, j, AOptions, Result)){
+						if (Nest2DUtils->Nest2dClusterTri->TryMakeRightTrianglePair(AOriginalItems, i, j, AOptions, Result)) {
 							Used[i] = true;
 							Used[j] = true;
 							Paired = true;
@@ -68,18 +68,18 @@ namespace ET {
 							break;
 						}
 					}
-					if (!Paired){
+					if (!Paired) {
 						Used[i] = true;
 						_AddSingleItem(AOriginalItems, i, Result);
 					}
 				}
 				return Result;
 			}
-			if (AStrategy == MetClusterStrategy::AutoPairCluster){
+			if (AStrategy == MetClusterStrategy::AutoPairCluster) {
 				return _BuildAutoPairClusters(AOriginalItems, AOptions);
 			}
-			
-			for (int i = 0; i < static_cast<int>(AOriginalItems.size()); ++i){
+
+			for (int i = 0; i < static_cast<int>(AOriginalItems.size()); ++i) {
 				_AddSingleItem(AOriginalItems, i, Result);
 			}
 			return Result;
@@ -87,11 +87,11 @@ namespace ET {
 
 		TetClusterBuildResult CetClusterManager::BuildClusterItemsWithFeatures(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions, MetClusterStrategy AStrategy)
 		{
-			
-			if (AStrategy == MetClusterStrategy::TemplateCluster){
+
+			if (AStrategy == MetClusterStrategy::TemplateCluster) {
 				return _BuildTemplateClusters(AOriginalItems, AFeatures, AOptions);
 			}
-			
+
 
 
 
@@ -101,11 +101,11 @@ namespace ET {
 		void CetClusterManager::ExpandClusterResultToOriginalItems(const CetTNestItemVector& AOriginalItems, const CetTNestItemVector& APackedItems, const std::vector<TetMetaItem>& AMetaItems, CetTNestItemVector& AOutOriginalItems)
 		{
 			AOutOriginalItems = AOriginalItems;
-			if (APackedItems.size() != AMetaItems.size()){
+			if (APackedItems.size() != AMetaItems.size()) {
 				std::cout << "[CLUSTER][ERROR] PackedItems size != MetaItems size. PackedItems = " << APackedItems.size() << ", MetaItems = " << AMetaItems.size() << std::endl;
 				return;
 			}
-			for (std::size_t PackedIndex = 0; PackedIndex < APackedItems.size(); ++PackedIndex){
+			for (std::size_t PackedIndex = 0; PackedIndex < APackedItems.size(); ++PackedIndex) {
 				const auto& PackedItem = APackedItems[PackedIndex];
 				const auto& Meta = AMetaItems[PackedIndex];
 				auto PackedTranslation = PackedItem.translation();
@@ -122,30 +122,30 @@ namespace ET {
 
 		bool CetClusterManager::ValidatePackedResultNoOverlap(const CetTNestItemVector& AOriginalItems, const CetTNestItemVector& APackedItems, const std::vector<TetMetaItem>& AMetaItems)
 		{
-			if (APackedItems.size() != AMetaItems.size()){
+			if (APackedItems.size() != AMetaItems.size()) {
 				return false;
 			}
 
 			CetTNestItemVector ExpandedItems = AOriginalItems;
-			for (std::size_t PackedIndex = 0; PackedIndex < APackedItems.size(); ++PackedIndex){
+			for (std::size_t PackedIndex = 0; PackedIndex < APackedItems.size(); ++PackedIndex) {
 				_ExpandClusterChildren(APackedItems[PackedIndex], AMetaItems[PackedIndex], ExpandedItems, false);
 			}
 
-			for (std::size_t FirstIndex = 0; FirstIndex < ExpandedItems.size(); ++FirstIndex){
-				if (ExpandedItems[FirstIndex].binId() < 0){
+			for (std::size_t FirstIndex = 0; FirstIndex < ExpandedItems.size(); ++FirstIndex) {
+				if (ExpandedItems[FirstIndex].binId() < 0) {
 					continue;
 				}
 
 				CetNestItem FirstItem = ExpandedItems[FirstIndex];
 				FirstItem.inflation(0);
-				for (std::size_t SecondIndex = FirstIndex + 1; SecondIndex < ExpandedItems.size(); ++SecondIndex){
-					if (ExpandedItems[SecondIndex].binId() != FirstItem.binId()){
+				for (std::size_t SecondIndex = FirstIndex + 1; SecondIndex < ExpandedItems.size(); ++SecondIndex) {
+					if (ExpandedItems[SecondIndex].binId() != FirstItem.binId()) {
 						continue;
 					}
 
 					CetNestItem SecondItem = ExpandedItems[SecondIndex];
 					SecondItem.inflation(0);
-					if (CetNestItem::intersects(FirstItem, SecondItem)){
+					if (CetNestItem::intersects(FirstItem, SecondItem)) {
 						std::cout << "[CLUSTER][EXPANDED VALIDATION][REJECT] Overlap between original items " << FirstIndex << " and " << SecondIndex << " on bin " << FirstItem.binId() << std::endl;
 						return false;
 					}
@@ -188,44 +188,44 @@ namespace ET {
 			double PackedX = static_cast<double>(PackedTranslation.X);
 			double PackedY = static_cast<double>(PackedTranslation.Y);
 			double PackedRotation = APackedItem.rotation();
-			
+
 			double CosR = std::cos(PackedRotation);
 			double SinR = std::sin(PackedRotation);
-			if (ALog){
+			if (ALog) {
 				std::cout << "[CLUSTER][EXPAND PACKED] IsCluster = " << AMeta.IsCluster << ", PackedBin = " << APackedItem.binId() << ", PackedX = " << PackedX << ", PackedY = " << PackedY << ", PackedRotation = " << PackedRotation << ", Children = " << AMeta.TransformData.size() << std::endl;
 			}
-			for (const auto& Transform : AMeta.TransformData){
+			for (const auto& Transform : AMeta.TransformData) {
 				int originalId = Transform.OriginalId;
-				if (originalId < 0 || originalId >= static_cast<int>(AOutOriginalItems.size())){
+				if (originalId < 0 || originalId >= static_cast<int>(AOutOriginalItems.size())) {
 					std::cout << "[ClusTer][WARN] Invalid originalId in TransformData: " << originalId << std::endl;
 					continue;
 				}
 				auto& OriginalItem = AOutOriginalItems[originalId];
 				double LocalX = Transform.RelativeX;
 				double LocalY = Transform.RelativeY;
-				
+
 				double RotatedLocalX = LocalX * CosR - LocalY * SinR;
 				double RotatedLocalY = LocalX * SinR + LocalY * CosR;
 				double FinalX = PackedX + RotatedLocalX;
 				double FinalY = PackedY + RotatedLocalY;
 				double FinalRotation = PackedRotation + Transform.RelativeRotation;
-				
+
 				OriginalItem.binId(APackedItem.binId());
 				OriginalItem.translation(ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(FinalX), static_cast<ClipperLib::cInt>(FinalY)));
 				OriginalItem.rotation(FinalRotation);
-				if (ALog){
+				if (ALog) {
 					std::cout << "[CLUSTER][EXPAND ITEM] OriginalId = " << originalId << ", Local = (" << LocalX << ", " << LocalY << ")" << ", Final = (" << FinalX << ", " << FinalY << ")" << ", FinalRotation = " << FinalRotation << ", Bin = " << APackedItem.binId() << std::endl;
 				}
 			}
 		}
 
 		TetClusterBuildResult CetClusterManager::_BuildTemplateClusters(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions)
-		{
+		{			
 			const int Count = static_cast<int>(AOriginalItems.size());
-			if (Count <= 0){
+			if (Count <= 0) {
 				return TetClusterBuildResult{};
 			}
-			if (AFeatures.size() != AOriginalItems.size()){
+			if (AFeatures.size() != AOriginalItems.size()) {
 				std::cout << "[TEMPLATE][ERROR] Feature count mismatch. OriginalItems=" << AOriginalItems.size() << ", Features=" << AFeatures.size() << std::endl;
 				return _BuildAllSingles(AOriginalItems);
 			}
@@ -236,158 +236,223 @@ namespace ET {
 
 			std::vector<bool> Used(Count, false);
 			std::map<MetShapeType, std::vector<int>> IndicesByType;
-			for (int i = 0; i < Count; ++i){
-				const TetShapeFeature& Feature = AFeatures[i];
-				if (Feature.Width <= 0.0 || Feature.Height <= 0.0){
+
+			//  形状分类
+			_CollectTemplateShapeIndices(AFeatures, IndicesByType);
+			//  收集所有基础候选
+			std::vector<TetClusterCandidate> BaseCandidates;
+			_BuildTemplateCandidates(AOriginalItems, AFeatures, AOptions, IndicesByType, BaseCandidates);
+			//  排序与初步筛选
+			std::vector<TetClusterCandidate> AcceptedCandidates = _SelectTemplateCandidates(AOriginalItems, AOptions, BaseCandidates, Used);
+
+			//  间隙填充及局部优化
+			_OptimizeTemplateCandidatesWithFill(AOriginalItems, AFeatures, AOptions, Used, AcceptedCandidates);
+
+			//  组装集群、填充剩余单品并校验覆盖率
+			int AcceptedClusterCount = 0;
+			for (const TetClusterCandidate& Candidate : AcceptedCandidates) {
+				if (!_AddClusterCandidate(Candidate, Result)) {
+					std::cout << "[TEMPLATE][ADD FAILED] Builder=" << Candidate.BuilderName << " Type=" << Candidate.ClusterType << std::endl;
 					continue;
 				}
-				IndicesByType[Feature.ShapeType].push_back(i);
+				++AcceptedClusterCount;
+				std::cout << "[TEMPLATE][ACCEPT] Builder=" << Candidate.BuilderName << " Type=" << Candidate.ClusterType << " ChildCount=" << Candidate.OriginalIndices.size() << " Score=" << Candidate.Score << std::endl;
+			}
+			int SingleCount = 0;
+			for (int i = 0; i < Count; ++i) {
+				if (Used[i]) {
+					continue;
+				}
+				_AddSingleItem(AOriginalItems, i, Result);
+				Used[i] = true;
+				++SingleCount;
+			}
+			const bool CoverageValid = _ValidateBuildResultCoverage(Result, Count);
+			std::cout << "[TEMPLATE][SUMMARY] OriginalCount=" << Count << " BaseCandidateCount=" << BaseCandidates.size() << " AcceptedClusterCount=" << AcceptedClusterCount << " SingleCount=" << SingleCount << " PackedItemCount=" << Result.NestItems.size() << " MetaItemCount=" << Result.MetaItems.size() << " CoverageValid=" << CoverageValid << std::endl;
+			if (!CoverageValid) {
+				std::cout << "[TEMPLATE][FALLBACK] Coverage invalid, use all singles." << std::endl;
+				return _BuildAllSingles(AOriginalItems);
 			}
 
-			std::cout << "[TEMPLATE][SHAPE COUNTS] Triangle=" << IndicesByType[MetShapeType::TriangleLike].size() << " Circle=" << IndicesByType[MetShapeType::CircleLike].size() << " Ellipse=" << IndicesByType[MetShapeType::EllipseLike].size() << " Rectangle=" << IndicesByType[MetShapeType::RectangleLike].size() << " Arc=" << IndicesByType[MetShapeType::ArcLike].size() << " Convex=" << IndicesByType[MetShapeType::ConvexPolygon].size() << " Concave=" << IndicesByType[MetShapeType::ConcavePolygon].size() << std::endl;
+			return Result;
+		}
+		void CetClusterManager::_CollectTemplateShapeIndices(const std::vector<TetShapeFeature>& AFeatures, std::map<MetShapeType, std::vector<int>>& AIndicesByType)
+		{
+			const int Count = static_cast<int>(AFeatures.size());
+			for (int i = 0; i < Count; ++i) {
+				const TetShapeFeature& Feature = AFeatures[i];
+				if (Feature.Width <= 0.0 || Feature.Height <= 0.0) {
+					continue;
+				}
+				AIndicesByType[Feature.ShapeType].push_back(i);
+			}
 
-			std::vector<TetClusterCandidate> BaseCandidates;
+			std::cout << "[TEMPLATE][SHAPE COUNTS] Triangle=" << AIndicesByType[MetShapeType::TriangleLike].size()
+				<< " Circle=" << AIndicesByType[MetShapeType::CircleLike].size()
+				<< " Ellipse=" << AIndicesByType[MetShapeType::EllipseLike].size()
+				<< " Rectangle=" << AIndicesByType[MetShapeType::RectangleLike].size()
+				<< " Arc=" << AIndicesByType[MetShapeType::ArcLike].size()
+				<< " Convex=" << AIndicesByType[MetShapeType::ConvexPolygon].size()
+				<< " Concave=" << AIndicesByType[MetShapeType::ConcavePolygon].size() << std::endl;
+		}
+		void CetClusterManager::_BuildTemplateCandidates(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions, const std::map<MetShapeType, std::vector<int>>& AIndicesByType, std::vector<TetClusterCandidate>& ABaseCandidates)
+		{
 			auto AppendBuilderLog = [&](const char* ABuilderName, std::size_t AOldCount) {
-				std::cout << "[TEMPLATE][BUILDER] " << ABuilderName << " NewCandidates=" << BaseCandidates.size() - AOldCount << std::endl;
+				std::cout << "[TEMPLATE][BUILDER] " << ABuilderName << " NewCandidates=" << ABaseCandidates.size() - AOldCount << std::endl;
 				};
 
 			{
-				const std::size_t OldCount = BaseCandidates.size();
+				const std::size_t OldCount = ABaseCandidates.size();
 				CetTriangleClusterBuilder Builder;
-				Builder.BuildCandidates(AOriginalItems, AFeatures, IndicesByType[MetShapeType::TriangleLike], AOptions, BaseCandidates);
+				Builder.BuildCandidates(AOriginalItems, AFeatures, AIndicesByType.at(MetShapeType::TriangleLike), AOptions, ABaseCandidates);
 				AppendBuilderLog("TriangleBuilder", OldCount);
 			}
 			{
-				const std::size_t OldCount = BaseCandidates.size();
+				const std::size_t OldCount = ABaseCandidates.size();
 				CetCircleClusterBuilder Builder;
-				Builder.BuildCandidates(AOriginalItems, AFeatures, IndicesByType[MetShapeType::CircleLike], AOptions, BaseCandidates);
+				Builder.BuildCandidates(AOriginalItems, AFeatures, AIndicesByType.at(MetShapeType::CircleLike), AOptions, ABaseCandidates);
 				AppendBuilderLog("CircleBuilder", OldCount);
 			}
 			{
-				const std::size_t OldCount = BaseCandidates.size();
+				const std::size_t OldCount = ABaseCandidates.size();
 				CetEllipseClusterBuilder Builder;
-				Builder.BuildCandidates(AOriginalItems, AFeatures, IndicesByType[MetShapeType::EllipseLike], AOptions, BaseCandidates);
+				Builder.BuildCandidates(AOriginalItems, AFeatures, AIndicesByType.at(MetShapeType::EllipseLike), AOptions, ABaseCandidates);
 				AppendBuilderLog("EllipseBuilder", OldCount);
 			}
 			{
-				const std::size_t OldCount = BaseCandidates.size();
+				const std::size_t OldCount = ABaseCandidates.size();
 				CetRectangleClusterBuilder Builder;
-				Builder.BuildCandidates(AOriginalItems, AFeatures, IndicesByType[MetShapeType::RectangleLike], AOptions, BaseCandidates);
+				Builder.BuildCandidates(AOriginalItems, AFeatures, AIndicesByType.at(MetShapeType::RectangleLike), AOptions, ABaseCandidates);
 				AppendBuilderLog("RectangleBuilder", OldCount);
 			}
 			{
-				const std::size_t OldCount = BaseCandidates.size();
+				const std::size_t OldCount = ABaseCandidates.size();
 				CetArcClusterBuilder Builder;
-				Builder.BuildCandidates(AOriginalItems, AFeatures, IndicesByType[MetShapeType::ArcLike], AOptions, BaseCandidates);
+				Builder.BuildCandidates(AOriginalItems, AFeatures, AIndicesByType.at(MetShapeType::ArcLike), AOptions, ABaseCandidates);
 				AppendBuilderLog("ArcBuilder", OldCount);
 			}
 			{
 				std::vector<int> CustomIndices;
 				const auto AppendCustomIndices = [&](MetShapeType AShapeType) {
-					const std::vector<int>& TypeIndices = IndicesByType[AShapeType];
-					CustomIndices.insert(CustomIndices.end(), TypeIndices.begin(), TypeIndices.end());
+					auto It = AIndicesByType.find(AShapeType);
+					if (It != AIndicesByType.end()) {
+						const std::vector<int>& TypeIndices = It->second;
+						CustomIndices.insert(CustomIndices.end(), TypeIndices.begin(), TypeIndices.end());
+					}
 					};
 				AppendCustomIndices(MetShapeType::QuadrilateralLike);
 				AppendCustomIndices(MetShapeType::ConvexPolygon);
 				AppendCustomIndices(MetShapeType::ConcavePolygon);
 
-				const std::size_t OldCount = BaseCandidates.size();
+				const std::size_t OldCount = ABaseCandidates.size();
 				CetCustomClusterBuilder Builder;
-				Builder.BuildCandidates(AOriginalItems, AFeatures, CustomIndices, AOptions, BaseCandidates);
+				Builder.BuildCandidates(AOriginalItems, AFeatures, CustomIndices, AOptions, ABaseCandidates);
 				AppendBuilderLog("CustomBuilder", OldCount);
 			}
+		}
 
-			std::stable_sort(BaseCandidates.begin(), BaseCandidates.end(), [](const TetClusterCandidate& A, const TetClusterCandidate& AB) {
-				if (std::abs(A.Score - AB.Score) > 1e-9){
+		std::vector<TetClusterCandidate> CetClusterManager::_SelectTemplateCandidates(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const std::vector<TetClusterCandidate>& ABaseCandidates, std::vector<bool>& AUsed)
+		{
+			const int Count = static_cast<int>(AOriginalItems.size());
+			std::vector<TetClusterCandidate> SortedCandidates = ABaseCandidates;
+
+			std::stable_sort(SortedCandidates.begin(), SortedCandidates.end(), [](const TetClusterCandidate& A, const TetClusterCandidate& AB) {
+				if (std::abs(A.Score - AB.Score) > 1e-9) {
 					return A.Score > AB.Score;
 				}
-				if (std::abs(A.SheetReuseScore - AB.SheetReuseScore) > 1e-9){
+				if (std::abs(A.SheetReuseScore - AB.SheetReuseScore) > 1e-9) {
 					return A.SheetReuseScore > AB.SheetReuseScore;
 				}
-				if (A.OriginalIndices.size() != AB.OriginalIndices.size()){
+				if (A.OriginalIndices.size() != AB.OriginalIndices.size()) {
 					return A.OriginalIndices.size() > AB.OriginalIndices.size();
 				}
-				if (std::abs(A.ProxyArea - AB.ProxyArea) > 1e-9){
+				if (std::abs(A.ProxyArea - AB.ProxyArea) > 1e-9) {
 					return A.ProxyArea < AB.ProxyArea;
 				}
 				return A.ClusterType < AB.ClusterType;
 				});
 
-			std::cout << "[TEMPLATE][BASE CANDIDATE TOTAL] " << BaseCandidates.size() << std::endl;
+			std::cout << "[TEMPLATE][BASE CANDIDATE TOTAL] " << SortedCandidates.size() << std::endl;
 
 			std::vector<TetClusterCandidate> AcceptedCandidates;
-			AcceptedCandidates.reserve(BaseCandidates.size());
-			for (const TetClusterCandidate& Candidate : BaseCandidates){
-				if (!_CanAcceptClusterCandidate(AOriginalItems, AOptions, Candidate, Used, Count)){
+			AcceptedCandidates.reserve(SortedCandidates.size());
+			for (const TetClusterCandidate& Candidate : SortedCandidates) {
+				if (!_CanAcceptClusterCandidate(AOriginalItems, AOptions, Candidate, AUsed, Count)) {
 					std::cout << "[TEMPLATE][REJECT] Builder=" << Candidate.BuilderName << " Type=" << Candidate.ClusterType << " Score=" << Candidate.Score << std::endl;
 					continue;
 				}
 
 				AcceptedCandidates.push_back(Candidate);
-				for (int OriginalIndex : Candidate.OriginalIndices){
-					Used[OriginalIndex] = true;
+				for (int OriginalIndex : Candidate.OriginalIndices) {
+					AUsed[OriginalIndex] = true;
 				}
 
 				std::cout << "[TEMPLATE][BASE ACCEPT] Builder=" << Candidate.BuilderName << " Type=" << Candidate.ClusterType << " ChildCount=" << Candidate.OriginalIndices.size() << " Score=" << Candidate.Score << std::endl;
 			}
 
+			return AcceptedCandidates;
+		}
+
+		void CetClusterManager::_OptimizeTemplateCandidatesWithFill(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions, std::vector<bool>& AUsed, std::vector<TetClusterCandidate>& ACandidates)
+		{
+			const int Count = static_cast<int>(AOriginalItems.size());
 			int RectangleFilledClusterCount = 0;
 			int RectangleFillerItemCount = 0;
 			std::size_t GapFillAttemptCount = 0;
 			std::size_t GapFillSkippedClusterCount = 0;
+
 			const auto GetLargestChildArea = [&](const TetClusterCandidate& ACandidate) {
 				double LargestArea = 0.0;
-				for (int OriginalIndex : ACandidate.OriginalIndices){
-					if (OriginalIndex >= 0 && OriginalIndex < static_cast<int>(AFeatures.size())){
-						LargestArea = std::max(LargestArea,AFeatures[OriginalIndex].Area);
+				for (int OriginalIndex : ACandidate.OriginalIndices) {
+					if (OriginalIndex >= 0 && OriginalIndex < static_cast<int>(AFeatures.size())) {
+						LargestArea = std::max(LargestArea, AFeatures[OriginalIndex].Area);
 					}
 				}
 				return LargestArea;
 				};
-			std::stable_sort(AcceptedCandidates.begin(),AcceptedCandidates.end(),[&](const TetClusterCandidate& AFirstCandidate, const TetClusterCandidate& ASecondCandidate){
-					// Exact proxy contours exclude usable holes inside the cluster's
-					// bounding envelope. Give the physically largest fill opportunity
-					// first access to the bounded mixed-shape filler pool.
-					const double FirstEnvelopeFreeArea = std::max(0.0,AFirstCandidate.BoundingBoxArea - AFirstCandidate.ReservedArea);
-					const double SecondEnvelopeFreeArea = std::max(0.0,ASecondCandidate.BoundingBoxArea - ASecondCandidate.ReservedArea);
-					if (std::abs(FirstEnvelopeFreeArea - SecondEnvelopeFreeArea) > 1.0){
-						return FirstEnvelopeFreeArea > SecondEnvelopeFreeArea;
-					}
-					const double FirstFillPriority = AFirstCandidate.ProxyWasteArea / std::max(1.0,AFirstCandidate.ProxyArea);
-					const double SecondFillPriority = ASecondCandidate.ProxyWasteArea / std::max(1.0,ASecondCandidate.ProxyArea);
-					if (std::abs(FirstFillPriority - SecondFillPriority) > 1e-9){
-						return FirstFillPriority > SecondFillPriority;
-					}
-					if (std::abs(AFirstCandidate.SheetReuseScore - ASecondCandidate.SheetReuseScore) > 1e-9){
-						return AFirstCandidate.SheetReuseScore > ASecondCandidate.SheetReuseScore;
-					}
-					if (std::abs(AFirstCandidate.FragmentationRisk - ASecondCandidate.FragmentationRisk) > 1e-9){
-						return AFirstCandidate.FragmentationRisk < ASecondCandidate.FragmentationRisk;
-					}
-					const double FirstLargestArea = GetLargestChildArea(AFirstCandidate);
-					const double SecondLargestArea = GetLargestChildArea(ASecondCandidate);
-					if (std::abs(FirstLargestArea - SecondLargestArea) > 1.0){
-						return FirstLargestArea > SecondLargestArea;
-					}
-					return AFirstCandidate.Score > ASecondCandidate.Score;
+
+			std::stable_sort(ACandidates.begin(), ACandidates.end(), [&](const TetClusterCandidate& AFirstCandidate, const TetClusterCandidate& ASecondCandidate) {
+				const double FirstEnvelopeFreeArea = std::max(0.0, AFirstCandidate.BoundingBoxArea - AFirstCandidate.ReservedArea);
+				const double SecondEnvelopeFreeArea = std::max(0.0, ASecondCandidate.BoundingBoxArea - ASecondCandidate.ReservedArea);
+				if (std::abs(FirstEnvelopeFreeArea - SecondEnvelopeFreeArea) > 1.0) {
+					return FirstEnvelopeFreeArea > SecondEnvelopeFreeArea;
+				}
+				const double FirstFillPriority = AFirstCandidate.ProxyWasteArea / std::max(1.0, AFirstCandidate.ProxyArea);
+				const double SecondFillPriority = ASecondCandidate.ProxyWasteArea / std::max(1.0, ASecondCandidate.ProxyArea);
+				if (std::abs(FirstFillPriority - SecondFillPriority) > 1e-9) {
+					return FirstFillPriority > SecondFillPriority;
+				}
+				if (std::abs(AFirstCandidate.SheetReuseScore - ASecondCandidate.SheetReuseScore) > 1e-9) {
+					return AFirstCandidate.SheetReuseScore > ASecondCandidate.SheetReuseScore;
+				}
+				if (std::abs(AFirstCandidate.FragmentationRisk - ASecondCandidate.FragmentationRisk) > 1e-9) {
+					return AFirstCandidate.FragmentationRisk < ASecondCandidate.FragmentationRisk;
+				}
+				const double FirstLargestArea = GetLargestChildArea(AFirstCandidate);
+				const double SecondLargestArea = GetLargestChildArea(ASecondCandidate);
+				if (std::abs(FirstLargestArea - SecondLargestArea) > 1.0) {
+					return FirstLargestArea > SecondLargestArea;
+				}
+				return AFirstCandidate.Score > ASecondCandidate.Score;
 				});
 
-			std::fill(Used.begin(),Used.end(),false);
+			std::fill(AUsed.begin(), AUsed.end(), false);
 			std::vector<TetClusterCandidate> LocallyOptimizedCandidates;
-			LocallyOptimizedCandidates.reserve(AcceptedCandidates.size());
+			LocallyOptimizedCandidates.reserve(ACandidates.size());
 
 			CetRectangleFillClusterBuilder RectangleFillBuilder;
 			CetClusterGeometryHelper Geometry;
 			const std::size_t GapFillAttemptLimit = Count > static_cast<int>(CET_NEST_FULL_STRATEGY_ITEM_LIMIT)
 				? CET_RECTANGLE_FILL_LARGE_ORDER_MAX_BASE_CANDIDATES
 				: CET_RECTANGLE_FILL_MAX_BASE_CANDIDATES;
-			for (const TetClusterCandidate& BaseCandidate : AcceptedCandidates){
+
+			for (const TetClusterCandidate& BaseCandidate : ACandidates) {
 				TetClusterCandidate AvailableCandidate = BaseCandidate;
 				bool RemovedUsedChild = false;
 				AvailableCandidate.OriginalIndices.clear();
 				AvailableCandidate.Transforms.clear();
-				for (const TetItemTransform& Transform : BaseCandidate.Transforms){
-					if (Transform.OriginalId < 0 || Transform.OriginalId >= Count || Used[Transform.OriginalId]){
+				for (const TetItemTransform& Transform : BaseCandidate.Transforms) {
+					if (Transform.OriginalId < 0 || Transform.OriginalId >= Count || AUsed[Transform.OriginalId]) {
 						RemovedUsedChild = true;
 						continue;
 					}
@@ -395,74 +460,45 @@ namespace ET {
 					AvailableCandidate.Transforms.push_back(Transform);
 				}
 
-				if (AvailableCandidate.OriginalIndices.size() < 2){
+				if (AvailableCandidate.OriginalIndices.size() < 2) {
 					continue;
 				}
-				if (RemovedUsedChild){
+				if (RemovedUsedChild) {
 					AvailableCandidate.ClusterType += "_Reduced" + std::to_string(AvailableCandidate.OriginalIndices.size());
-					if (!Geometry.FinalizeCandidate(AOriginalItems,AOptions,AvailableCandidate)){
+					if (!Geometry.FinalizeCandidate(AOriginalItems, AOptions, AvailableCandidate)) {
 						continue;
 					}
 				}
-				if (!_CanAcceptClusterCandidate(AOriginalItems,AOptions,AvailableCandidate,Used,Count)){
+				if (!_CanAcceptClusterCandidate(AOriginalItems, AOptions, AvailableCandidate, AUsed, Count)) {
 					continue;
 				}
 
 				TetClusterCandidate FilledCandidate;
 				const bool TryGapFill = GapFillAttemptCount < GapFillAttemptLimit;
-				if (TryGapFill){
+				if (TryGapFill) {
 					++GapFillAttemptCount;
 				}
 				else {
 					++GapFillSkippedClusterCount;
 				}
-				if (TryGapFill && RectangleFillBuilder.BuildCandidateForBase(AOriginalItems,AFeatures,AvailableCandidate,AOptions,Used,FilledCandidate) && _CanAcceptClusterCandidate(AOriginalItems,AOptions,FilledCandidate,Used,Count)){
+				if (TryGapFill && RectangleFillBuilder.BuildCandidateForBase(AOriginalItems, AFeatures, AvailableCandidate, AOptions, AUsed, FilledCandidate) && _CanAcceptClusterCandidate(AOriginalItems, AOptions, FilledCandidate, AUsed, Count)) {
 					const int NewFillerCount = static_cast<int>(FilledCandidate.OriginalIndices.size() - AvailableCandidate.OriginalIndices.size());
 					RectangleFillerItemCount += std::max(0, NewFillerCount);
-					if (NewFillerCount > 0){
+					if (NewFillerCount > 0) {
 						++RectangleFilledClusterCount;
 						std::cout << "[TEMPLATE][RECT_FILL ACCEPT] BaseType=" << AvailableCandidate.ClusterType << " FilledType=" << FilledCandidate.ClusterType << " Added=" << NewFillerCount << " ChildCount=" << FilledCandidate.OriginalIndices.size() << " Score=" << FilledCandidate.Score << std::endl;
 					}
 					AvailableCandidate = std::move(FilledCandidate);
 				}
 
-				for (int OriginalIndex : AvailableCandidate.OriginalIndices){
-					Used[OriginalIndex] = true;
+				for (int OriginalIndex : AvailableCandidate.OriginalIndices) {
+					AUsed[OriginalIndex] = true;
 				}
 				LocallyOptimizedCandidates.push_back(std::move(AvailableCandidate));
 			}
-			AcceptedCandidates = std::move(LocallyOptimizedCandidates);
-
-			int AcceptedClusterCount = 0;
-			for (const TetClusterCandidate& Candidate : AcceptedCandidates){
-				if (!_AddClusterCandidate(Candidate, Result)){
-					std::cout << "[TEMPLATE][ADD FAILED] Builder=" << Candidate.BuilderName << " Type=" << Candidate.ClusterType << std::endl;
-					continue;
-				}
-
-				++AcceptedClusterCount;
-				std::cout << "[TEMPLATE][ACCEPT] Builder=" << Candidate.BuilderName << " Type=" << Candidate.ClusterType << " ChildCount=" << Candidate.OriginalIndices.size() << " Score=" << Candidate.Score << std::endl;
-			}
-
-			int SingleCount = 0;
-			for (int i = 0; i < Count; ++i){
-				if (Used[i]){
-					continue;
-				}
-				_AddSingleItem(AOriginalItems, i, Result);
-				Used[i] = true;
-				++SingleCount;
-			}
-
-			const bool CoverageValid = _ValidateBuildResultCoverage(Result, Count);
-			std::cout << "[TEMPLATE][SUMMARY] OriginalCount=" << Count << " BaseCandidateCount=" << BaseCandidates.size() << " AcceptedClusterCount=" << AcceptedClusterCount << " GapFillAttemptCount=" << GapFillAttemptCount << " GapFillSkippedClusterCount=" << GapFillSkippedClusterCount << " RectangleFilledClusterCount=" << RectangleFilledClusterCount << " RectangleFillerItemCount=" << RectangleFillerItemCount << " SingleCount=" << SingleCount << " PackedItemCount=" << Result.NestItems.size() << " MetaItemCount=" << Result.MetaItems.size() << " CoverageValid=" << CoverageValid << std::endl;
-			if (!CoverageValid){
-				std::cout << "[TEMPLATE][FALLBACK] Coverage invalid, use all singles." << std::endl;
-				return _BuildAllSingles(AOriginalItems);
-			}
-
-			return Result;
+			ACandidates = std::move(LocallyOptimizedCandidates);
 		}
+
 		TetClusterBuildResult CetClusterManager::_BuildAutoPairClusters(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions)
 		{
 			TetClusterBuildResult Result;
@@ -474,19 +510,19 @@ namespace ET {
 			std::vector<bool> WorthAutoPair(Count, false);
 			const long long TotalPairs = static_cast<long long>(Count) * static_cast<long long>(Count - 1) / 2;
 			long long CheckedPairs = 0;
-			
-			for (int i = 0; i < Count; ++i){
-				for (int j = i + 1; j < Count; ++j){
-					
-					if (!WorthAutoPair[i] && !WorthAutoPair[j]){
+
+			for (int i = 0; i < Count; ++i) {
+				for (int j = i + 1; j < Count; ++j) {
+
+					if (!WorthAutoPair[i] && !WorthAutoPair[j]) {
 						continue;
 					}
 					TetAutoPairCandidate Candidate;
-					if (_TryFindBestAutoPairCandidate(AOriginalItems, i, j, AOptions, Candidate)){
-						if (Candidate.Valid){
+					if (_TryFindBestAutoPairCandidate(AOriginalItems, i, j, AOptions, Candidate)) {
+						if (Candidate.Valid) {
 							AllCandidates.push_back(std::move(Candidate));
 						}
-						if (CheckedPairs == 1 || CheckedPairs % 100 == 0 || CheckedPairs == TotalPairs){
+						if (CheckedPairs == 1 || CheckedPairs % 100 == 0 || CheckedPairs == TotalPairs) {
 							const double Percent = TotalPairs > 0 ? 100.0 * static_cast<double>(CheckedPairs) / static_cast<double>(TotalPairs) : 100.0;
 							std::cout << "[AUTO_PAIR][PROGRESS] " << CheckedPairs << " / " << TotalPairs << " (" << Percent << "%)" << std::endl;
 						}
@@ -494,15 +530,15 @@ namespace ET {
 				}
 			}
 			std::cout << "[AUTO_PAIR][SEARCH DONE] CheckedPairs = " << CheckedPairs << ", CandidateCount = " << AllCandidates.size() << std::endl;
-			
+
 			std::sort(AllCandidates.begin(), AllCandidates.end(), [](const TetAutoPairCandidate& A, const TetAutoPairCandidate& AB) { return A.Score > AB.Score; });
 			std::cout << "[AUTO_PAIR][GLOBAL] CandidateCount = " << AllCandidates.size() << std::endl;
-			
-			for (const auto& Candidate : AllCandidates){
-				if (!Candidate.Valid){
+
+			for (const auto& Candidate : AllCandidates) {
+				if (!Candidate.Valid) {
 					continue;
 				}
-				if (Used[Candidate.AIndex] || Used[Candidate.BIndex]){
+				if (Used[Candidate.AIndex] || Used[Candidate.BIndex]) {
 					continue;
 				}
 				_AddAutoPairCluster(AOriginalItems, AOptions, Candidate, Result);
@@ -510,9 +546,9 @@ namespace ET {
 				Used[Candidate.BIndex] = true;
 				std::cout << "[AUTO_PAIR][GLOBAL ACCEPT] " << Candidate.AIndex << " + " << Candidate.BIndex << ", Score = " << Candidate.Score << ", ClusterW = " << Candidate.ClusterW << ", ClusterH = " << Candidate.ClusterH << std::endl;
 			}
-			
-			for (int i = 0; i < Count; ++i){
-				if (!Used[i]){
+
+			for (int i = 0; i < Count; ++i) {
+				if (!Used[i]) {
 					_AddSingleItem(AOriginalItems, i, Result);
 					Used[i] = true;
 				}
@@ -522,7 +558,7 @@ namespace ET {
 
 		bool CetClusterManager::_TryFindBestEdgePairCandidate(const CetTNestItemVector& AOriginalItems, int AIndex, int ABIndex, const TetNestOptions& AOptions, TetAutoPairCandidate& ABestCandidate)
 		{
-			if (AIndex < 0 || ABIndex < 0 || AIndex >= static_cast<int>(AOriginalItems.size()) || ABIndex >= static_cast<int>(AOriginalItems.size()) || AIndex == ABIndex){
+			if (AIndex < 0 || ABIndex < 0 || AIndex >= static_cast<int>(AOriginalItems.size()) || ABIndex >= static_cast<int>(AOriginalItems.size()) || AIndex == ABIndex) {
 				return false;
 			}
 			CetClusterGeometryHelper Geometry;
@@ -534,9 +570,9 @@ namespace ET {
 			double SpacingCoord = static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing));
 			TetEdgePairContext ctx = { AOriginalItems, AIndex, ABIndex, AOptions, std::max(0.0, SpacingCoord) + std::max(CET_CLUSTER_MIN_SAFETY_GAP, SpacingCoord * 0.001), std::max(1.0, std::min(std::max(_GetItemWidth(AOriginalItems[AIndex]), _GetItemHeight(AOriginalItems[AIndex])), std::max(_GetItemWidth(AOriginalItems[ABIndex]), _GetItemHeight(AOriginalItems[ABIndex])))), _IsSimilarTriangleByEdges(EdgesA, EdgesB) };
 			bool Found = false;
-			for (const TetEdgeInfo& EdgeA : EdgesA){
-				for (const TetEdgeInfo& EdgeB : EdgesB){
-					if (_EvaluateEdgePair(ctx, EdgeA, EdgeB, ABestCandidate)){
+			for (const TetEdgeInfo& EdgeA : EdgesA) {
+				for (const TetEdgeInfo& EdgeB : EdgesB) {
+					if (_EvaluateEdgePair(ctx, EdgeA, EdgeB, ABestCandidate)) {
 						Found = true;
 					}
 				}
@@ -546,14 +582,14 @@ namespace ET {
 
 		bool CetClusterManager::_TryFindBestAutoPairCandidate(const CetTNestItemVector& AOriginalItems, int AIndex, int ABIndex, const TetNestOptions& AOptions, TetAutoPairCandidate& ABestCandidate)
 		{
-			if (AIndex < 0 || ABIndex < 0 || AIndex >= static_cast<int>(AOriginalItems.size()) || ABIndex >= static_cast<int>(AOriginalItems.size())){
+			if (AIndex < 0 || ABIndex < 0 || AIndex >= static_cast<int>(AOriginalItems.size()) || ABIndex >= static_cast<int>(AOriginalItems.size())) {
 				return false;
 			}
-			if (_GetItemWidth(AOriginalItems[AIndex]) <= 0.0 || _GetItemHeight(AOriginalItems[AIndex]) <= 0.0 || _GetItemWidth(AOriginalItems[ABIndex]) <= 0.0 || _GetItemHeight(AOriginalItems[ABIndex]) <= 0.0){
+			if (_GetItemWidth(AOriginalItems[AIndex]) <= 0.0 || _GetItemHeight(AOriginalItems[AIndex]) <= 0.0 || _GetItemWidth(AOriginalItems[ABIndex]) <= 0.0 || _GetItemHeight(AOriginalItems[ABIndex]) <= 0.0) {
 				return false;
 			}
-			
-			if (_TryFindBestEdgePairCandidate(AOriginalItems, AIndex, ABIndex, AOptions, ABestCandidate)){
+
+			if (_TryFindBestEdgePairCandidate(AOriginalItems, AIndex, ABIndex, AOptions, ABestCandidate)) {
 				return true;
 			}
 			std::vector<double> Rotations = CetRotationUtils::BuildAllowedRotations(AOptions.Rotations);
@@ -564,7 +600,7 @@ namespace ET {
 		bool CetClusterManager::_TryBuildAutoPairAt(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const TetAutoPairBuildInput& AInput, TetAutoPairCandidate& ACandidate)
 		{
 			using NestItemType = CetTNestItemVector::value_type;
-			if (AInput.AIndex < 0 || AInput.BIndex < 0 || AInput.AIndex >= static_cast<int>(AOriginalItems.size()) || AInput.BIndex >= static_cast<int>(AOriginalItems.size())){
+			if (AInput.AIndex < 0 || AInput.BIndex < 0 || AInput.AIndex >= static_cast<int>(AOriginalItems.size()) || AInput.BIndex >= static_cast<int>(AOriginalItems.size())) {
 				return false;
 			}
 			const auto& AItem = AOriginalItems[AInput.AIndex];
@@ -580,15 +616,15 @@ namespace ET {
 			B.rotation(libnest2d::Radians(AInput.BRotation));
 			B.inflation(0);
 			const double SpacingCoord = static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing));
-			if (SpacingCoord > 0.0){
+			if (SpacingCoord > 0.0) {
 				const auto OldInflation = A.inflation();
 				A.inflation(static_cast<decltype(OldInflation)>(SpacingCoord));
-				if (NestItemType::intersects(A, B)){
+				if (NestItemType::intersects(A, B)) {
 					return false;
 				}
 				A.inflation(OldInflation);
 			}
-			else if (NestItemType::intersects(A, B)){
+			else if (NestItemType::intersects(A, B)) {
 				return false;
 			}
 			const auto BBA = A.boundingBox();
@@ -607,7 +643,7 @@ namespace ET {
 			const double MaxY = std::max(AMaxY, BMaxY);
 			const double ClusterW = MaxX - MinX;
 			const double ClusterH = MaxY - MinY;
-			if (ClusterW <= 0.0 || ClusterH <= 0.0){
+			if (ClusterW <= 0.0 || ClusterH <= 0.0) {
 				return false;
 			}
 			const double BinW = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth));
@@ -615,19 +651,19 @@ namespace ET {
 			const bool FitsNormally = ClusterW <= BinW && ClusterH <= BinH;
 			const bool QuarterTurnAllowed = CetRotationUtils::IsAllowedRotation(CET_CLUSTER_HALF_PI, AOptions.Rotations, 1e-9);
 			const bool FitsAfter90DegreeRotation = QuarterTurnAllowed && ClusterH <= BinW && ClusterW <= BinH;
-			if (!FitsNormally && !FitsAfter90DegreeRotation){
+			if (!FitsNormally && !FitsAfter90DegreeRotation) {
 				return false;
 			}
 			const double RotatedBBoxAreaA = std::abs((AMaxX - AMinX) * (AMaxY - AMinY));
 			const double RotatedBBoxAreaB = std::abs((BMaxX - BMinX) * (BMaxY - BMinY));
 			const double BeforeBBoxArea = RotatedBBoxAreaA + RotatedBBoxAreaB;
 			const double AfterBBoxArea = ClusterW * ClusterH;
-			if (BeforeBBoxArea <= 0.0 || AfterBBoxArea <= 0.0){
+			if (BeforeBBoxArea <= 0.0 || AfterBBoxArea <= 0.0) {
 				return false;
 			}
 			const double SaveArea = BeforeBBoxArea - AfterBBoxArea;
 			const double SaveRatio = SaveArea / BeforeBBoxArea;
-			if (SaveRatio < 0.03){
+			if (SaveRatio < 0.03) {
 				return false;
 			}
 			const double RealArea = std::abs(static_cast<double>(AItem.area())) + std::abs(static_cast<double>(BItem.area()));
@@ -651,7 +687,7 @@ namespace ET {
 
 		void CetClusterManager::_AddAutoPairCluster(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const TetAutoPairCandidate& ACandidate, TetClusterBuildResult& AResult)
 		{
-			if (!ACandidate.Valid){
+			if (!ACandidate.Valid) {
 				return;
 			}
 			auto ClusterItem = _MakeUnionNestItemFromCandidate(AOriginalItems, AOptions, ACandidate);
@@ -678,23 +714,23 @@ namespace ET {
 
 		double CetClusterManager::_CalcAutoPairScore(double ABeforeBBoxArea, double AAfterBBoxArea, double ARealArea, double AClusterW, double AClusterH)
 		{
-			if (ABeforeBBoxArea <= 0.0 || AAfterBBoxArea <= 0.0){
+			if (ABeforeBBoxArea <= 0.0 || AAfterBBoxArea <= 0.0) {
 				return -1.0;
 			}
 			double SaveArea = ABeforeBBoxArea - AAfterBBoxArea;
 			double SaveRatio = SaveArea / ABeforeBBoxArea;
 			double FillRatio = 0.0;
-			if (AAfterBBoxArea > 0.0){
+			if (AAfterBBoxArea > 0.0) {
 				FillRatio = ARealArea / AAfterBBoxArea;
 			}
-			
+
 			double Score = SaveRatio * 1000.0 + FillRatio * 100.0 - (AClusterW + AClusterH) * 0.000001;
 			return Score;
 		}
 
 		bool CetClusterManager::_RunAutoPairGridSearch(const CetTNestItemVector& AOriginalItems, int AIndex, int ABIndex, const TetNestOptions& AOptions, const TetAutoPairGridConfig& AConfig, TetAutoPairCandidate& AOutBest)
 		{
-			if (AConfig.Step <= 0.0){
+			if (AConfig.Step <= 0.0) {
 				return false;
 			}
 			const double AWidth = AConfig.RotAMaxX - AConfig.RotAMinX;
@@ -702,15 +738,15 @@ namespace ET {
 			const double BWidth = AConfig.RotBMaxX - AConfig.RotBMinX;
 			const double BHeight = AConfig.RotBMaxY - AConfig.RotBMinY;
 			const double BeforeBBoxArea = AWidth * AHeight + BWidth * BHeight;
-			if (BeforeBBoxArea <= 0.0){
+			if (BeforeBBoxArea <= 0.0) {
 				return false;
 			}
 			bool Found = false;
 			int CheckedCount = 0;
-			for (double OffsetY = AConfig.MinOffsetY; OffsetY <= AConfig.MaxOffsetY; OffsetY += AConfig.Step){
-				for (double OffsetX = AConfig.MinOffsetX; OffsetX <= AConfig.MaxOffsetX; OffsetX += AConfig.Step){
+			for (double OffsetY = AConfig.MinOffsetY; OffsetY <= AConfig.MaxOffsetY; OffsetY += AConfig.Step) {
+				for (double OffsetX = AConfig.MinOffsetX; OffsetX <= AConfig.MaxOffsetX; OffsetX += AConfig.Step) {
 					++CheckedCount;
-					if (CheckedCount > AConfig.MaxCheckedCount){
+					if (CheckedCount > AConfig.MaxCheckedCount) {
 						return Found;
 					}
 					const double QuickMinX = std::min(AConfig.RotAMinX, OffsetX + AConfig.RotBMinX);
@@ -719,11 +755,11 @@ namespace ET {
 					const double QuickMaxY = std::max(AConfig.RotAMaxY, OffsetY + AConfig.RotBMaxY);
 					const double QuickW = QuickMaxX - QuickMinX;
 					const double QuickH = QuickMaxY - QuickMinY;
-					if (QuickW <= 0.0 || QuickH <= 0.0){
+					if (QuickW <= 0.0 || QuickH <= 0.0) {
 						continue;
 					}
 					const double QuickAfterArea = QuickW * QuickH;
-					if (QuickAfterArea >= BeforeBBoxArea * 0.97){
+					if (QuickAfterArea >= BeforeBBoxArea * 0.97) {
 						continue;
 					}
 					TetAutoPairBuildInput Input;
@@ -734,10 +770,10 @@ namespace ET {
 					Input.BOffsetX = OffsetX;
 					Input.BOffsetY = OffsetY;
 					TetAutoPairCandidate Candidate;
-					if (!_TryBuildAutoPairAt(AOriginalItems, AOptions, Input, Candidate)){
+					if (!_TryBuildAutoPairAt(AOriginalItems, AOptions, Input, Candidate)) {
 						continue;
 					}
-					if (!Found || Candidate.Score > AOutBest.Score){
+					if (!Found || Candidate.Score > AOutBest.Score) {
 						AOutBest = Candidate;
 						Found = true;
 					}
@@ -754,7 +790,7 @@ namespace ET {
 				return Geometry.MakeNestItemFromProxyContour(Rectangle);
 				};
 
-			if (!ACandidate.Valid || ACandidate.AIndex < 0 || ACandidate.BIndex < 0 || ACandidate.AIndex >= static_cast<int>(AOriginalItems.size()) || ACandidate.BIndex >= static_cast<int>(AOriginalItems.size())){
+			if (!ACandidate.Valid || ACandidate.AIndex < 0 || ACandidate.BIndex < 0 || ACandidate.AIndex >= static_cast<int>(AOriginalItems.size()) || ACandidate.BIndex >= static_cast<int>(AOriginalItems.size())) {
 				return MakeRectangleFallback();
 			}
 
@@ -765,7 +801,7 @@ namespace ET {
 
 			CetClusterBoundary BoundaryBuilder;
 			TetClusterBoundaryResult BoundaryResult;
-			if (!BoundaryBuilder.BuildBoundaryWithResult(AOriginalItems, Transforms, AOptions, BoundaryResult)){
+			if (!BoundaryBuilder.BuildBoundaryWithResult(AOriginalItems, Transforms, AOptions, BoundaryResult)) {
 				std::cout << "[AUTO_PAIR][BOUNDARY][WARN] BuildBoundary failed, fallback to rectangle." << std::endl;
 				return MakeRectangleFallback();
 			}
@@ -782,15 +818,15 @@ namespace ET {
 		std::vector<TetEdgeInfo> CetClusterManager::_CollectEdges(const ClipperLib::Path& AContour)
 		{
 			std::vector<TetEdgeInfo> Result;
-			if (AContour.size() < 3){
+			if (AContour.size() < 3) {
 				return Result;
 			}
 			Result.reserve(AContour.size());
-			for (std::size_t i = 0; i < AContour.size(); ++i){
+			for (std::size_t i = 0; i < AContour.size(); ++i) {
 				const auto& Start = AContour[i];
 				const auto& End = AContour[(i + 1) % AContour.size()];
 				const double Length = _CalcEdgeLength(Start, End);
-				if (Length <= 1.0){
+				if (Length <= 1.0) {
 					continue;
 				}
 				const double DX = static_cast<double>(End.X - Start.X);
@@ -804,7 +840,7 @@ namespace ET {
 			}
 			std::sort(Result.begin(), Result.end(), [](const TetEdgeInfo& A, const TetEdgeInfo& AB) { return A.Length > AB.Length; });
 			constexpr std::size_t MAX_EDGE_COUNT = 24;
-			if (Result.size() > MAX_EDGE_COUNT){
+			if (Result.size() > MAX_EDGE_COUNT) {
 				Result.resize(MAX_EDGE_COUNT);
 			}
 			return Result;
@@ -812,22 +848,22 @@ namespace ET {
 
 		bool CetClusterManager::_IsSimilarTriangleByEdges(std::vector<TetEdgeInfo> AEdges, std::vector<TetEdgeInfo> ABEdges)
 		{
-			if (AEdges.size() != 3 || ABEdges.size() != 3){
+			if (AEdges.size() != 3 || ABEdges.size() != 3) {
 				return false;
 			}
 			auto LongerFirst = [](const TetEdgeInfo& A, const TetEdgeInfo& AB) { return A.Length > AB.Length; };
 			std::sort(AEdges.begin(), AEdges.end(), LongerFirst);
 			std::sort(ABEdges.begin(), ABEdges.end(), LongerFirst);
-			if (AEdges.front().Length <= 0.0 || ABEdges.front().Length <= 0.0){
+			if (AEdges.front().Length <= 0.0 || ABEdges.front().Length <= 0.0) {
 				return false;
 			}
 			const double Scale = AEdges.front().Length / ABEdges.front().Length;
 			constexpr double SHAPE_TOLERANCE = 0.08;
-			for (std::size_t i = 0; i < 3; ++i){
+			for (std::size_t i = 0; i < 3; ++i) {
 				const double ScaledBLength = ABEdges[i].Length * Scale;
 				const double Denominator = std::max(1.0, std::max(AEdges[i].Length, ScaledBLength));
 				const double RelativeError = std::abs(AEdges[i].Length - ScaledBLength) / Denominator;
-				if (RelativeError > SHAPE_TOLERANCE){
+				if (RelativeError > SHAPE_TOLERANCE) {
 					return false;
 				}
 			}
@@ -881,8 +917,8 @@ namespace ET {
 			if (EdgeLength <= 0.0) return false;
 			const double NormalX = -EdgeDY / EdgeLength, NormalY = EdgeDX / EdgeLength;
 			bool Found = false;
-			for (double Direction : { -1.0, 1.0 }){
-				for (const auto& BaseOffset : Astate.BaseOffsets){
+			for (double Direction : { -1.0, 1.0 }) {
+				for (const auto& BaseOffset : Astate.BaseOffsets) {
 					TetAutoPairBuildInput Input;
 					Input.AIndex = Actx.AIndex;
 					Input.BIndex = Actx.BIndex;
@@ -894,7 +930,7 @@ namespace ET {
 					if (!_TryBuildAutoPairAt(Actx.OriginalItems, Actx.Options, Input, Candidate)) continue;
 					double EdgeCoverage = std::max(0.0, std::min(1.0, Astate.MinLength / Actx.RefLength));
 					Candidate.Score += Astate.LengthMatchRatio * 60.0 + EdgeCoverage * 40.0 + (Actx.SimilarTrianglePair ? 50.0 : 0.0);
-					if (!Found || Candidate.Score > ABestCandidate.Score){
+					if (!Found || Candidate.Score > ABestCandidate.Score) {
 						ABestCandidate = Candidate;
 						Found = true;
 					}
@@ -906,9 +942,9 @@ namespace ET {
 		bool CetClusterManager::_RunGridSearchAllAngles(const TetAutoPairContext& Actx, const std::vector<double>& Arotations, TetAutoPairCandidate& ABestCandidate)
 		{
 			bool Found = false;
-			for (double ARot : Arotations){
-				for (double BRot : Arotations){
-					if (_EvaluateRotationPair(Actx, ARot, BRot, ABestCandidate)){
+			for (double ARot : Arotations) {
+				for (double BRot : Arotations) {
+					if (_EvaluateRotationPair(Actx, ARot, BRot, ABestCandidate)) {
 						Found = true;
 					}
 				}
@@ -974,7 +1010,7 @@ namespace ET {
 			TetAutoPairCandidate FineBest;
 			bool FineFound = _RunAutoPairGridSearch(Actx.OriginalItems, Actx.AIndex, Actx.BIndex, Actx.Options, FineConfig, FineBest);
 			const TetAutoPairCandidate& CurrentBest = FineFound ? FineBest : CoarseBest;
-			if (CurrentBest.Score > ABestCandidate.Score){
+			if (CurrentBest.Score > ABestCandidate.Score) {
 				ABestCandidate = CurrentBest;
 				return true;
 			}
@@ -983,34 +1019,34 @@ namespace ET {
 
 		bool CetClusterManager::_CanAcceptClusterCandidate(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const TetClusterCandidate& ACandidate, const std::vector<bool>& AUsed, int AOriginalCount)
 		{
-			if (AOriginalCount < 0 || AOriginalItems.size() != static_cast<std::size_t>(AOriginalCount)){
+			if (AOriginalCount < 0 || AOriginalItems.size() != static_cast<std::size_t>(AOriginalCount)) {
 				return false;
 			}
-			if (!ACandidate.Valid || ACandidate.OriginalIndices.empty() || ACandidate.OriginalIndices.size() != ACandidate.Transforms.size() || ACandidate.ProxyContour.size() < 3){
+			if (!ACandidate.Valid || ACandidate.OriginalIndices.empty() || ACandidate.OriginalIndices.size() != ACandidate.Transforms.size() || ACandidate.ProxyContour.size() < 3) {
 				return false;
 			}
-			if (ACandidate.ClusterWidth <= 0.0 || ACandidate.ClusterHeight <= 0.0 || ACandidate.ProxyArea <= 0.0){
+			if (ACandidate.ClusterWidth <= 0.0 || ACandidate.ClusterHeight <= 0.0 || ACandidate.ProxyArea <= 0.0) {
 				return false;
 			}
 			std::set<int> CandidateIds;
 			std::set<int> TransformIds;
-			for (int OriginalIndex : ACandidate.OriginalIndices){
-				if (OriginalIndex < 0 || OriginalIndex >= AOriginalCount || OriginalIndex >= static_cast<int>(AUsed.size()) || AUsed[OriginalIndex]){
+			for (int OriginalIndex : ACandidate.OriginalIndices) {
+				if (OriginalIndex < 0 || OriginalIndex >= AOriginalCount || OriginalIndex >= static_cast<int>(AUsed.size()) || AUsed[OriginalIndex]) {
 					return false;
 				}
-				if (!CandidateIds.insert(OriginalIndex).second){
+				if (!CandidateIds.insert(OriginalIndex).second) {
 					return false;
 				}
 			}
 
-			for (const TetItemTransform& Transform : ACandidate.Transforms){
-				if (Transform.OriginalId < 0 || Transform.OriginalId >= AOriginalCount){
+			for (const TetItemTransform& Transform : ACandidate.Transforms) {
+				if (Transform.OriginalId < 0 || Transform.OriginalId >= AOriginalCount) {
 					return false;
 				}
-				if (!std::isfinite(Transform.RelativeX) || !std::isfinite(Transform.RelativeY) || !std::isfinite(Transform.RelativeRotation)){
+				if (!std::isfinite(Transform.RelativeX) || !std::isfinite(Transform.RelativeY) || !std::isfinite(Transform.RelativeRotation)) {
 					return false;
 				}
-				if (!TransformIds.insert(Transform.OriginalId).second){
+				if (!TransformIds.insert(Transform.OriginalId).second) {
 					return false;
 				}
 			}
@@ -1020,7 +1056,7 @@ namespace ET {
 		CetNestItem CetClusterManager::_MakeClusterProxyItem(const TetClusterCandidate& ACandidate)
 		{
 			CetClusterGeometryHelper Geometry;
-			if (ACandidate.ProxyContour.size() >= 3){
+			if (ACandidate.ProxyContour.size() >= 3) {
 				return Geometry.MakeNestItemFromProxyContour(ACandidate.ProxyContour);
 			}
 			return Geometry.MakeNestItemFromProxyContour(Geometry.MakeRectangleContour(ACandidate.ClusterWidth, ACandidate.ClusterHeight));
@@ -1028,7 +1064,7 @@ namespace ET {
 
 		bool CetClusterManager::_AddClusterCandidate(const TetClusterCandidate& ACandidate, TetClusterBuildResult& AResult)
 		{
-			if (!ACandidate.Valid || ACandidate.OriginalIndices.empty() || ACandidate.Transforms.empty()){
+			if (!ACandidate.Valid || ACandidate.OriginalIndices.empty() || ACandidate.Transforms.empty()) {
 				return false;
 			}
 			CetNestItem ClusterItem = _MakeClusterProxyItem(ACandidate);
@@ -1049,7 +1085,7 @@ namespace ET {
 			TetClusterBuildResult Result;
 			Result.NestItems.reserve(AOriginalItems.size());
 			Result.MetaItems.reserve(AOriginalItems.size());
-			for (int i = 0; i < static_cast<int>(AOriginalItems.size()); ++i){
+			for (int i = 0; i < static_cast<int>(AOriginalItems.size()); ++i) {
 				_AddSingleItem(AOriginalItems, i, Result);
 			}
 			return Result;
@@ -1057,36 +1093,36 @@ namespace ET {
 
 		bool CetClusterManager::_ValidateBuildResultCoverage(const TetClusterBuildResult& AResult, int AOriginalCount)
 		{
-			if (AOriginalCount < 0){
+			if (AOriginalCount < 0) {
 				std::cout << "[TEMPLATE][COVERAGE ERROR] OriginalCount < 0." << std::endl;
 				return false;
 			}
-			if (AResult.NestItems.size() != AResult.MetaItems.size()){
+			if (AResult.NestItems.size() != AResult.MetaItems.size()) {
 				std::cout << "[TEMPLATE][COVERAGE ERROR] NestItems.size != MetaItems.size. NestItems=" << AResult.NestItems.size() << ", MetaItems=" << AResult.MetaItems.size() << std::endl;
 				return false;
 			}
 			std::vector<int> HitCount(static_cast<std::size_t>(AOriginalCount), 0);
-			for (std::size_t MetaIndex = 0; MetaIndex < AResult.MetaItems.size(); ++MetaIndex){
+			for (std::size_t MetaIndex = 0; MetaIndex < AResult.MetaItems.size(); ++MetaIndex) {
 				const TetMetaItem& Meta = AResult.MetaItems[MetaIndex];
-				if (Meta.PackedItemIndex < 0 || Meta.PackedItemIndex >= static_cast<int>(AResult.NestItems.size())){
+				if (Meta.PackedItemIndex < 0 || Meta.PackedItemIndex >= static_cast<int>(AResult.NestItems.size())) {
 					std::cout << "[TEMPLATE][COVERAGE ERROR] Invalid PackedItemIndex. MetaIndex=" << MetaIndex << ", PackedItemIndex=" << Meta.PackedItemIndex << ", NestItems.size=" << AResult.NestItems.size() << std::endl;
 					return false;
 				}
-				if (Meta.TransformData.empty()){
+				if (Meta.TransformData.empty()) {
 					std::cout << "[TEMPLATE][COVERAGE ERROR] Empty TransformData. MetaIndex=" << MetaIndex << ", ClusterType=" << Meta.ClusterType << std::endl;
 					return false;
 				}
-				for (const TetItemTransform& Transform : Meta.TransformData){
+				for (const TetItemTransform& Transform : Meta.TransformData) {
 					const int OriginalId = Transform.OriginalId;
-					if (OriginalId < 0 || OriginalId >= AOriginalCount){
+					if (OriginalId < 0 || OriginalId >= AOriginalCount) {
 						std::cout << "[TEMPLATE][COVERAGE ERROR] Invalid OriginalId. MetaIndex=" << MetaIndex << ", OriginalId=" << OriginalId << ", OriginalCount=" << AOriginalCount << std::endl;
 						return false;
 					}
 					++HitCount[OriginalId];
 				}
 			}
-			for (int OriginalId = 0; OriginalId < AOriginalCount; ++OriginalId){
-				if (HitCount[OriginalId] != 1){
+			for (int OriginalId = 0; OriginalId < AOriginalCount; ++OriginalId) {
+				if (HitCount[OriginalId] != 1) {
 					std::cout << "[TEMPLATE][COVERAGE ERROR] Original item coverage invalid. OriginalId=" << OriginalId << ", HitCount=" << HitCount[OriginalId] << std::endl;
 					return false;
 				}

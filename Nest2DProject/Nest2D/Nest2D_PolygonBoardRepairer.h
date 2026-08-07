@@ -33,10 +33,7 @@ namespace ET {
 			void Repair(std::size_t& ALayers);
 			
 			//CetPolygonBoardRepairer(CetTNestItemVector& ANestItems,const TetNestOptions& AOptions,const CetPolygonImpl& ABinPoly,double ABoardBinWidth,double ABoardBinHeight);
-		protected:
-			struct TetPlacementCandidate;			
-
-		protected:
+        protected:
 			void PackFromScratch(std::size_t& ALayers);
 			void _BuildRotations();
 

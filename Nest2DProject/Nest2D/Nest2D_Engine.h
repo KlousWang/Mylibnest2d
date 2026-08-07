@@ -19,21 +19,6 @@ namespace ET {
                 CetCoreObject::_WrapFuncs(); 
                 _WrapFunc("RunNesting", Type_Class_Func(RunNesting_Impl));
             }
-        protected:
-            struct TetNestProgressTracker {
-                int totalItems;
-                NestProgressCallback callback;
-                TetNestProgressTracker(int Atotal, NestProgressCallback Acb)
-                    : totalItems(Atotal), callback(Acb) {
-                }
-                void operator()(unsigned Acnt) const {
-                    if (callback != nullptr){
-                        int finished = totalItems - static_cast<int>(Acnt);
-                        callback(finished, totalItems);
-                    }
-                }
-            };
-
         public:
             CetNest2DEngine();
             ~CetNest2DEngine();

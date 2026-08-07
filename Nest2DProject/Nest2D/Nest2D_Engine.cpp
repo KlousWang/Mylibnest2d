@@ -50,10 +50,33 @@ namespace ET {
 
 		// Refill sheets with complete cluster proxies. Children stay glued through
 		// their metadata and are expanded only after this multi-sheet pass.
+		using ClusterBackfillPlacer = placers::_BottomLeftPlacer<CetPolygonImpl>;
+		using ClusterBackfillConfig = placers::BLConfig<CetPolygonImpl>;
+
+		bool RepackClusterItems(CetTNestItemVector& AItems, const std::vector<std::size_t>& AIndices, const Box& ABin, const ClusterBackfillConfig& AConfig, int ABinId)
+		{
+			CetTNestItemVector Repacked;
+			Repacked.reserve(AIndices.size());
+			for (std::size_t Index : AIndices){
+				CetNestItem Copy = AItems[Index];
+				Copy.translation(ClipperLib::IntPoint(0,0));
+				Copy.rotation(0.0);
+				Copy.inflation(0);
+				Repacked.push_back(std::move(Copy));
+			}
+			ClusterBackfillPlacer Repacker(ABin);
+			Repacker.configure(AConfig);
+			for (CetNestItem& Item : Repacked){
+				if (!Repacker.pack(Item)) return false;
+				Item.binId(ABinId);
+			}
+			for (std::size_t Position = 0; Position < AIndices.size(); ++Position) AItems[AIndices[Position]] = std::move(Repacked[Position]);
+			return true;
+		}
+
 		static std::size_t BackfillClusterSheets(CetTNestItemVector& AItems, const TetNestOptions& AOptions, std::size_t ALayers)
 		{
 			if (ALayers <= 1 || AItems.empty()) return ALayers;
-			using Placer = placers::_BottomLeftPlacer<CetPolygonImpl>;
 			const auto Width = NestUtils::ToNestCoord(AOptions.BinWidth);
 			const auto Height = NestUtils::ToNestCoord(AOptions.BinHeight);
 			Box Bin(Width, Height, { Width / 2, Height / 2 });
@@ -84,29 +107,8 @@ namespace ET {
 					const int Source = AItems[Index].binId();
 					std::vector<std::size_t> TrialIndices = TargetIndices;
 					TrialIndices.push_back(Index);
-					// Repack the target and candidate together. A preloaded layout can
-					// hide a valid fit behind an avoidable skyline; this bounded trial
-					// lets the complete proxies move while their children stay glued.
-					CetTNestItemVector Repacked;
-					Repacked.reserve(TrialIndices.size());
-					for (std::size_t TrialIndex : TrialIndices){
-						CetNestItem Copy = AItems[TrialIndex];
-						Copy.translation(ClipperLib::IntPoint(0,0));
-						Copy.rotation(0.0);
-						Copy.inflation(0);
-						Repacked.push_back(std::move(Copy));
-					}
-					Placer Repacker(Bin);
-					Repacker.configure(Config);
-					bool Success = true;
-					for (CetNestItem& Item : Repacked){
-						if (!Repacker.pack(Item)){ Success = false; break; }
-					}
-					if (!Success) continue;
-					for (std::size_t Position = 0; Position < TrialIndices.size(); ++Position){
-						Repacked[Position].binId(static_cast<int>(Target));
-						AItems[TrialIndices[Position]] = std::move(Repacked[Position]);
-					}
+					// Repack the target and candidate together while preserving glued proxies.
+					if (!RepackClusterItems(AItems, TrialIndices, Bin, Config, static_cast<int>(Target))) continue;
 					TargetIndices.push_back(Index);
 					AffectedBins.insert(Source);
 					++Moved;
@@ -122,26 +124,9 @@ namespace ET {
 				for (std::size_t Index = 0; Index < AItems.size(); ++Index){
 					if (AItems[Index].binId() == SourceBin) Indices.push_back(Index);
 				}
-				CetTNestItemVector Repacked;
-				Repacked.reserve(Indices.size());
-				for (std::size_t Index : Indices){
-					CetNestItem Copy = AItems[Index];
-					Copy.translation(ClipperLib::IntPoint(0,0));
-					Copy.rotation(0.0);
-					Copy.inflation(0);
-					Repacked.push_back(std::move(Copy));
-				}
-				Placer Repacker(Bin);
-				Repacker.configure(Config);
-				bool Success = true;
-				for (CetNestItem& Item : Repacked){
-					if (!Repacker.pack(Item)){ Success = false; break; }
-					Item.binId(SourceBin);
-				}
+				const bool Success = RepackClusterItems(AItems, Indices, Bin, Config, SourceBin);
 				if (Success){
-					for (std::size_t Position = 0; Position < Indices.size(); ++Position){
-						AItems[Indices[Position]] = std::move(Repacked[Position]);
-					}
+					// RepackClusterItems has already written the packed items back.
 				}
 				std::cout << "[NEST][CLUSTER REPACK] Bin=" << SourceBin
 					<< ", Items=" << Indices.size()

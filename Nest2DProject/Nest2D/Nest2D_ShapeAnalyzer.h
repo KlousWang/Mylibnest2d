@@ -33,6 +33,8 @@ namespace ET {
             void _NormalizePath(CetPath& APath);        
             bool _AnalyzeThickArcFeature(const CetPath& AContour,TetShapeFeature& AFeature);
             bool _AnalyzeSolidArcFeature(const CetPath& AContour,TetShapeFeature& AFeature);
+            bool _FindLongestContourEdge(const CetPath& AContour, std::size_t& AOutStartIndex, std::size_t& AOutEndIndex, double& AOutLength);
+            void _EvaluateThickArcCandidate(const CetPath& AContour, const TetShapeFeature& AFeature, const TetThickArcTestInput& AInput, TetArcCandidateLocal& AInOutBestCandidate);
         };
 
     }

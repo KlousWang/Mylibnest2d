@@ -36,8 +36,13 @@ namespace ET {
         protected:
             void _BuildSameShapeClusterCandidates(const CetTNestItemVector& AOriginalItems,const std::vector<TetShapeFeature>& AFeatures,const std::vector<int>& AIndices,const TetNestOptions& AOptions,std::vector<TetClusterCandidate>& AOutCandidates);
             bool _BuildMixedShapeCandidate(const CetTNestItemVector& AOriginalItems,const std::vector<TetShapeFeature>& AFeatures,const std::vector<int>& AIndices,const TetNestOptions& AOptions,TetClusterCandidate& AOutCandidate);
+            bool _BuildMixedShapeCandidateImpl(const CetTNestItemVector& AOriginalItems,const std::vector<TetShapeFeature>& AFeatures,const std::vector<int>& AIndices,const TetNestOptions& AOptions,TetClusterCandidate& AOutCandidate);
             bool _FindLargestBoardFitLayout(const CetTNestItemVector& AOriginalItems,const std::vector<int>& AIndices,const TetNestOptions& AOptions,std::size_t& AOutChildCount,TetClusterCandidate& AOutCandidate);
-            bool _BuildBestEdgePairCandidate(const CetTNestItemVector& AOriginalItems,const std::vector<int>& AIndices,const TetNestOptions& AOptions,TetClusterCandidate& AOutCandidate);
+            bool _BuildBestEdgePairCandidate(const TetEdgePairRequest& ARequest);
+            bool _PrepareEdgePairSearch(const TetEdgePairRequest& ARequest, TetEdgePairSearchContext& AOutContext);
+            bool _SearchEdgePairCandidates(const TetEdgePairRequest& ARequest, const TetEdgePairSearchContext& AContext, TetEdgePairSearchResult& AOutResult);
+            bool _TryBuildEdgePairCandidate(const TetEdgePairRequest& ARequest, const TetEdgePairSearchContext& AContext, const TetEdgePairPlacement& APlacement, TetClusterCandidate& AOutCandidate);
+            bool _BuildCustomLayoutCandidate(const CustomLayoutCandidateRequest& ARequest, TetClusterCandidate& AOutCandidate);
             bool _BuildBestLayoutCandidate(const CetTNestItemVector& AOriginalItems,const std::vector<int>& AIndices,const TetNestOptions& AOptions,TetClusterCandidate& AOutCandidate);
             bool _RemapCandidateIndices(const TetClusterCandidate& ASourceCandidate,const std::vector<int>& AIndices,TetClusterCandidate& AOutCandidate);
             bool _IsSupportedCustomShape(const TetShapeFeature& AFeature);

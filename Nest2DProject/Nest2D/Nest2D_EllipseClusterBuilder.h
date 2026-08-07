@@ -20,6 +20,7 @@ namespace ET {
             void BuildCandidates(const CetTNestItemVector& AItems,const std::vector<TetShapeFeature>& AFeatures,const std::vector<int>& AIndices,const TetNestOptions& AOptions,std::vector<TetClusterCandidate>& AOut);
 
         protected:
+            bool _BuildEllipseCandidateForLayout(const EllipseBuildRequest& ARequest, const TetEllipseLayout& ALayout, TetClusterCandidate& AOutCandidate);
             void _BuildSameSizeClusterCandidates(const CetTNestItemVector& AItems,const std::vector<TetShapeFeature>& AFeatures,const std::vector<int>& AIndices,const TetNestOptions& AOptions,std::vector<TetClusterCandidate>& AOut);
             bool _BuildClusterCandidate(const CetTNestItemVector& AItems,const std::vector<TetShapeFeature>& AFeatures,const std::vector<int>& AIndices,const TetNestOptions& AOptions,TetClusterCandidate& AOutCandidate);
             double _CalculateScore(const TetClusterCandidate& ACandidate, const TetNestOptions& AOptions);

@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Nest2D_GeometryUtils.h"
+#include"Nest2D_PrivateDataType.h"
 
 ET::NEST2DMANAGERLIB::CetGeometryUtils::CetGeometryUtils()
 {

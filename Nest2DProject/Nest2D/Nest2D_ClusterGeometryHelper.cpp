@@ -415,7 +415,7 @@ namespace ET {
             return FinalizeCandidate(AOriginalItems, AOptions, ACandidate, false);
         }
 
-        bool CetClusterGeometryHelper::FinalizeCandidate(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetClusterCandidate& ACandidate, bool AForceRectangleProxy) const
+        void CetClusterGeometryHelper::_ResetCandidate(TetClusterCandidate& ACandidate) const
         {
             ACandidate.Valid = false;
             ACandidate.ProxyContour.clear();
@@ -436,14 +436,10 @@ namespace ET {
             ACandidate.FragmentationRisk = 1.0;
             ACandidate.BaselineArea = 0.0;
             ACandidate.AreaSavingRatio = 0.0;
+        }
 
-            if (!_ValidateIndexAndTransforms(AOriginalItems, ACandidate)) return false;
-
-            double MinX = std::numeric_limits<double>::max();
-            double MinY = std::numeric_limits<double>::max();
-            double MaxX = std::numeric_limits<double>::lowest();
-            double MaxY = std::numeric_limits<double>::lowest();
-
+        bool CetClusterGeometryHelper::_CalculateCandidateGeometry(const CetTNestItemVector& AOriginalItems, const TetClusterCandidate& ACandidate, TetCandidateGeometryStats& AOutStats) const
+        {
             for (const TetItemTransform& Transform : ACandidate.Transforms){
                 const CetNestItem& Original = AOriginalItems[Transform.OriginalId];
                 const CetPath Child = TransformContour(GetIdentityContour(Original), Transform.RelativeRotation, Transform.RelativeX, Transform.RelativeY);
@@ -453,31 +449,23 @@ namespace ET {
                 double ChildMaxY = 0.0;
                 if (!GetBounds(Child, ChildMinX, ChildMinY, ChildMaxX, ChildMaxY)) return false;
 
-                MinX = std::min(MinX, ChildMinX);
-                MinY = std::min(MinY, ChildMinY);
-                MaxX = std::max(MaxX, ChildMaxX);
-                MaxY = std::max(MaxY, ChildMaxY);
+                AOutStats.MinX = std::min(AOutStats.MinX, ChildMinX);
+                AOutStats.MinY = std::min(AOutStats.MinY, ChildMinY);
+                AOutStats.MaxX = std::max(AOutStats.MaxX, ChildMaxX);
+                AOutStats.MaxY = std::max(AOutStats.MaxY, ChildMaxY);
 
                 const double OriginalArea = std::abs(static_cast<double>(Original.area()));
                 const double ChildBoxArea = (ChildMaxX - ChildMinX) * (ChildMaxY - ChildMinY);
                 if (!std::isfinite(OriginalArea) || !std::isfinite(ChildBoxArea) || OriginalArea <= 0.0 || ChildBoxArea <= 0.0) return false;
-                ACandidate.RealArea += OriginalArea;
-                ACandidate.BaselineArea += ChildBoxArea;
+                AOutStats.RealArea += OriginalArea;
+                AOutStats.BaselineArea += ChildBoxArea;
             }
 
-            if (!std::isfinite(ACandidate.RealArea) || ACandidate.RealArea <= 0.0 || !std::isfinite(ACandidate.BaselineArea)) return false;
+            return std::isfinite(AOutStats.RealArea) && AOutStats.RealArea > 0.0 && std::isfinite(AOutStats.BaselineArea);
+        }
 
-            ClipperLib::Paths TransformedChildContours;
-            if (!_BuildTransformedChildContours(AOriginalItems, ACandidate, TransformedChildContours)) return false;
-
-            ACandidate.OccupiedArea = _CalculateUnionArea(TransformedChildContours);
-            if (!std::isfinite(ACandidate.OccupiedArea) || ACandidate.OccupiedArea <= 0.0) return false;
-
-            ACandidate.ReservedArea = _CalculateReservedArea(TransformedChildContours, AOptions, ACandidate.OccupiedArea);
-            if (!std::isfinite(ACandidate.ReservedArea) || ACandidate.ReservedArea <= 0.0){
-                ACandidate.ReservedArea = ACandidate.OccupiedArea;
-            }
-
+        void CetClusterGeometryHelper::_BuildCandidateProxy(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetClusterCandidate& ACandidate, bool AForceRectangleProxy) const
+        {
             if (!AForceRectangleProxy){
                 CetClusterBoundary BoundaryBuilder;
                 TetClusterBoundaryResult BoundaryResult;
@@ -487,14 +475,17 @@ namespace ET {
                     ACandidate.ProxyContourNormalized = false;
                 }
             }
+        }
 
+        bool CetClusterGeometryHelper::_NormalizeCandidateProxy(TetClusterCandidate& ACandidate, const TetCandidateGeometryStats& AStats) const
+        {
             for (TetItemTransform& Transform : ACandidate.Transforms){
-                Transform.RelativeX -= MinX;
-                Transform.RelativeY -= MinY;
+                Transform.RelativeX -= AStats.MinX;
+                Transform.RelativeY -= AStats.MinY;
             }
 
-            const double Width = MaxX - MinX;
-            const double Height = MaxY - MinY;
+            const double Width = AStats.MaxX - AStats.MinX;
+            const double Height = AStats.MaxY - AStats.MinY;
             if (!std::isfinite(Width) || !std::isfinite(Height) || Width <= 0.0 || Height <= 0.0) return false;
 
             if (ACandidate.ProxyContour.size() < 3){
@@ -503,8 +494,8 @@ namespace ET {
             }
             else {
                 for (CetInpoint& Point : ACandidate.ProxyContour){
-                    Point.X -= static_cast<ClipperLib::cInt>(std::llround(MinX));
-                    Point.Y -= static_cast<ClipperLib::cInt>(std::llround(MinY));
+                    Point.X -= static_cast<ClipperLib::cInt>(std::llround(AStats.MinX));
+                    Point.Y -= static_cast<ClipperLib::cInt>(std::llround(AStats.MinY));
                 }
             }
 
@@ -518,7 +509,11 @@ namespace ET {
             ACandidate.ClusterHeight = ProxyMaxY - ProxyMinY;
             ACandidate.ProxyArea = std::abs(static_cast<double>(ClipperLib::Area(ACandidate.ProxyContour)));
             if (!std::isfinite(ACandidate.ProxyArea) || ACandidate.ProxyArea <= 0.0) return false;
+            return true;
+        }
 
+        bool CetClusterGeometryHelper::_CalculateCandidateMetrics(TetClusterCandidate& ACandidate, const TetNestOptions& AOptions) const
+        {
             const double AreaTolerance = _GetAreaTolerance(ACandidate.ProxyArea);
             ACandidate.FillRatio = ACandidate.ProxyArea > AreaTolerance ? std::clamp(ACandidate.RealArea / ACandidate.ProxyArea, 0.0, 1.0) : 0.0;
             if (!std::isfinite(ACandidate.FillRatio)) ACandidate.FillRatio = 0.0;
@@ -559,7 +554,29 @@ namespace ET {
                 0.0,
                 1.0);
             ACandidate.SheetReuseScore = 1.0 - ACandidate.FragmentationRisk;
+            return true;
+        }
 
+        bool CetClusterGeometryHelper::FinalizeCandidate(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetClusterCandidate& ACandidate, bool AForceRectangleProxy) const
+        {
+            _ResetCandidate(ACandidate);
+            if (!_ValidateIndexAndTransforms(AOriginalItems, ACandidate)) return false;
+
+            TetCandidateGeometryStats GeometryStats;
+            if (!_CalculateCandidateGeometry(AOriginalItems, ACandidate, GeometryStats)) return false;
+            ACandidate.RealArea = GeometryStats.RealArea;
+            ACandidate.BaselineArea = GeometryStats.BaselineArea;
+
+            ClipperLib::Paths TransformedChildContours;
+            if (!_BuildTransformedChildContours(AOriginalItems, ACandidate, TransformedChildContours)) return false;
+            ACandidate.OccupiedArea = _CalculateUnionArea(TransformedChildContours);
+            if (!std::isfinite(ACandidate.OccupiedArea) || ACandidate.OccupiedArea <= 0.0) return false;
+            ACandidate.ReservedArea = _CalculateReservedArea(TransformedChildContours, AOptions, ACandidate.OccupiedArea);
+            if (!std::isfinite(ACandidate.ReservedArea) || ACandidate.ReservedArea <= 0.0) ACandidate.ReservedArea = ACandidate.OccupiedArea;
+
+            _BuildCandidateProxy(AOriginalItems, AOptions, ACandidate, AForceRectangleProxy);
+            if (!_NormalizeCandidateProxy(ACandidate, GeometryStats)) return false;
+            if (!_CalculateCandidateMetrics(ACandidate, AOptions)) return false;
             ACandidate.ProxyContourNormalized = true;
             if (!_FitsBoardBounds(ACandidate, AOptions)) return false;
             if (!ValidateCandidateGeometry(AOriginalItems, AOptions, ACandidate)) return false;

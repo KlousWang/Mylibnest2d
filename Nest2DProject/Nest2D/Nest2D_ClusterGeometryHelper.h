@@ -37,6 +37,13 @@ namespace ET {
             bool CanPlaceCandidateCopiesOnBoard(const TetClusterCandidate& ACandidate, const TetNestOptions& AOptions, std::size_t ARequiredCopies) const;
 
         protected:
+
+            void _ResetCandidate(TetClusterCandidate& ACandidate) const;
+            bool _CalculateCandidateGeometry(const CetTNestItemVector& AOriginalItems, const TetClusterCandidate& ACandidate, TetCandidateGeometryStats& AOutStats) const;
+            void _BuildCandidateProxy(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetClusterCandidate& ACandidate, bool AForceRectangleProxy) const;
+            bool _NormalizeCandidateProxy(TetClusterCandidate& ACandidate, const TetCandidateGeometryStats& AStats) const;
+            bool _CalculateCandidateMetrics(TetClusterCandidate& ACandidate, const TetNestOptions& AOptions) const;
+
             bool _ValidateIndexAndTransforms(const CetTNestItemVector& AOriginalItems, const TetClusterCandidate& ACandidate) const;
             bool _ValidateChildContainment(const CetTNestItemVector& AOriginalItems, const TetClusterCandidate& ACandidate) const;
             bool _ValidateChildSpacing(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const TetClusterCandidate& ACandidate, bool ALogRejection) const;

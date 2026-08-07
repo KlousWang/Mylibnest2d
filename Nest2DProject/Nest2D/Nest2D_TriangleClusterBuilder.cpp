@@ -169,13 +169,9 @@ namespace ET {
             double HA = _GetItemHeight(AItem);
             double WB = _GetItemWidth(ABItem);
             double HB = _GetItemHeight(ABItem);
-            bool SameDirection = _NearlyEqual(WA, WB, 0.05) && _NearlyEqual(HA, HB, 0.05);
-            bool SwappedDirection = _NearlyEqual(WA, HB, 0.05) && _NearlyEqual(HA, WB, 0.05);
+            bool SameDirection = CetClusterMathUtils::NearlyEqual(WA, WB, 0.05) && CetClusterMathUtils::NearlyEqual(HA, HB, 0.05);
+            bool SwappedDirection = CetClusterMathUtils::NearlyEqual(WA, HB, 0.05) && CetClusterMathUtils::NearlyEqual(HA, WB, 0.05);
             return SameDirection || SwappedDirection;
-        }
-        bool CetTriangleClusterBuilder::_NearlyEqual(double A, double AB, double ARelTol)
-        {
-            return CetClusterMathUtils::NearlyEqual(A, AB, ARelTol);
         }
         double CetTriangleClusterBuilder::_GetItemWidth(const CetNestItem& AItem)
         {
@@ -330,6 +326,31 @@ namespace ET {
             }
             std::cout << "[TRIANGLE][RECTANGLE][BUILD] GroupCount=" << Groups.size() << ", NewCandidateCount=" << AOutCandidates.size() - OldCandidateCount << ", HandledCount=" << AOutHandledIndices.size() << std::endl;
         }
+        bool CetTriangleClusterBuilder::_SelectRightTriangleRectangleLayout(const RightTriangleRectangleRequest& ARequest, const std::vector<TetRightTriangleRectangleLayout>& ALayouts, TetClusterCandidate& AOutCandidate)
+        {
+            bool HasBest = false;
+            TetClusterCandidate BestCandidate;
+            double BestBoxArea = std::numeric_limits<double>::infinity();
+            const std::size_t MaxLayoutChecks = std::min<std::size_t>(ALayouts.size(), 6);
+            for (std::size_t LayoutIndex = 0; LayoutIndex < MaxLayoutChecks; ++LayoutIndex){
+                const TetRightTriangleRectangleLayout& Layout = ALayouts[LayoutIndex];
+                TetClusterCandidate Candidate;
+                if (!_BuildRightTriangleRectangleLayoutCandidate(ARequest.OriginalItems, ARequest.Features, ARequest.Indices, ARequest.Options, Layout.Rows, Layout.Cols, ARequest.CellWidth, ARequest.CellHeight, ARequest.AxisGap, ARequest.CellGap, ARequest.HalfTurn, Candidate)) continue;
+                Candidate.Score = _CalculateRightTriangleRectangleScore(Candidate, ARequest.PairCount, Layout.Rows, Layout.Cols);
+                const double CandidateBoxArea = Candidate.ClusterWidth * Candidate.ClusterHeight;
+                const bool SmallerBox = CandidateBoxArea + 1.0 < BestBoxArea;
+                const bool SameBoxBetterScore = std::abs(CandidateBoxArea - BestBoxArea) <= 1.0 && Candidate.Score > BestCandidate.Score;
+                if (!HasBest || SmallerBox || SameBoxBetterScore){
+                    HasBest = true;
+                    BestBoxArea = CandidateBoxArea;
+                    BestCandidate = std::move(Candidate);
+                }
+            }
+            if (!HasBest) return false;
+            AOutCandidate = std::move(BestCandidate);
+            return true;
+        }
+
         bool CetTriangleClusterBuilder::_BuildRightTriangleRectangleClusterCandidate(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const std::vector<int>& AIndices, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate)
         {
             AOutCandidate = TetClusterCandidate{};
@@ -424,31 +445,8 @@ namespace ET {
                 }
                 return A.Rows < AB.Rows;
                 });
-            bool HasBest = false;
-            TetClusterCandidate BestCandidate;
-            double BestBoxArea = std::numeric_limits<double>::infinity();
-            const std::size_t MaxLayoutChecks = std::min<std::size_t>(Layouts.size(), 6);
-            for (std::size_t LayoutIndex = 0; LayoutIndex < MaxLayoutChecks; ++LayoutIndex){
-                const TetRightTriangleRectangleLayout& Layout = Layouts[LayoutIndex];
-                TetClusterCandidate Candidate;
-                if (!_BuildRightTriangleRectangleLayoutCandidate(AOriginalItems, AFeatures, AIndices, AOptions, Layout.Rows, Layout.Cols, CellWidth, CellHeight, AxisGap, CellGap, HalfTurn, Candidate)){
-                    continue;
-                }
-                Candidate.Score = _CalculateRightTriangleRectangleScore(Candidate, PairCount, Layout.Rows, Layout.Cols);
-                const double CandidateBoxArea = Candidate.ClusterWidth * Candidate.ClusterHeight;
-                const bool SmallerBox = CandidateBoxArea + 1.0 < BestBoxArea;
-                const bool SameBoxBetterScore = std::abs(CandidateBoxArea - BestBoxArea) <= 1.0 && Candidate.Score > BestCandidate.Score;
-                if (!HasBest || SmallerBox || SameBoxBetterScore){
-                    HasBest = true;
-                    BestBoxArea = CandidateBoxArea;
-                    BestCandidate = std::move(Candidate);
-                }
-            }
-            if (!HasBest){
-                return false;
-            }
-            AOutCandidate = std::move(BestCandidate);
-            return true;
+            const RightTriangleRectangleRequest Request{ AOriginalItems, AFeatures, AIndices, AOptions, PairCount, CellWidth, CellHeight, AxisGap, CellGap, HalfTurn };
+            return _SelectRightTriangleRectangleLayout(Request, Layouts, AOutCandidate);
         }
         bool CetTriangleClusterBuilder::_BuildRightTriangleRectangleLayoutCandidate(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const std::vector<int>& AIndices, const TetNestOptions& AOptions, int ACellRows, int ACellCols, double ACellWidth, double ACellHeight, double AAxisGap, double ACellGap, double AHalfTurn, TetClusterCandidate& AOutCandidate)
         {
@@ -542,7 +540,7 @@ namespace ET {
             if (AA.ShapeType != MetShapeType::TriangleLike ||AB.ShapeType != MetShapeType::TriangleLike){
                 return false;
             }
-            for (int i = 0; i < 3; ++i) if (!_NearlyEqual(AA.TriangleSides[i], AB.TriangleSides[i], 0.03)) return false;
+            for (int i = 0; i < 3; ++i) if (!CetClusterMathUtils::NearlyEqual(AA.TriangleSides[i], AB.TriangleSides[i], 0.03)) return false;
             return true;
         }
         void CetTriangleClusterBuilder::_BuildAnyTriangleClusterCandidates(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const std::vector<int>& AIndices, const TetNestOptions& AOptions, std::vector<TetClusterCandidate>& AOutCandidates)
@@ -803,7 +801,8 @@ namespace ET {
             for (int AEdgeIndex = 0; AEdgeIndex < 3; ++AEdgeIndex){
                 for (int BEdgeIndex = 0; BEdgeIndex < 3; ++BEdgeIndex){
                     TetClusterCandidate Candidate;
-                    if (!_TryBuildTriangleEdgePairCandidate(AOriginalItems, AFeatures, AAIndex, ABIndex, AEdgeIndex, BEdgeIndex, AOptions, Candidate)){
+                    TriangleEdgePairRequest Request{ AOriginalItems, AFeatures, AAIndex, ABIndex, AEdgeIndex, BEdgeIndex, AOptions, Candidate };
+                    if (!_TryBuildTriangleEdgePairCandidate(Request)){
                         continue;
                     }
                     if (!HasBest || Candidate.Score > BestCandidate.Score){
@@ -823,15 +822,15 @@ namespace ET {
             AOutCandidate = std::move(BestCandidate);
             return true;
         }
-        bool CetTriangleClusterBuilder::_TryBuildTriangleEdgePairCandidate(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, int AAIndex, int ABIndex, int AEdgeIndex, int ABEdgeIndex, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate)
+        bool CetTriangleClusterBuilder::_PrepareTriangleEdgePair(const TriangleEdgePairRequest& ARequest, TriangleEdgePairGeometry& AOutGeometry)
         {
-            if (AAIndex < 0 || ABIndex < 0 || AAIndex == ABIndex ||
-                AAIndex >= static_cast<int>(AOriginalItems.size()) || ABIndex >= static_cast<int>(AOriginalItems.size()) ||
-                AAIndex >= static_cast<int>(AFeatures.size()) || ABIndex >= static_cast<int>(AFeatures.size())){
+            if (ARequest.AIndex < 0 || ARequest.BIndex < 0 || ARequest.AIndex == ARequest.BIndex ||
+                ARequest.AIndex >= static_cast<int>(ARequest.OriginalItems.size()) || ARequest.BIndex >= static_cast<int>(ARequest.OriginalItems.size()) ||
+                ARequest.AIndex >= static_cast<int>(ARequest.Features.size()) || ARequest.BIndex >= static_cast<int>(ARequest.Features.size())){
                 return false;
             }
-            const TetShapeFeature& FeatureA = AFeatures[AAIndex];
-            const TetShapeFeature& FeatureB = AFeatures[ABIndex];
+            const TetShapeFeature& FeatureA = ARequest.Features[ARequest.AIndex];
+            const TetShapeFeature& FeatureB = ARequest.Features[ARequest.BIndex];
             if (FeatureA.ShapeType != MetShapeType::TriangleLike || FeatureB.ShapeType != MetShapeType::TriangleLike){
                 return false;
             }
@@ -839,8 +838,8 @@ namespace ET {
                 return false;
             }
             CetClusterGeometryHelper Geometry;
-            CetPath ContourA = Geometry.GetIdentityContour(AOriginalItems[AAIndex]);
-            CetPath ContourB = Geometry.GetIdentityContour(AOriginalItems[ABIndex]);
+            CetPath ContourA = Geometry.GetIdentityContour(ARequest.OriginalItems[ARequest.AIndex]);
+            CetPath ContourB = Geometry.GetIdentityContour(ARequest.OriginalItems[ARequest.BIndex]);
             auto removeDuplicateStartEnd = [](CetPath& Apath) {
                 if (Apath.size() > 3 && Apath.front().X == Apath.back().X && Apath.front().Y == Apath.back().Y){
                     Apath.pop_back();
@@ -853,113 +852,124 @@ namespace ET {
             }
             TetTriangleEdgePose EdgeA;
             TetTriangleEdgePose EdgeB;
-            if (!_GetTriangleEdgePose(ContourA, AEdgeIndex, EdgeA) || !_GetTriangleEdgePose(ContourB, ABEdgeIndex, EdgeB)){
+            if (!_GetTriangleEdgePose(ContourA, ARequest.AEdgeIndex, EdgeA) || !_GetTriangleEdgePose(ContourB, ARequest.BEdgeIndex, EdgeB)){
                 return false;
             }
-            if (!_NearlyEqual(EdgeA.Length, EdgeB.Length, 0.03)){
+            if (!CetClusterMathUtils::NearlyEqual(EdgeA.Length, EdgeB.Length, 0.03)){
                 return false;
             }
             CetInpoint AThird;
             CetInpoint BThird;
-            if (!_GetTriangleThirdPoint(ContourA, AEdgeIndex, AThird) || !_GetTriangleThirdPoint(ContourB, ABEdgeIndex, BThird)){
+            if (!_GetTriangleThirdPoint(ContourA, ARequest.AEdgeIndex, AThird) || !_GetTriangleThirdPoint(ContourB, ARequest.BEdgeIndex, BThird)){
                 return false;
             }
-            const double ASide = _Cross(EdgeA.Start, EdgeA.End, AThird);
-            if (std::abs(ASide) <= 1.0){
+            AOutGeometry.ASide = _Cross(EdgeA.Start, EdgeA.End, AThird);
+            if (std::abs(AOutGeometry.ASide) <= 1.0){
                 return false;
             }
             const double TargetRotationB = EdgeA.Angle + CET_CLUSTER_PI - EdgeB.Angle;
-            double RotationB = 0.0;
-            if (!CetRotationUtils::SnapToAllowedRotation(TargetRotationB, AOptions.Rotations, RotationB, 0.0523598775598299)){
+            if (!CetRotationUtils::SnapToAllowedRotation(TargetRotationB, ARequest.Options.Rotations, AOutGeometry.RotationB, 0.0523598775598299)){
                 return false;
             }
             double AMinX = 0.0, AMinY = 0.0, AMaxX = 0.0, AMaxY = 0.0;
             if (!Geometry.GetBounds(ContourA, AMinX, AMinY, AMaxX, AMaxY)){
                 return false;
             }
-            const double ATranslationX = -AMinX;
-            const double ATranslationY = -AMinY;
-            const double AStartX = static_cast<double>(EdgeA.Start.X) + ATranslationX;
-            const double AStartY = static_cast<double>(EdgeA.Start.Y) + ATranslationY;
-            const double AEndX = static_cast<double>(EdgeA.End.X) + ATranslationX;
-            const double AEndY = static_cast<double>(EdgeA.End.Y) + ATranslationY;
-            const double EdgeDX = AEndX - AStartX;
-            const double EdgeDY = AEndY - AStartY;
-            const double EdgeLen = std::sqrt(EdgeDX * EdgeDX + EdgeDY * EdgeDY);
+            AOutGeometry.TranslationAX = -AMinX;
+            AOutGeometry.TranslationAY = -AMinY;
+            AOutGeometry.AStartX = static_cast<double>(EdgeA.Start.X) + AOutGeometry.TranslationAX;
+            AOutGeometry.AStartY = static_cast<double>(EdgeA.Start.Y) + AOutGeometry.TranslationAY;
+            const double AEndX = static_cast<double>(EdgeA.End.X) + AOutGeometry.TranslationAX;
+            const double AEndY = static_cast<double>(EdgeA.End.Y) + AOutGeometry.TranslationAY;
+            AOutGeometry.EdgeDX = AEndX - AOutGeometry.AStartX;
+            AOutGeometry.EdgeDY = AEndY - AOutGeometry.AStartY;
+            const double EdgeLen = std::sqrt(AOutGeometry.EdgeDX * AOutGeometry.EdgeDX + AOutGeometry.EdgeDY * AOutGeometry.EdgeDY);
             if (EdgeLen <= 0.0){
                 return false;
             }
-            const double UnitX = EdgeDX / EdgeLen;
-            const double UnitY = EdgeDY / EdgeLen;
-            const double RequiredGap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
+            AOutGeometry.UnitX = AOutGeometry.EdgeDX / EdgeLen;
+            AOutGeometry.UnitY = AOutGeometry.EdgeDY / EdgeLen;
+            const double RequiredGap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(ARequest.Options.Spacing)));
             const double SafetyGap = RequiredGap > 0.0 ? std::max(CET_CLUSTER_MIN_SAFETY_GAP, RequiredGap * 0.001) : 0.0;
-            const double Gap = RequiredGap + SafetyGap;
-            const CetInpoint RotatedBStart = _RotatePoint(EdgeB.Start, RotationB);
-            const CetInpoint RotatedBEnd = _RotatePoint(EdgeB.End, RotationB);
-            const CetInpoint RotatedBThird = _RotatePoint(BThird, RotationB);
-            const double AMidX = (AStartX + AEndX) * 0.5;
-            const double AMidY = (AStartY + AEndY) * 0.5;
+            AOutGeometry.Gap = RequiredGap + SafetyGap;
+            const CetInpoint RotatedBStart = _RotatePoint(EdgeB.Start, AOutGeometry.RotationB);
+            const CetInpoint RotatedBEnd = _RotatePoint(EdgeB.End, AOutGeometry.RotationB);
+            AOutGeometry.RotatedBThird = _RotatePoint(BThird, AOutGeometry.RotationB);
+            AOutGeometry.AMidX = (AOutGeometry.AStartX + AEndX) * 0.5;
+            AOutGeometry.AMidY = (AOutGeometry.AStartY + AEndY) * 0.5;
             const double BMidX = (static_cast<double>(RotatedBStart.X) + static_cast<double>(RotatedBEnd.X)) * 0.5;
             const double BMidY = (static_cast<double>(RotatedBStart.Y) + static_cast<double>(RotatedBEnd.Y)) * 0.5;
-            std::vector<TetBaseOffset> BaseOffsets;
-            BaseOffsets.push_back({ AMidX - BMidX, AMidY - BMidY });
+            AOutGeometry.BMidX = BMidX;
+            AOutGeometry.BMidY = BMidY;
+            AOutGeometry.LengthMatchRatio = std::min(EdgeA.Length, EdgeB.Length) / std::max(EdgeA.Length, EdgeB.Length);
+            return true;
+        }
+
+        bool CetTriangleClusterBuilder::_BuildTriangleEdgePairCandidateAtOffset(const TriangleEdgePairRequest& ARequest, const TriangleEdgePairGeometry& AGeometry, const TetBaseOffset& ABaseOffset, TetClusterCandidate& AOutCandidate)
+        {
+            const double BThirdBaseX = static_cast<double>(AGeometry.RotatedBThird.X) + ABaseOffset.X;
+            const double BThirdBaseY = static_cast<double>(AGeometry.RotatedBThird.Y) + ABaseOffset.Y;
+            const double BaseAPX = BThirdBaseX - AGeometry.AStartX;
+            const double BaseAPY = BThirdBaseY - AGeometry.AStartY;
+            const double BSideBase = AGeometry.EdgeDX * BaseAPY - AGeometry.EdgeDY * BaseAPX;
+            if (AGeometry.ASide * BSideBase >= 0.0){
+                return false;
+            }
+            const double OffsetSign = BSideBase > 0.0 ? 1.0 : -1.0;
+            const double BTranslationX = ABaseOffset.X + (-AGeometry.UnitY) * OffsetSign * AGeometry.Gap;
+            const double BTranslationY = ABaseOffset.Y + AGeometry.UnitX * OffsetSign * AGeometry.Gap;
+            const double BThirdX = static_cast<double>(AGeometry.RotatedBThird.X) + BTranslationX;
+            const double BThirdY = static_cast<double>(AGeometry.RotatedBThird.Y) + BTranslationY;
+            const double APX = BThirdX - AGeometry.AStartX;
+            const double APY = BThirdY - AGeometry.AStartY;
+            const double BSide = AGeometry.EdgeDX * APY - AGeometry.EdgeDY * APX;
+            if (AGeometry.ASide * BSide >= 0.0){
+                return false;
+            }
+
+            AOutCandidate.BuilderName = "TriangleBuilder";
+            AOutCandidate.ClusterType = "AnyTriangleEdgePair";
+            AOutCandidate.OriginalIndices = { ARequest.AIndex, ARequest.BIndex };
+            TetItemTransform TransformA;
+            TransformA.OriginalId = ARequest.AIndex;
+            TransformA.RelativeX = AGeometry.TranslationAX;
+            TransformA.RelativeY = AGeometry.TranslationAY;
+            TransformA.RelativeRotation = 0.0;
+            TetItemTransform TransformB;
+            TransformB.OriginalId = ARequest.BIndex;
+            TransformB.RelativeX = BTranslationX;
+            TransformB.RelativeY = BTranslationY;
+            TransformB.RelativeRotation = AGeometry.RotationB;
+            AOutCandidate.Transforms = { TransformA, TransformB };
+            AOutCandidate.Confidence = 0.90;
+
+            CetClusterGeometryHelper Geometry;
+            if (!Geometry.FinalizeCandidate(ARequest.OriginalItems, ARequest.Options, AOutCandidate)){
+                return false;
+            }
+            AOutCandidate.Score += AGeometry.LengthMatchRatio * 50.0;
+            return true;
+        }
+
+        bool CetTriangleClusterBuilder::_TryBuildTriangleEdgePairCandidate(const TriangleEdgePairRequest& ARequest)
+        {
+            TriangleEdgePairGeometry Geometry;
+            if (!_PrepareTriangleEdgePair(ARequest, Geometry)){
+                return false;
+            }
+
+            const TetBaseOffset BaseOffset{ Geometry.AMidX - Geometry.BMidX, Geometry.AMidY - Geometry.BMidY };
             bool HasBest = false;
             TetClusterCandidate BestCandidate;
-            int SideRejectCount = 0;
-            int FinalizeRejectCount = 0;
-            for (const auto& BaseOffset : BaseOffsets){
-                const double BThirdBaseX = static_cast<double>(RotatedBThird.X) + BaseOffset.X;
-                const double BThirdBaseY = static_cast<double>(RotatedBThird.Y) + BaseOffset.Y;
-                const double BaseAPX = BThirdBaseX - AStartX;
-                const double BaseAPY = BThirdBaseY - AStartY;
-                const double BSideBase = EdgeDX * BaseAPY - EdgeDY * BaseAPX;
-                if (ASide * BSideBase >= 0.0){
-                    ++SideRejectCount;
-                    continue;
-                }
-                const double OffsetSign = BSideBase > 0.0 ? 1.0 : -1.0;
-                const double BTranslationX = BaseOffset.X + (-UnitY) * OffsetSign * Gap;
-                const double BTranslationY = BaseOffset.Y + UnitX * OffsetSign * Gap;
-                const double BThirdX = static_cast<double>(RotatedBThird.X) + BTranslationX;
-                const double BThirdY = static_cast<double>(RotatedBThird.Y) + BTranslationY;
-                const double APX = BThirdX - AStartX;
-                const double APY = BThirdY - AStartY;
-                const double BSide = EdgeDX * APY - EdgeDY * APX;
-                if (ASide * BSide >= 0.0){
-                    ++SideRejectCount;
-                    continue;
-                }
-                TetClusterCandidate Candidate;
-                Candidate.BuilderName = "TriangleBuilder";
-                Candidate.ClusterType = "AnyTriangleEdgePair";
-                Candidate.OriginalIndices = { AAIndex, ABIndex };
-                TetItemTransform TransformA;
-                TransformA.OriginalId = AAIndex;
-                TransformA.RelativeX = ATranslationX;
-                TransformA.RelativeY = ATranslationY;
-                TransformA.RelativeRotation = 0.0;
-                TetItemTransform TransformB;
-                TransformB.OriginalId = ABIndex;
-                TransformB.RelativeX = BTranslationX;
-                TransformB.RelativeY = BTranslationY;
-                TransformB.RelativeRotation = RotationB;
-                Candidate.Transforms = { TransformA, TransformB };
-                Candidate.Confidence = 0.90;
-                if (!Geometry.FinalizeCandidate(AOriginalItems, AOptions, Candidate)){
-                    ++FinalizeRejectCount;
-                    continue;
-                }
-                const double LengthMatchRatio = std::min(EdgeA.Length, EdgeB.Length) / std::max(EdgeA.Length, EdgeB.Length);
-                Candidate.Score += LengthMatchRatio * 50.0;
-                if (!HasBest || Candidate.Score > BestCandidate.Score){
-                    HasBest = true;
-                    BestCandidate = std::move(Candidate);
-                }
+            TetClusterCandidate Candidate;
+            if (_BuildTriangleEdgePairCandidateAtOffset(ARequest, Geometry, BaseOffset, Candidate)){
+                HasBest = true;
+                BestCandidate = std::move(Candidate);
             }
             if (!HasBest){
                 return false;
             }
-            AOutCandidate = std::move(BestCandidate);
+            ARequest.OutCandidate = std::move(BestCandidate);
             return true;
         }
         bool CetTriangleClusterBuilder::_GetTriangleEdgePose(const CetPath& AContour, int AEdgeIndex, TetTriangleEdgePose& AOutEdge)
@@ -976,10 +986,6 @@ namespace ET {
             if (AOutEdge.Length <= 0.0){ return false; }
             AOutEdge.Angle = std::atan2(DY, DX);
             return true;
-        }
-        double CetTriangleClusterBuilder::_NormalizeAngle(double AAngle)
-        {
-            return CetRotationUtils::NormalizeAngle(AAngle);
         }
         CetInpoint CetTriangleClusterBuilder::_RotatePoint(const CetInpoint& APoint, double ARotation)
         {

@@ -15,7 +15,7 @@ using namespace libnest2d;
 namespace ET {
     namespace NEST2DMANAGERLIB {
 
-        struct CetPolygonBoardRepairer::TetPlacementCandidate
+      /*  struct TetPlacementCandidate
         {
             TetPlacementCandidate(): ItemIndex(0), TargetBin(-1), Translation(Point(0, 0)), Rotation(libnest2d::Radians(0.0)){
             }
@@ -24,7 +24,7 @@ namespace ET {
             int TargetBin;
             Point Translation;
             libnest2d::Radians Rotation;
-        };
+        };*/
 
         CetPolygonBoardRepairer::CetPolygonBoardRepairer(): CetCoreObject()
         {

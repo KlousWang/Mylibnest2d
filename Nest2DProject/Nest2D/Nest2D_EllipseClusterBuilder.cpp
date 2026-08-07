@@ -318,134 +318,74 @@ namespace ET {
             }
         }
 
+        bool CetEllipseClusterBuilder::_BuildEllipseCandidateForLayout(const EllipseBuildRequest& ARequest, const TetEllipseLayout& Layout, TetClusterCandidate& AOutCandidate)
+        {
+            CetClusterGeometryHelper Geometry;
+            AOutCandidate.BuilderName = "EllipseBuilder";
+            AOutCandidate.ClusterType = Layout.ClusterType;
+            AOutCandidate.OriginalIndices = ARequest.Indices;
+            AOutCandidate.Confidence = 0.9;
+            AOutCandidate.Transforms.reserve(ARequest.Indices.size());
+            for (std::size_t I = 0; I < ARequest.Indices.size(); ++I){
+                const int Index = ARequest.Indices[I];
+                const TetEllipseLayoutSlot& Slot = Layout.Slots[I];
+                double Rotation = 0.0;
+                double MinX = 0.0;
+                double MinY = 0.0;
+                double Width = 0.0;
+                double Height = 0.0;
+                if (!GetOrientedBounds(ARequest.Items[Index], ARequest.Features[Index], Slot.RotateToVertical, ARequest.Options, Geometry, Rotation, MinX, MinY, Width, Height)) return false;
+                TetItemTransform Transform;
+                Transform.OriginalId = Index;
+                Transform.RelativeRotation = Rotation;
+                Transform.RelativeX = Slot.X - MinX;
+                Transform.RelativeY = Slot.Y - MinY;
+                AOutCandidate.Transforms.push_back(Transform);
+            }
+            if (!Geometry.FinalizeCandidate(ARequest.Items, ARequest.Options, AOutCandidate)) return false;
+            AOutCandidate.Score = _CalculateScore(AOutCandidate, ARequest.Options);
+            return true;
+        }
+
         bool CetEllipseClusterBuilder::_BuildClusterCandidate(const CetTNestItemVector& AItems, const std::vector<TetShapeFeature>& AFeatures, const std::vector<int>& AIndices, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate)
         {
             AOutCandidate = TetClusterCandidate{};
-
-            if (AItems.size() != AFeatures.size() || AIndices.size() < 2){
-                return false;
-            }
-
+            if (AItems.size() != AFeatures.size() || AIndices.size() < 2) return false;
             std::vector<int> Indices = AIndices;
             std::sort(Indices.begin(), Indices.end());
             Indices.erase(std::unique(Indices.begin(), Indices.end()), Indices.end());
-            if (Indices.size() < 2){
-                return false;
-            }
-
-            for (int Index : Indices){
-                if (Index < 0 || Index >= static_cast<int>(AFeatures.size())){
-                    return false;
-                }
-            }
-
+            if (Indices.size() < 2) return false;
+            for (int Index : Indices) if (Index < 0 || Index >= static_cast<int>(AFeatures.size())) return false;
             const TetShapeFeature& BaseFeature = AFeatures[Indices.front()];
-            if (!IsValidEllipseFeature(BaseFeature)){
-                return false;
-            }
-
-            for (int Index : Indices){
-                if (!AreSameSizeEllipses(BaseFeature, AFeatures[Index])){
-                    return false;
-                }
-            }
+            if (!IsValidEllipseFeature(BaseFeature)) return false;
+            for (int Index : Indices) if (!AreSameSizeEllipses(BaseFeature, AFeatures[Index])) return false;
 
             CetClusterGeometryHelper Geometry;
-            double HorizontalRotation = 0.0;
-            double HorizontalMinX = 0.0;
-            double HorizontalMinY = 0.0;
-            double HorizontalWidth = 0.0;
-            double HorizontalHeight = 0.0;
-            if (!GetOrientedBounds(AItems[Indices.front()], BaseFeature, false, AOptions, Geometry, HorizontalRotation, HorizontalMinX, HorizontalMinY, HorizontalWidth, HorizontalHeight)){
-                return false;
-            }
-
-            double VerticalRotation = 0.0;
-            double VerticalMinX = 0.0;
-            double VerticalMinY = 0.0;
-            double VerticalWidth = 0.0;
-            double VerticalHeight = 0.0;
-            if (!GetOrientedBounds(AItems[Indices.front()], BaseFeature, true, AOptions, Geometry, VerticalRotation, VerticalMinX, VerticalMinY, VerticalWidth, VerticalHeight)){
-                return false;
-            }
-
+            double HR = 0.0, HMinX = 0.0, HMinY = 0.0, HWidth = 0.0, HHeight = 0.0;
+            if (!GetOrientedBounds(AItems[Indices.front()], BaseFeature, false, AOptions, Geometry, HR, HMinX, HMinY, HWidth, HHeight)) return false;
+            double VR = 0.0, VMinX = 0.0, VMinY = 0.0, VWidth = 0.0, VHeight = 0.0;
+            if (!GetOrientedBounds(AItems[Indices.front()], BaseFeature, true, AOptions, Geometry, VR, VMinX, VMinY, VWidth, VHeight)) return false;
             const double RequiredGap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
-            const double SafetyGap = RequiredGap > 0.0 ? std::max(CET_CLUSTER_MIN_SAFETY_GAP, RequiredGap * 0.001) : 0.0;
-            const double Gap = RequiredGap + SafetyGap;
-
+            const double Gap = RequiredGap + (RequiredGap > 0.0 ? std::max(CET_CLUSTER_MIN_SAFETY_GAP, RequiredGap * 0.001) : 0.0);
             std::vector<TetEllipseLayout> Layouts;
-            Layouts.push_back(MakeLineLayout(Indices.size(), HorizontalWidth, HorizontalHeight, VerticalWidth, VerticalHeight, Gap, false, false));
-            Layouts.push_back(MakeLineLayout(Indices.size(), HorizontalWidth, HorizontalHeight, VerticalWidth, VerticalHeight, Gap, true, false));
-            Layouts.push_back(MakeLineLayout(Indices.size(), HorizontalWidth, HorizontalHeight, VerticalWidth, VerticalHeight, Gap, false, true));
-
+            Layouts.push_back(MakeLineLayout(Indices.size(), HWidth, HHeight, VWidth, VHeight, Gap, false, false));
+            Layouts.push_back(MakeLineLayout(Indices.size(), HWidth, HHeight, VWidth, VHeight, Gap, true, false));
+            Layouts.push_back(MakeLineLayout(Indices.size(), HWidth, HHeight, VWidth, VHeight, Gap, false, true));
             for (int Rows = 2; Rows <= static_cast<int>(Indices.size()); ++Rows){
-                Layouts.push_back(MakeGridLayout(Indices.size(), Rows, HorizontalWidth, HorizontalHeight, VerticalWidth, VerticalHeight, Gap, false));
-                Layouts.push_back(MakeGridLayout(Indices.size(), Rows, HorizontalWidth, HorizontalHeight, VerticalWidth, VerticalHeight, Gap, true));
-                Layouts.push_back(MakeHoneycombLayout(Indices.size(), Rows, HorizontalWidth, HorizontalHeight, Gap));
+                Layouts.push_back(MakeGridLayout(Indices.size(), Rows, HWidth, HHeight, VWidth, VHeight, Gap, false));
+                Layouts.push_back(MakeGridLayout(Indices.size(), Rows, HWidth, HHeight, VWidth, VHeight, Gap, true));
+                Layouts.push_back(MakeHoneycombLayout(Indices.size(), Rows, HWidth, HHeight, Gap));
             }
-
+            EllipseBuildRequest Request{ AItems, AFeatures, Indices, AOptions };
             bool HasBest = false;
             TetClusterCandidate BestCandidate;
-
             for (const TetEllipseLayout& Layout : Layouts){
-                if (Layout.Slots.size() != Indices.size() || Layout.Width <= 0.0 || Layout.Height <= 0.0){
-                    continue;
-                }
-
-                if (!FitsBin(Layout.Width, Layout.Height, AOptions)){
-                    continue;
-                }
-
+                if (Layout.Slots.size() != Indices.size() || Layout.Width <= 0.0 || Layout.Height <= 0.0 || !FitsBin(Layout.Width, Layout.Height, AOptions)) continue;
                 TetClusterCandidate Candidate;
-                Candidate.BuilderName = "EllipseBuilder";
-                Candidate.ClusterType = Layout.ClusterType;
-                Candidate.OriginalIndices = Indices;
-                Candidate.Confidence = 0.9;
-                Candidate.Transforms.reserve(Indices.size());
-
-                bool TransformValid = true;
-                for (std::size_t I = 0; I < Indices.size(); ++I){
-                    const int Index = Indices[I];
-                    const TetShapeFeature& Feature = AFeatures[Index];
-                    const TetEllipseLayoutSlot& Slot = Layout.Slots[I];
-
-                    double Rotation = 0.0;
-                    double MinX = 0.0;
-                    double MinY = 0.0;
-                    double Width = 0.0;
-                    double Height = 0.0;
-                    if (!GetOrientedBounds(AItems[Index], Feature, Slot.RotateToVertical, AOptions, Geometry, Rotation, MinX, MinY, Width, Height)){
-                        TransformValid = false;
-                        break;
-                    }
-
-                    TetItemTransform Transform;
-                    Transform.OriginalId = Index;
-                    Transform.RelativeRotation = Rotation;
-                    Transform.RelativeX = Slot.X - MinX;
-                    Transform.RelativeY = Slot.Y - MinY;
-                    Candidate.Transforms.push_back(Transform);
-                }
-
-                if (!TransformValid){
-                    continue;
-                }
-
-                if (!Geometry.FinalizeCandidate(AItems, AOptions, Candidate)){
-                    continue;
-                }
-
-                Candidate.Score = _CalculateScore(Candidate, AOptions);
-                if (!HasBest || Candidate.Score > BestCandidate.Score){
-                    HasBest = true;
-                    BestCandidate = std::move(Candidate);
-                }
+                if (!_BuildEllipseCandidateForLayout(Request, Layout, Candidate)) continue;
+                if (!HasBest || Candidate.Score > BestCandidate.Score){ HasBest = true; BestCandidate = std::move(Candidate); }
             }
-
-            if (!HasBest){
-                return false;
-            }
-
+            if (!HasBest) return false;
             AOutCandidate = std::move(BestCandidate);
             return true;
         }
