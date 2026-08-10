@@ -30,6 +30,7 @@ struct TetNestDataOptions
     int PlacerAlignment = 1;       // 0 = DONT_ALIGN, 1 = BOTTOM_LEFT
     int PlacerStartingPoint = 1;   // 0 = DONT_ALIGN, 1 = BOTTOM_LEFT
 
+    bool EnableLastBinEvacuation = true;
     bool PlacerParallel = true;
     bool PlacerExploreHoles = false;
 };

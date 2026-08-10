@@ -16,6 +16,7 @@
 #include<cmath>
 #include<numeric>
 #include<set>
+#include<chrono>
 
 //#include"libnest2d/optimizers/nlopt/subplex.hpp"
 
@@ -168,6 +169,53 @@ namespace ET {
 
 			return { MetClusterStrategy::None, MetClusterStrategy::TemplateCluster };
 		}
+
+		bool CetNest2DEngine::_RunLastBinEvacuation(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, std::size_t& ALayers)
+		{
+			if (!AOptions.EnableLastBinEvacuation || ANestItems.empty() || ALayers <= 1) {
+				return false;
+			}
+			const CetTNestItemVector OriginalSolution = ANestItems;
+			double BoardBinWidth = AOptions.BinWidth;
+			double BoardBinHeight = AOptions.BinHeight;
+			CetPolygonImpl BinPoly = Nest2DUtils->Nest2DBord->BuildBinPolygonFromOptions(AOptions, BoardBinWidth, BoardBinHeight);
+			Nest2DUtils->Nest2DPolygonBord->SetContext(ANestItems, AOptions, BinPoly, BoardBinWidth, BoardBinHeight);
+			TetLastBinEvacuationStats Stats;
+			const bool Success = Nest2DUtils->Nest2DPolygonBord->EvacuateLastBin(ALayers, Stats);
+			if (!Success) {
+				ANestItems = OriginalSolution;
+			}
+#ifdef _DEBUG
+			std::cout << "[LAST_BIN] Start UsedBins=" << Stats.BeforeUsedBins << ", LastBin=" << Stats.LastBinId << ", LastBinItems=" << Stats.LastBinItemCount << ", LastBinArea=" << Stats.LastBinArea << std::endl;
+			std::cout << (Success ? "[LAST_BIN][SUCCESS]" : "[LAST_BIN][FAILED]")
+				<< " UsedBins " << Stats.BeforeUsedBins << " -> " << Stats.AfterUsedBins
+				<< ", DirectMoves=" << Stats.DirectMoves
+				<< ", SameBinRelocations=" << Stats.SameBinRelocations
+				<< ", RelocatedExistingSmallItems=" << Stats.RelocatedExistingSmallItemCount
+				<< ", PlacementChecks=" << Stats.PlacementChecks
+				<< ", SearchBudgetReached=" << Stats.SearchBudgetReached
+				<< ", RemainingItems=" << Stats.RemainingItems
+				<< ", TimeMs=" << Stats.TimeMs
+				<< ", Rollback=" << Stats.RolledBack << std::endl;
+			if (!Success) {
+				std::cout << "[LAST_BIN][FAIL SUMMARY] Remaining=" << Stats.RemainingItems
+					<< ", NoCandidatePosition=" << Stats.NoCandidatePosition
+					<< ", RelocationFailed=" << Stats.RelocationFailed
+					<< ", InsufficientFreeArea=" << Stats.InsufficientFreeArea << std::endl;
+			}
+#endif
+			return Success;
+		}
+
+		void CetNest2DEngine::_RepairAndEvacuate(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, const CetPolygonImpl& ABinPoly, double ABinWidth, double ABinHeight, std::size_t& ALayers)
+		{
+			Nest2DUtils->Nest2DPolygonBord->SetContext(ANestItems, AOptions, ABinPoly, ABinWidth, ABinHeight);
+			const auto RepairStart = std::chrono::steady_clock::now();
+			Nest2DUtils->Nest2DPolygonBord->Repair(ALayers);
+			const double BeforeLastBinMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - RepairStart).count();
+			std::cout << "[NEST][TIMING] BeforeLastBinMs=" << BeforeLastBinMs << std::endl;
+			_RunLastBinEvacuation(ANestItems, AOptions, ALayers);
+		}
 		
 		int CetNest2DEngine::RunNesting_Impl(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, std::size_t* AUsedBins)
 		{
@@ -286,8 +334,8 @@ namespace ET {
 			double BoardBinHeight = AOptions.BinHeight;
 			CetPolygonImpl BinPoly = Nest2DUtils->Nest2DBord->BuildBinPolygonFromOptions(AOptions,BoardBinWidth,BoardBinHeight);
 
-			Nest2DUtils->Nest2DPolygonBord->SetContext(ANestItems,AOptions,BinPoly,BoardBinWidth,BoardBinHeight);
-			Nest2DUtils->Nest2DPolygonBord->Repair(BestLayers);
+			_RepairAndEvacuate(ANestItems, AOptions, BinPoly, BoardBinWidth, BoardBinHeight, BestLayers);
+			BestEval = Nest2DUtils->Nest2DStrategy->EvaluateNestResult(ANestItems, BestLayers);
 			std::cout << "================ POLYGON BEST NEST RESULT ================" << std::endl;
 			std::cout << "[POLYGON BEST] bin0 count = " << BestEval.FirstBinCount << ", bin0 area = " << BestEval.FirstBinArea << ", layers = " << BestLayers << std::endl;
 
@@ -427,13 +475,10 @@ namespace ET {
 						<< ", Layers=" << BestEval.Layers << std::endl;
 				}
 				Nest2DUtils->Nest2DCluster->ExpandClusterResultToOriginalItems(OriginalItems, BestItems, BestMetaItems, ANestItems);
+				CetPolygonImpl RectBinPoly = Nest2DUtils->Nest2DBord->BuildRectangleBinPolygon(AOptions.BinWidth, AOptions.BinHeight);
+				_RepairAndEvacuate(ANestItems, AOptions, RectBinPoly, AOptions.BinWidth, AOptions.BinHeight, BestLayers);
+				BestEval = Nest2DUtils->Nest2DStrategy->EvaluateNestResult(ANestItems, BestLayers);
 			}
-			//if(BestLayers > 0) {
-			//	CetPolygonImpl RectBinPoly = Nest2DUtils->Nest2DBord->BuildRectangleBinPolygon(AOptions.BinWidth, AOptions.BinHeight);
-			
-			//	Nest2DUtils->Nest2DPolygonBord->SetContext(ANestItems, AOptions, RectBinPoly, AOptions.BinWidth, AOptions.BinHeight);
-			//	Nest2DUtils->Nest2DPolygonBord->Repair(BestLayers);
-			//}
 			std::cout << "================ BEST NEST RESULT ================" << std::endl;
 			std::cout << "[NEST BEST] bin0 count = " << BestEval.FirstBinCount << ", bin0 area = " << BestEval.FirstBinArea << ", layers = " << BestEval.Layers << std::endl;
 			Nest2DUtils->Nest2DStrategy->PrintBinCount(ANestItems);

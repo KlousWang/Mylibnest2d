@@ -28,6 +28,8 @@ namespace ET {
             std::size_t RunPolygonBoardNesting(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker);
 			std::size_t RunPolygonNestOnce(CetTNestItemVector& ATestItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker);
             std::size_t RunRectangleBoardNesting(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker);
+            bool _RunLastBinEvacuation(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, std::size_t& ALayers);
+            void _RepairAndEvacuate(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, const CetPolygonImpl& ABinPoly, double ABinWidth, double ABinHeight, std::size_t& ALayers);
             std::size_t RunRectangleNestOnce(CetTNestItemVector& ATestItems,const TetNestOptions& AOptions,TetNestProgressTracker& ATracker);
             TetLocalBestResult EvaluateSortingStrategies(const TetClusterBuildResult& AClusterResult, const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker);
 			bool _HasClusterItems(const std::vector<TetMetaItem>& AMetaItems) const;

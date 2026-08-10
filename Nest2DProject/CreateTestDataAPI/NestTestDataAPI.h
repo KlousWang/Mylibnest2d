@@ -98,6 +98,7 @@ namespace ET {
             float m_PlacerAccuracy =0;
             int m_PlacerAlignment =0;
             int m_PlacerStartingPoint =0;
+            bool m_EnableLastBin = true;
             bool m_PlacerParallel =true;
             bool m_PlacerExploreHoles =false;
          

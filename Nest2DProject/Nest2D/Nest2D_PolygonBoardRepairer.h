@@ -3,6 +3,7 @@
 #include"Nest2D_DataType.h"
 #include"Nest2D_PrivateDataType.h"
 
+#include <chrono>
 #include <cstddef>
 #include <iostream>
 #include <vector>
@@ -31,6 +32,7 @@ namespace ET {
 		public:
 			void SetContext(CetTNestItemVector& ANestItems,const TetNestOptions& AOptions,const CetPolygonImpl& ABinPoly,double ABoardBinWidth,double ABoardBinHeight);
 			void Repair(std::size_t& ALayers);
+			bool EvacuateLastBin(std::size_t& ALayers, TetLastBinEvacuationStats& AStats);
 			
 			//CetPolygonBoardRepairer(CetTNestItemVector& ANestItems,const TetNestOptions& AOptions,const CetPolygonImpl& ABinPoly,double ABoardBinWidth,double ABoardBinHeight);
         protected:
@@ -53,6 +55,20 @@ namespace ET {
 			bool _TryFindBestPlacementInBin(std::size_t AItemIndex,int ATargetBin,TetHoleFillCandidate& ABestCandidate);
 			void _ApplyHoleFillCandidate(const TetHoleFillCandidate& ACandidate);
 			double _CalcHoleFillScore(std::size_t AItemIndex,int AOldBin,int ATargetBin,const libnest2d::Point& ATranslation);
+			std::vector<std::size_t> _CollectLastBinItems(int ALastBinId) const;
+			void _CaptureLastBinStats(const std::vector<std::size_t>& AItemIndices, TetLastBinEvacuationStats& AStats) const;
+			int _CountUsedBins() const;
+			std::vector<int> _BuildLastBinTargetOrder(int ALastBinId) const;
+			bool _HasEnoughFreeAreaForLastBin(int ALastBinId, double ALastBinArea) const;
+			bool _TryEvacuateItemDirect(std::size_t AItemIndex, const std::vector<int>& ATargetBins);
+			std::vector<std::size_t> _CollectSmallRelocationCandidates(int ATargetBin) const;
+			bool _TryEvacuateItemWithRelocation(std::size_t AItemIndex, int ALastBinId, const std::vector<int>& ATargetBins, TetLastBinEvacuationStats& AStats);
+			bool _TryRelocateSmallItemWithinSameBin(std::size_t AItemIndex, int ABinId, double& AScore);
+			bool _TryFindBestSmallRelocationInBin(std::size_t AItemIndex, int ATargetBin, TetPlacementCandidate& ABestPlacement, double& ABestScore);
+			double _CalcSmallRelocationScore(const TetPlacementCandidate& APlacement);
+			bool _ValidateAllItemsWithSpacing(int ALastBinId) const;
+			bool _CanContinueSearch();
+			double _GetEffectiveGridStep(long long ACheckLimit) const;
 		protected:
 			CetTNestItemVector* _Items = nullptr;
 			const TetNestOptions* _Options = nullptr;
@@ -63,6 +79,11 @@ namespace ET {
 
 			double m_StepMm = 3.0;
 			long long m_SpacingCoord = 0;
+			long long m_RemainingPlacementChecks = 0;
+			long long m_PlacementChecks = 0;
+			long long m_PerItemPlacementCheckLimit = 0;
+			std::chrono::steady_clock::time_point m_SearchDeadline{};
+			bool m_SearchBudgetReached = false;
 
 			std::vector<libnest2d::Radians> m_Rotations;
 		

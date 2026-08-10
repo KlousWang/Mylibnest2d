@@ -58,6 +58,7 @@ struct TetNestOptions
 	TetNestPlacerOptions Placer;
 
 	bool ExportSvg = false;
+	bool EnableLastBinEvacuation = false;
 	std::string SvgPath = "NestingResult";
 
 	NestProgressCallback ProgressCallback = nullptr; 

@@ -40,6 +40,7 @@ namespace ET {
             m_PlacerAccuracy = opt.PlacerAccuracy;
             m_PlacerAlignment = opt.PlacerAlignment;
             m_PlacerStartingPoint = opt.PlacerStartingPoint;
+            m_EnableLastBin = opt.EnableLastBinEvacuation;
             m_PlacerParallel = opt.PlacerParallel;
             m_PlacerExploreHoles = opt.PlacerExploreHoles;
 
@@ -461,6 +462,7 @@ namespace ET {
             Oss << "PLACER_ACCURACY " << m_PlacerAccuracy << "\n";
             Oss << "PLACER_ALIGNMENT " << _NestAlignmentIntToString(m_PlacerAlignment) << "\n";
             Oss << "PLACER_STARTING_POINT " << _NestAlignmentIntToString(m_PlacerStartingPoint) << "\n";
+            Oss << "EnableLastBin " << (m_EnableLastBin ? 1 : 0) << "\n";
             Oss << "PLACER_PARALLEL " << (m_PlacerParallel ? 1 : 0) << "\n";
             Oss << "PLACER_EXPLORE_HOLES " << (m_PlacerExploreHoles ? 1 : 0) << "\n";
             for (const auto& Poly : m_Polygons) {

@@ -13,12 +13,143 @@
 #include "Nest2D_RotationUtils.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <set>
 #include <map>
+#include <unordered_map>
 
 using namespace ClipperLib;
 using namespace libnest2d;
+
+namespace {
+
+constexpr int kMaxSwapRounds = 2;
+constexpr int kMaxSwapClusters = 64;
+constexpr double kMinSwapGainRatio = 0.05;
+
+TetPairCandidateKey MakePairCandidateKey(int AFirst, int ASecond) {
+	if (AFirst > ASecond) {
+		std::swap(AFirst, ASecond);
+	}
+	return { AFirst, ASecond };
+}
+
+using TPairCandidateLookup = std::unordered_map<TetPairCandidateKey, const TetClusterCandidate*, TetPairCandidateKeyHash>;
+
+bool IsPairCandidateUsable(const TetClusterCandidate& ACandidate, int AOriginalItemCount) {
+	if (!ACandidate.Valid || ACandidate.OriginalIndices.size() != 2 || ACandidate.Transforms.size() != 2 || ACandidate.ProxyContour.size() < 3 || ACandidate.ClusterWidth <= 0.0 || ACandidate.ClusterHeight <= 0.0 || ACandidate.ProxyArea <= 0.0 || !std::isfinite(ACandidate.Score)) {
+		return false;
+	}
+	const int FirstIndex = ACandidate.OriginalIndices[0];
+	const int SecondIndex = ACandidate.OriginalIndices[1];
+	return FirstIndex >= 0 && SecondIndex >= 0 && FirstIndex < AOriginalItemCount && SecondIndex < AOriginalItemCount && FirstIndex != SecondIndex;
+}
+
+void BuildPairCandidateLookup(const std::vector<TetClusterCandidate>& ACandidates, int AOriginalItemCount, TPairCandidateLookup& AOutLookup) {
+	AOutLookup.clear();
+	AOutLookup.reserve(ACandidates.size());
+	for (const TetClusterCandidate& Candidate : ACandidates) {
+		if (!IsPairCandidateUsable(Candidate, AOriginalItemCount)) {
+			continue;
+		}
+		const TetPairCandidateKey Key = MakePairCandidateKey(Candidate.OriginalIndices[0], Candidate.OriginalIndices[1]);
+		auto It = AOutLookup.find(Key);
+		if (It == AOutLookup.end() || Candidate.Score > It->second->Score) {
+			AOutLookup[Key] = &Candidate;
+		}
+	}
+}
+
+std::vector<std::size_t> CollectPairCandidatePositions(const std::vector<TetClusterCandidate>& ACandidates) {
+	std::vector<std::size_t> PairPositions;
+	PairPositions.reserve(ACandidates.size());
+	for (std::size_t CandidateIndex = 0; CandidateIndex < ACandidates.size(); ++CandidateIndex) {
+		const TetClusterCandidate& Candidate = ACandidates[CandidateIndex];
+		if (Candidate.Valid && Candidate.OriginalIndices.size() == 2 && std::isfinite(Candidate.Score)) {
+			PairPositions.push_back(CandidateIndex);
+		}
+	}
+	std::stable_sort(PairPositions.begin(), PairPositions.end(), [&](std::size_t AFirstPosition, std::size_t ASecondPosition) {
+		return ACandidates[AFirstPosition].Score > ACandidates[ASecondPosition].Score;
+		});
+	if (PairPositions.size() > static_cast<std::size_t>(kMaxSwapClusters)) {
+		PairPositions.resize(kMaxSwapClusters);
+	}
+	return PairPositions;
+}
+
+bool TryFindBetterPairSwap(const TPairCandidateLookup& APairCandidateLookup, const TetClusterCandidate& AFirstCandidate, const TetClusterCandidate& ASecondCandidate, const TetClusterCandidate*& AOutFirstCandidate, const TetClusterCandidate*& AOutSecondCandidate) {
+	AOutFirstCandidate = nullptr;
+	AOutSecondCandidate = nullptr;
+	if (AFirstCandidate.OriginalIndices.size() != 2 || ASecondCandidate.OriginalIndices.size() != 2) {
+		return false;
+	}
+	const int A = AFirstCandidate.OriginalIndices[0];
+	const int B = AFirstCandidate.OriginalIndices[1];
+	const int C = ASecondCandidate.OriginalIndices[0];
+	const int D = ASecondCandidate.OriginalIndices[1];
+	if (A == B || A == C || A == D || B == C || B == D || C == D) {
+		return false;
+	}
+
+	double BestScore = AFirstCandidate.Score + ASecondCandidate.Score;
+	const auto TrySelectSwap = [&](int AFirstIndex, int ASecondIndex, int BFirstIndex, int BSecondIndex) {
+		const auto FirstIt = APairCandidateLookup.find(MakePairCandidateKey(AFirstIndex, ASecondIndex));
+		const auto SecondIt = APairCandidateLookup.find(MakePairCandidateKey(BFirstIndex, BSecondIndex));
+		if (FirstIt == APairCandidateLookup.end() || SecondIt == APairCandidateLookup.end() || FirstIt->second == SecondIt->second) {
+			return;
+		}
+		const double NewScore = FirstIt->second->Score + SecondIt->second->Score;
+		const double GainRatio = (NewScore - BestScore) / std::max(std::abs(BestScore), 1.0);
+		if (GainRatio >= kMinSwapGainRatio) {
+			BestScore = NewScore;
+			AOutFirstCandidate = FirstIt->second;
+			AOutSecondCandidate = SecondIt->second;
+		}
+		};
+	TrySelectSwap(A, C, B, D);
+	TrySelectSwap(A, D, B, C);
+	return AOutFirstCandidate != nullptr && AOutSecondCandidate != nullptr;
+}
+
+double GetLargestChildArea(const TetClusterCandidate& ACandidate, const std::vector<TetShapeFeature>& AFeatures) {
+	double LargestArea = 0.0;
+	for (int OriginalIndex : ACandidate.OriginalIndices) {
+		if (OriginalIndex >= 0 && OriginalIndex < static_cast<int>(AFeatures.size())) {
+			LargestArea = std::max(LargestArea, AFeatures[OriginalIndex].Area);
+		}
+	}
+	return LargestArea;
+}
+
+bool IsGapFillCandidateBefore(const TetClusterCandidate& AFirst, const TetClusterCandidate& ASecond, const std::vector<TetShapeFeature>& AFeatures) {
+	const double FirstFreeArea = std::max(0.0, AFirst.BoundingBoxArea - AFirst.ReservedArea);
+	const double SecondFreeArea = std::max(0.0, ASecond.BoundingBoxArea - ASecond.ReservedArea);
+	if (std::abs(FirstFreeArea - SecondFreeArea) > 1.0) return FirstFreeArea > SecondFreeArea;
+	const double FirstFillPriority = AFirst.ProxyWasteArea / std::max(1.0, AFirst.ProxyArea);
+	const double SecondFillPriority = ASecond.ProxyWasteArea / std::max(1.0, ASecond.ProxyArea);
+	if (std::abs(FirstFillPriority - SecondFillPriority) > 1e-9) return FirstFillPriority > SecondFillPriority;
+	if (std::abs(AFirst.SheetReuseScore - ASecond.SheetReuseScore) > 1e-9) return AFirst.SheetReuseScore > ASecond.SheetReuseScore;
+	if (std::abs(AFirst.FragmentationRisk - ASecond.FragmentationRisk) > 1e-9) return AFirst.FragmentationRisk < ASecond.FragmentationRisk;
+	const double FirstLargestArea = GetLargestChildArea(AFirst, AFeatures);
+	const double SecondLargestArea = GetLargestChildArea(ASecond, AFeatures);
+	if (std::abs(FirstLargestArea - SecondLargestArea) > 1.0) return FirstLargestArea > SecondLargestArea;
+	return AFirst.Score > ASecond.Score;
+}
+
+std::vector<bool> BuildCandidateUsageMask(const std::vector<bool>& AReserved, const std::vector<bool>& AProcessed, const TetClusterCandidate& ABaseCandidate) {
+	std::vector<bool> Result = AReserved;
+	for (int OriginalIndex : ABaseCandidate.OriginalIndices) {
+		if (OriginalIndex >= 0 && OriginalIndex < static_cast<int>(Result.size())) Result[OriginalIndex] = false;
+	}
+	for (std::size_t OriginalIndex = 0; OriginalIndex < Result.size(); ++OriginalIndex) {
+		if (AProcessed[OriginalIndex]) Result[OriginalIndex] = true;
+	}
+	return Result;
+}
+
+}
 
 namespace ET {
 	namespace NEST2DMANAGERLIB {
@@ -237,18 +368,16 @@ namespace ET {
 			std::vector<bool> Used(Count, false);
 			std::map<MetShapeType, std::vector<int>> IndicesByType;
 
-			//  形状分类
+			//  褰㈢姸鍒嗙被
 			_CollectTemplateShapeIndices(AFeatures, IndicesByType);
-			//  收集所有基础候选
+			// Collect all template candidates.
 			std::vector<TetClusterCandidate> BaseCandidates;
 			_BuildTemplateCandidates(AOriginalItems, AFeatures, AOptions, IndicesByType, BaseCandidates);
-			//  排序与初步筛选
-			std::vector<TetClusterCandidate> AcceptedCandidates = _SelectTemplateCandidates(AOriginalItems, AOptions, BaseCandidates, Used);
-
-			//  间隙填充及局部优化
+			// Select candidates and apply bounded local optimization.
+			std::vector<TetClusterCandidate> AcceptedCandidates = _SelectAndOptimizeTemplateCandidates(AOriginalItems, AOptions, BaseCandidates, Used, Count);
+			// Fill internal gaps without consuming other accepted cluster members.
 			_OptimizeTemplateCandidatesWithFill(AOriginalItems, AFeatures, AOptions, Used, AcceptedCandidates);
-
-			//  组装集群、填充剩余单品并校验覆盖率
+			// Assemble clusters and append remaining singles.
 			int AcceptedClusterCount = 0;
 			for (const TetClusterCandidate& Candidate : AcceptedCandidates) {
 				if (!_AddClusterCandidate(Candidate, Result)) {
@@ -393,6 +522,159 @@ namespace ET {
 			return AcceptedCandidates;
 		}
 
+		std::vector<TetClusterCandidate> CetClusterManager::_SelectAndOptimizeTemplateCandidates(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const std::vector<TetClusterCandidate>& ABaseCandidates, std::vector<bool>& AUsed, int AOriginalItemCount)
+		{
+#ifdef _DEBUG
+			const auto GreedyStartTime = std::chrono::steady_clock::now();
+#endif
+			std::vector<TetClusterCandidate> AcceptedCandidates = _SelectTemplateCandidates(AOriginalItems, AOptions, ABaseCandidates, AUsed);
+#ifdef _DEBUG
+			const auto GreedyEndTime = std::chrono::steady_clock::now();
+			const std::vector<TetClusterCandidate> GreedyResult = AcceptedCandidates;
+			const double GreedyScore = _CalculateCandidateSelectionScore(GreedyResult);
+			const auto OptimizeStartTime = std::chrono::steady_clock::now();
+#endif
+			const int SwapCount = _OptimizePairClusterSelection(ABaseCandidates, AcceptedCandidates, AOriginalItemCount);
+#ifndef _DEBUG
+			(void)SwapCount;
+#endif
+#ifdef _DEBUG
+			const auto OptimizeEndTime = std::chrono::steady_clock::now();
+			const std::size_t OptimizedCandidateCount = AcceptedCandidates.size();
+			const double OptimizedScore = _CalculateCandidateSelectionScore(AcceptedCandidates);
+#endif
+			std::fill(AUsed.begin(), AUsed.end(), false);
+			for (const TetClusterCandidate& Candidate : AcceptedCandidates) {
+				for (int OriginalIndex : Candidate.OriginalIndices) {
+					if (OriginalIndex >= 0 && OriginalIndex < AOriginalItemCount) {
+						AUsed[OriginalIndex] = true;
+					}
+				}
+			}
+#ifdef _DEBUG
+			const auto ToMilliseconds = [](const auto& AStart, const auto& AEnd) {
+				return std::chrono::duration<double, std::milli>(AEnd - AStart).count();
+				};
+			std::cout << "[ClusterSelection] Greedy Score = " << GreedyScore
+				<< ", Optimized Score = " << OptimizedScore
+				<< ", Improvement = " << OptimizedScore - GreedyScore
+				<< ", Swap Count = " << SwapCount << std::endl;
+			std::cout << "[ClusterPerf] Candidates: " << ABaseCandidates.size()
+				<< ", AcceptedGreedy: " << GreedyResult.size()
+				<< ", AcceptedOptimized: " << OptimizedCandidateCount
+				<< ", SwapCount: " << SwapCount
+				<< ", GreedyMs: " << ToMilliseconds(GreedyStartTime, GreedyEndTime)
+				<< ", OptimizeMs: " << ToMilliseconds(OptimizeStartTime, OptimizeEndTime) << std::endl;
+#endif
+			return AcceptedCandidates;
+		}
+
+		int CetClusterManager::_OptimizePairClusterSelection(const std::vector<TetClusterCandidate>& AAllCandidates, std::vector<TetClusterCandidate>& AAcceptedCandidates, int AOriginalItemCount)
+		{
+			if (AAcceptedCandidates.size() < 2 || AOriginalItemCount <= 0) {
+				return 0;
+			}
+
+			TPairCandidateLookup PairCandidateLookup;
+			BuildPairCandidateLookup(AAllCandidates, AOriginalItemCount, PairCandidateLookup);
+			if (PairCandidateLookup.empty()) {
+				return 0;
+			}
+
+			const std::vector<TetClusterCandidate> GreedyResult = AAcceptedCandidates;
+			const double GreedyScore = _CalculateCandidateSelectionScore(GreedyResult);
+			if (!_ValidateClusterSelection(GreedyResult, AOriginalItemCount)) {
+				return 0;
+			}
+
+			int SwapCount = 0;
+			for (int Round = 0; Round < kMaxSwapRounds; ++Round) {
+				const std::vector<std::size_t> PairPositions = CollectPairCandidatePositions(AAcceptedCandidates);
+				if (PairPositions.size() < 2) {
+					break;
+				}
+
+				bool Changed = false;
+				for (std::size_t FirstPairIndex = 0; FirstPairIndex + 1 < PairPositions.size(); ++FirstPairIndex) {
+					for (std::size_t SecondPairIndex = FirstPairIndex + 1; SecondPairIndex < PairPositions.size(); ++SecondPairIndex) {
+						const std::size_t FirstPosition = PairPositions[FirstPairIndex];
+						const std::size_t SecondPosition = PairPositions[SecondPairIndex];
+						const TetClusterCandidate* FirstReplacement = nullptr;
+						const TetClusterCandidate* SecondReplacement = nullptr;
+						if (!TryFindBetterPairSwap(PairCandidateLookup, AAcceptedCandidates[FirstPosition], AAcceptedCandidates[SecondPosition], FirstReplacement, SecondReplacement)) {
+							continue;
+						}
+						std::vector<TetClusterCandidate> TrialSelection = AAcceptedCandidates;
+						TrialSelection[FirstPosition] = *FirstReplacement;
+						TrialSelection[SecondPosition] = *SecondReplacement;
+						if (!_ValidateClusterSelection(TrialSelection, AOriginalItemCount)) {
+							continue;
+						}
+						AAcceptedCandidates = std::move(TrialSelection);
+						++SwapCount;
+						Changed = true;
+					}
+				}
+				if (!Changed) {
+					break;
+				}
+			}
+
+			const bool SelectionValid = _ValidateClusterSelection(AAcceptedCandidates, AOriginalItemCount);
+			const double OptimizedScore = _CalculateCandidateSelectionScore(AAcceptedCandidates);
+			if (!SelectionValid) {
+				std::cout << "[ClusterSelection][ROLLBACK] Invalid pair-swap selection." << std::endl;
+				AAcceptedCandidates = GreedyResult;
+				return 0;
+			}
+			const double GainRatio = (OptimizedScore - GreedyScore) / std::max(std::abs(GreedyScore), 1.0);
+			if (SwapCount > 0 && GainRatio < kMinSwapGainRatio) {
+				AAcceptedCandidates = GreedyResult;
+				return 0;
+			}
+
+			return SwapCount;
+		}
+
+		double CetClusterManager::_CalculateCandidateSelectionScore(const std::vector<TetClusterCandidate>& ACandidates)
+		{
+			double TotalScore = 0.0;
+			for (const TetClusterCandidate& Candidate : ACandidates) {
+				TotalScore += Candidate.Score;
+			}
+			return TotalScore;
+		}
+
+		bool CetClusterManager::_ValidateClusterSelection(const std::vector<TetClusterCandidate>& ACandidates, int AOriginalItemCount)
+		{
+			if (AOriginalItemCount < 0) {
+				return false;
+			}
+			std::vector<bool> Used(static_cast<std::size_t>(AOriginalItemCount), false);
+			for (const TetClusterCandidate& Candidate : ACandidates) {
+				if (!Candidate.Valid || Candidate.OriginalIndices.empty() || Candidate.OriginalIndices.size() != Candidate.Transforms.size() || !std::isfinite(Candidate.Score)) {
+					return false;
+				}
+				std::set<int> CandidateIds;
+				std::set<int> TransformIds;
+				for (int OriginalIndex : Candidate.OriginalIndices) {
+					if (OriginalIndex < 0 || OriginalIndex >= AOriginalItemCount || Used[OriginalIndex] || !CandidateIds.insert(OriginalIndex).second) {
+						return false;
+					}
+					Used[OriginalIndex] = true;
+				}
+				for (const TetItemTransform& Transform : Candidate.Transforms) {
+					if (Transform.OriginalId < 0 || Transform.OriginalId >= AOriginalItemCount || !std::isfinite(Transform.RelativeX) || !std::isfinite(Transform.RelativeY) || !std::isfinite(Transform.RelativeRotation) || !TransformIds.insert(Transform.OriginalId).second) {
+						return false;
+					}
+				}
+				if (CandidateIds != TransformIds) {
+					return false;
+				}
+			}
+			return true;
+		}
+
 		void CetClusterManager::_OptimizeTemplateCandidatesWithFill(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions, std::vector<bool>& AUsed, std::vector<TetClusterCandidate>& ACandidates)
 		{
 			const int Count = static_cast<int>(AOriginalItems.size());
@@ -401,41 +683,11 @@ namespace ET {
 			std::size_t GapFillAttemptCount = 0;
 			std::size_t GapFillSkippedClusterCount = 0;
 
-			const auto GetLargestChildArea = [&](const TetClusterCandidate& ACandidate) {
-				double LargestArea = 0.0;
-				for (int OriginalIndex : ACandidate.OriginalIndices) {
-					if (OriginalIndex >= 0 && OriginalIndex < static_cast<int>(AFeatures.size())) {
-						LargestArea = std::max(LargestArea, AFeatures[OriginalIndex].Area);
-					}
-				}
-				return LargestArea;
-				};
-
 			std::stable_sort(ACandidates.begin(), ACandidates.end(), [&](const TetClusterCandidate& AFirstCandidate, const TetClusterCandidate& ASecondCandidate) {
-				const double FirstEnvelopeFreeArea = std::max(0.0, AFirstCandidate.BoundingBoxArea - AFirstCandidate.ReservedArea);
-				const double SecondEnvelopeFreeArea = std::max(0.0, ASecondCandidate.BoundingBoxArea - ASecondCandidate.ReservedArea);
-				if (std::abs(FirstEnvelopeFreeArea - SecondEnvelopeFreeArea) > 1.0) {
-					return FirstEnvelopeFreeArea > SecondEnvelopeFreeArea;
-				}
-				const double FirstFillPriority = AFirstCandidate.ProxyWasteArea / std::max(1.0, AFirstCandidate.ProxyArea);
-				const double SecondFillPriority = ASecondCandidate.ProxyWasteArea / std::max(1.0, ASecondCandidate.ProxyArea);
-				if (std::abs(FirstFillPriority - SecondFillPriority) > 1e-9) {
-					return FirstFillPriority > SecondFillPriority;
-				}
-				if (std::abs(AFirstCandidate.SheetReuseScore - ASecondCandidate.SheetReuseScore) > 1e-9) {
-					return AFirstCandidate.SheetReuseScore > ASecondCandidate.SheetReuseScore;
-				}
-				if (std::abs(AFirstCandidate.FragmentationRisk - ASecondCandidate.FragmentationRisk) > 1e-9) {
-					return AFirstCandidate.FragmentationRisk < ASecondCandidate.FragmentationRisk;
-				}
-				const double FirstLargestArea = GetLargestChildArea(AFirstCandidate);
-				const double SecondLargestArea = GetLargestChildArea(ASecondCandidate);
-				if (std::abs(FirstLargestArea - SecondLargestArea) > 1.0) {
-					return FirstLargestArea > SecondLargestArea;
-				}
-				return AFirstCandidate.Score > ASecondCandidate.Score;
+				return IsGapFillCandidateBefore(AFirstCandidate, ASecondCandidate, AFeatures);
 				});
 
+			const std::vector<bool> ReservedByCluster = AUsed;
 			std::fill(AUsed.begin(), AUsed.end(), false);
 			std::vector<TetClusterCandidate> LocallyOptimizedCandidates;
 			LocallyOptimizedCandidates.reserve(ACandidates.size());
@@ -447,6 +699,7 @@ namespace ET {
 				: CET_RECTANGLE_FILL_MAX_BASE_CANDIDATES;
 
 			for (const TetClusterCandidate& BaseCandidate : ACandidates) {
+				const std::vector<bool> CandidateUsage = BuildCandidateUsageMask(ReservedByCluster, AUsed, BaseCandidate);
 				TetClusterCandidate AvailableCandidate = BaseCandidate;
 				bool RemovedUsedChild = false;
 				AvailableCandidate.OriginalIndices.clear();
@@ -469,7 +722,7 @@ namespace ET {
 						continue;
 					}
 				}
-				if (!_CanAcceptClusterCandidate(AOriginalItems, AOptions, AvailableCandidate, AUsed, Count)) {
+				if (!_CanAcceptClusterCandidate(AOriginalItems, AOptions, AvailableCandidate, CandidateUsage, Count)) {
 					continue;
 				}
 
@@ -481,7 +734,7 @@ namespace ET {
 				else {
 					++GapFillSkippedClusterCount;
 				}
-				if (TryGapFill && RectangleFillBuilder.BuildCandidateForBase(AOriginalItems, AFeatures, AvailableCandidate, AOptions, AUsed, FilledCandidate) && _CanAcceptClusterCandidate(AOriginalItems, AOptions, FilledCandidate, AUsed, Count)) {
+				if (TryGapFill && RectangleFillBuilder.BuildCandidateForBase(AOriginalItems, AFeatures, AvailableCandidate, AOptions, CandidateUsage, FilledCandidate) && _CanAcceptClusterCandidate(AOriginalItems, AOptions, FilledCandidate, CandidateUsage, Count)) {
 					const int NewFillerCount = static_cast<int>(FilledCandidate.OriginalIndices.size() - AvailableCandidate.OriginalIndices.size());
 					RectangleFillerItemCount += std::max(0, NewFillerCount);
 					if (NewFillerCount > 0) {

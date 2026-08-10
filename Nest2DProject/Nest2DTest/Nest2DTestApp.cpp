@@ -205,6 +205,10 @@ namespace ET {
 
 			std::cout << "Please enter placer starting point, 0 = DONT_ALIGN, 1 = BOTTOM_LEFT: ";
 			std::cin >> AInput.PlacerStartingPoint;
+			int LastBinEvacuation = 0;
+			std::cout << "Please enter placer LastBinEvacuation, 0 = false, 1 = true: ";
+			std::cin >> LastBinEvacuation;
+			AInput.EnableLastBinEvacuation = (LastBinEvacuation != 0);
 			int parallel = 1;
 			std::cout << "Please enter placer parallel, 0 = false, 1 = true: ";
 			std::cin >> parallel;
@@ -214,6 +218,7 @@ namespace ET {
 			std::cout << "Please enter placer explore holes, 0 = false, 1 = true: ";
 			std::cin >> exploreHoles;
 			AInput.PlacerExploreHoles = (exploreHoles != 0);
+			
 			if (AInput.BinWidth <= 0.0 || AInput.BinHeight <= 0.0) {
 				std::cout << "Invalid bin size." << std::endl;
 				return false;

@@ -5,6 +5,7 @@
 #include <string>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <utility>
 #include <limits>
 #include <array>
@@ -77,10 +78,21 @@ constexpr double CET_RECTANGLE_FILL_POSITION_TOLERANCE = 1.0;
 
 constexpr std::size_t CET_NEST_FULL_STRATEGY_ITEM_LIMIT = 96;
 constexpr std::size_t CET_NEST_REDUCED_STRATEGY_ITEM_LIMIT = 256;
+constexpr int CET_LAST_BIN_MAX_TARGET_BINS_PER_ITEM = 4;
+constexpr int CET_LAST_BIN_MAX_RELOCATION_CANDIDATES = 24;
+constexpr int CET_LAST_BIN_MAX_RELOCATED_SMALL_ITEMS = 3;
+constexpr int CET_LAST_BIN_MAX_EVACUATION_PASSES = 2;
+constexpr double CET_LAST_BIN_SMALL_ITEM_AREA_RATIO = 0.01;
+constexpr long long CET_REPAIR_MAX_PLACEMENT_CHECKS_PER_ITEM = 20000;
+constexpr long long CET_REPAIR_MAX_TOTAL_PLACEMENT_CHECKS = 120000;
+constexpr long long CET_REPAIR_MAX_SEARCH_TIME_MS = 5000;
+constexpr long long CET_LAST_BIN_MAX_PLACEMENT_CHECKS_PER_ITEM = 30000;
+constexpr long long CET_LAST_BIN_MAX_TOTAL_PLACEMENT_CHECKS = 240000;
+constexpr long long CET_LAST_BIN_MAX_SEARCH_TIME_MS = 15000;
 
 
 // ============================================================================
-// µ⁄“ª≤„º∂£∫∫¡Œﬁ“¿¿µµƒµ◊≤„√∂æŸ (Enums)
+// Á¨¨‰∏ÄÂ±ÇÁ∫ßÔºöÊØ´Êó†‰æùËµñÁöÑÂ∫ïÂ±ÇÊûö‰∏æ (Enums)
 // ============================================================================
 
 enum class MetClusterStrategy { None = 0, RightTrianglePair, AutoPairCluster, TemplateCluster };
@@ -142,7 +154,7 @@ enum class MetArcSweepBucket
 };
 
 // ============================================================================
-// µ⁄∂˛≤„º∂£∫ª˘¥°Ω·ππÃÂ (Base Structs)
+// Á¨¨‰∫åÂ±ÇÁ∫ßÔºöÂü∫Á°ÄÁªìÊûÑ‰Ωì (Base Structs)
 // ============================================================================
 
 struct TetItemTransform {
@@ -221,7 +233,7 @@ struct TetThickArcTestInput {
 
 
 // ============================================================================
-// µ⁄»˝≤„º∂£∫∏¥‘”Ω·ππÃÂ (Complex Structs)
+// Á¨¨‰∏âÂ±ÇÁ∫ßÔºöÂ§çÊùÇÁªìÊûÑ‰Ωì (Complex Structs)
 // ============================================================================
 
 struct TetShapeFeature
@@ -308,7 +320,7 @@ struct TetClusterCandidate {
 
 
 // ============================================================================
-// µ⁄Àƒ≤„º∂£∫ππΩ®∆˜À˘–Ë≤Œ ˝∂‘œÛº∞∆‰À˚◊Èº˛
+// Á¨¨ÂõõÂ±ÇÁ∫ßÔºöÊûÑÂª∫Âô®ÊâÄÈúÄÂèÇÊï∞ÂØπË±°ÂèäÂÖ∂‰ªñÁªÑ‰ª∂
 // ============================================================================
 
 struct CustomLayoutCandidateRequest {
@@ -407,6 +419,26 @@ struct TetLocalBestResult {
     bool HasCluster = false;
 };
 
+struct TetPairCandidateKey
+{
+    int First = -1;
+    int Second = -1;
+
+    bool operator==(const TetPairCandidateKey& AOther) const
+    {
+        return First == AOther.First && Second == AOther.Second;
+    }
+};
+
+struct TetPairCandidateKeyHash
+{
+    std::size_t operator()(const TetPairCandidateKey& AKey) const noexcept
+    {
+        const std::size_t FirstHash = std::hash<int>{}(AKey.First);
+        const std::size_t SecondHash = std::hash<int>{}(AKey.Second);
+        return FirstHash ^ (SecondHash + static_cast<std::size_t>(0x9e3779b9) + (FirstHash << 6) + (FirstHash >> 2));
+    }
+};
 struct TetAutoPairCandidate {
     bool Valid = false;
     int AIndex = -1;
@@ -525,10 +557,30 @@ struct TetCircleCenter {
 };
 
 struct TetNestProgressTracker {
-    int totalItems;
-    NestProgressCallback callback;
+    int totalItems = 0;
+    NestProgressCallback callback = nullptr;
+
+    static NestProgressCallback _NormalizeCallback(NestProgressCallback Acb)
+    {
+        if (Acb == nullptr) {
+            return nullptr;
+        }
+#ifdef _WIN32
+        MEMORY_BASIC_INFORMATION MemoryInfo{};
+        const SIZE_T QuerySize = VirtualQuery(reinterpret_cast<const void*>(Acb), &MemoryInfo, sizeof MemoryInfo);
+        if (QuerySize != sizeof MemoryInfo || MemoryInfo.State != MEM_COMMIT) {
+            return nullptr;
+        }
+        const DWORD ExecuteMask = PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY;
+        if ((MemoryInfo.Protect & ExecuteMask) == 0) {
+            return nullptr;
+        }
+#endif
+        return Acb;
+    }
+
     TetNestProgressTracker(int Atotal, NestProgressCallback Acb)
-        : totalItems(Atotal), callback(Acb) {
+        : totalItems(Atotal), callback(_NormalizeCallback(Acb)) {
     }
     void operator()(unsigned Acnt) const {
         if (callback != nullptr) {
@@ -601,6 +653,29 @@ struct TetHoleFillCandidate
     libnest2d::Point Translation{ 0, 0 };
     libnest2d::Radians Rotation{ 0.0 };
     double Score = 0.0;
+};
+
+struct TetLastBinEvacuationStats
+{
+    bool Started = false;
+    bool Success = false;
+    bool ValidationPassed = false;
+    bool RolledBack = false;
+    int BeforeUsedBins = 0;
+    int AfterUsedBins = 0;
+    int LastBinId = -1;
+    int LastBinItemCount = 0;
+    int RemainingItems = 0;
+    int DirectMoves = 0;
+    int SameBinRelocations = 0;
+    int RelocatedExistingSmallItemCount = 0;
+    int NoCandidatePosition = 0;
+    int RelocationFailed = 0;
+    bool InsufficientFreeArea = false;
+    bool SearchBudgetReached = false;
+    long long PlacementChecks = 0;
+    double LastBinArea = 0.0;
+    double TimeMs = 0.0;
 };
 
 struct TetAutoPairGridConfig {
