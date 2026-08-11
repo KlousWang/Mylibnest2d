@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Nest2D_StrategyManager.h"
 //#include"Nest2D_PrivateDataType.h"
+#include "Nest2D_RotationUtils.h"
 #include "NestUtils.h"
 
 #include <algorithm>
@@ -30,12 +31,55 @@ namespace {
 		return std::abs(AFirst - ASecond) > Scale * 1e-9;
 	}
 
-	bool IsPriorityBefore(const CetTNestItemVector& AItems, MetENestOrderStrategy AStrategy, const std::vector<int>& AAnchorRanks, std::size_t A, std::size_t AB)
+	struct TetAreaDensityMetric
+	{
+		double Area = 0.0;
+		double Density = 0.0;
+		double LongSide = 0.0;
+		int AreaBand = 0;
+	};
+
+	TetAreaDensityMetric BuildAreaDensityMetric(const CetNestItem& AItem, const TetNestOptions& AOptions)
+	{
+		TetAreaDensityMetric Result;
+		Result.Area = std::abs(static_cast<double>(AItem.area()));
+		if (Result.Area <= 0.0) return Result;
+
+		const double Spacing = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
+		double BestEnvelopeArea = std::numeric_limits<double>::infinity();
+		for (const Radians Rotation : ET::NEST2DMANAGERLIB::CetRotationUtils::BuildAllowedLibRotations(AOptions.Rotations)) {
+			CetNestItem RotatedItem = AItem;
+			RotatedItem.rotation(Rotation);
+			RotatedItem.inflation(0);
+			const auto Bounds = RotatedItem.boundingBox();
+			const double Width = std::max(0.0, static_cast<double>(Bounds.width()) + Spacing * 2.0);
+			const double Height = std::max(0.0, static_cast<double>(Bounds.height()) + Spacing * 2.0);
+			const double EnvelopeArea = Width * Height;
+			if (EnvelopeArea < BestEnvelopeArea) {
+				BestEnvelopeArea = EnvelopeArea;
+				Result.LongSide = std::max(Width, Height);
+			}
+		}
+		Result.Density = Result.Area / std::max(1.0, BestEnvelopeArea);
+		Result.AreaBand = static_cast<int>(std::floor(std::log2(std::max(1.0, Result.Area))));
+		return Result;
+	}
+
+	bool IsPriorityBefore(const CetTNestItemVector& AItems, MetENestOrderStrategy AStrategy, const std::vector<int>& AAnchorRanks, const std::vector<TetAreaDensityMetric>* AAreaDensityMetrics, std::size_t A, std::size_t AB)
 	{
 		const bool AIsAnchor = AAnchorRanks[A] >= 0;
 		const bool BIsAnchor = AAnchorRanks[AB] >= 0;
 		if (AIsAnchor != BIsAnchor) return AIsAnchor;
 		if (AIsAnchor) return AAnchorRanks[A] < AAnchorRanks[AB];
+		if (AStrategy == MetENestOrderStrategy::AreaDensityFirst && AAreaDensityMetrics != nullptr) {
+			const TetAreaDensityMetric& MetricA = (*AAreaDensityMetrics)[A];
+			const TetAreaDensityMetric& MetricB = (*AAreaDensityMetrics)[AB];
+			if (MetricA.AreaBand != MetricB.AreaBand) return MetricA.AreaBand > MetricB.AreaBand;
+			if (AreMetricValuesDifferent(MetricA.Density, MetricB.Density)) return MetricA.Density > MetricB.Density;
+			if (AreMetricValuesDifferent(MetricA.LongSide, MetricB.LongSide)) return MetricA.LongSide > MetricB.LongSide;
+			if (AreMetricValuesDifferent(MetricA.Area, MetricB.Area)) return MetricA.Area > MetricB.Area;
+			return A < AB;
+		}
 
 		const auto Width = [&](std::size_t Index) { return static_cast<double>(AItems[Index].boundingBox().width()); };
 		const auto Height = [&](std::size_t Index) { return static_cast<double>(AItems[Index].boundingBox().height()); };
@@ -118,7 +162,7 @@ bool ET::NEST2DMANAGERLIB::CetStrategyManager::IsBetterNestResult(const TetTNest
 	return false;
 }
 
-void ET::NEST2DMANAGERLIB::CetStrategyManager::ApplyNestPriorityStrategy(CetTNestItemVector& AItems, MetENestOrderStrategy AStrategy)
+void ET::NEST2DMANAGERLIB::CetStrategyManager::ApplyNestPriorityStrategy(CetTNestItemVector& AItems, const TetNestOptions& AOptions, MetENestOrderStrategy AStrategy)
 {
 	std::vector<std::size_t> Indices;
 	Indices.reserve(AItems.size());
@@ -144,9 +188,17 @@ void ET::NEST2DMANAGERLIB::CetStrategyManager::ApplyNestPriorityStrategy(CetTNes
 	for (std::size_t Rank = 0; Rank < AnchorCount; ++Rank){
 		AnchorRanks[AreaOrder[Rank]] = static_cast<int>(Rank);
 	}
+	std::vector<TetAreaDensityMetric> AreaDensityMetrics;
+	if (AStrategy == MetENestOrderStrategy::AreaDensityFirst) {
+		AreaDensityMetrics.reserve(AItems.size());
+		for (const CetNestItem& Item : AItems) {
+			AreaDensityMetrics.push_back(BuildAreaDensityMetric(Item, AOptions));
+		}
+	}
 
 	std::stable_sort(Indices.begin(), Indices.end(), [&](std::size_t A, std::size_t AB) {
-		return IsPriorityBefore(AItems, AStrategy, AnchorRanks, A, AB);
+		const auto* Metrics = AreaDensityMetrics.empty() ? nullptr : &AreaDensityMetrics;
+		return IsPriorityBefore(AItems, AStrategy, AnchorRanks, Metrics, A, AB);
 	});
 
 	int Priority = static_cast<int>(AItems.size());

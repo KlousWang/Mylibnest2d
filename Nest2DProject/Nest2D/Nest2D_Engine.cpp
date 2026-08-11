@@ -49,6 +49,38 @@ namespace ET {
 			}
 		}
 
+		static bool ValidatePlacedItemsSpacing(const CetTNestItemVector& AItems, const TetNestOptions& AOptions)
+		{
+			const auto SpacingCoord = NestUtils::ToNestCoord(std::max(0.0, AOptions.Spacing));
+			for (std::size_t FirstIndex = 0; FirstIndex < AItems.size(); ++FirstIndex){
+				const CetNestItem& SourceItem = AItems[FirstIndex];
+				if (SourceItem.binId() < 0){
+					std::cout << "[NEST][SPACING][REJECT] Item " << FirstIndex << " was not placed on a bin." << std::endl;
+					return false;
+				}
+				CetNestItem FirstItem = SourceItem;
+				FirstItem.inflation(0);
+				if (SpacingCoord > 0){
+					FirstItem.inflation(static_cast<decltype(FirstItem.inflation())>(SpacingCoord));
+				}
+				for (std::size_t SecondIndex = FirstIndex + 1; SecondIndex < AItems.size(); ++SecondIndex){
+					if (AItems[SecondIndex].binId() != SourceItem.binId()){
+						continue;
+					}
+					CetNestItem SecondItem = AItems[SecondIndex];
+					SecondItem.inflation(0);
+					if (CetNestItem::intersects(FirstItem, SecondItem)){
+						std::cout << "[NEST][SPACING][REJECT] "
+							<< (SpacingCoord > 0 ? "Spacing violation" : "Overlap")
+							<< " between items " << FirstIndex << " and " << SecondIndex
+							<< " on bin " << SourceItem.binId() << std::endl;
+						return false;
+					}
+				}
+			}
+			return true;
+		}
+
 		// Refill sheets with complete cluster proxies. Children stay glued through
 		// their metadata and are expanded only after this multi-sheet pass.
 		using ClusterBackfillPlacer = placers::_BottomLeftPlacer<CetPolygonImpl>;
@@ -209,12 +241,19 @@ namespace ET {
 
 		void CetNest2DEngine::_RepairAndEvacuate(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, const CetPolygonImpl& ABinPoly, double ABinWidth, double ABinHeight, std::size_t& ALayers)
 		{
+			const CetTNestItemVector OriginalSolution = ANestItems;
+			const std::size_t OriginalLayers = ALayers;
 			Nest2DUtils->Nest2DPolygonBord->SetContext(ANestItems, AOptions, ABinPoly, ABinWidth, ABinHeight);
 			const auto RepairStart = std::chrono::steady_clock::now();
 			Nest2DUtils->Nest2DPolygonBord->Repair(ALayers);
 			const double BeforeLastBinMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - RepairStart).count();
 			std::cout << "[NEST][TIMING] BeforeLastBinMs=" << BeforeLastBinMs << std::endl;
 			_RunLastBinEvacuation(ANestItems, AOptions, ALayers);
+			if (!ValidatePlacedItemsSpacing(ANestItems, AOptions)){
+				std::cout << "[NEST][REPAIR][ROLLBACK] Repair produced an invalid spacing result." << std::endl;
+				ANestItems = OriginalSolution;
+				ALayers = OriginalLayers;
+			}
 		}
 		
 		int CetNest2DEngine::RunNesting_Impl(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, std::size_t* AUsedBins)
@@ -243,6 +282,10 @@ namespace ET {
 			std::cout << "[NEST] after polygon nest, Layers = " << Layers << std::endl;
 
 			if (Layers == 0){
+				return NEST2D_ERR_CORE_NESTING_FAILED;
+			}
+			if (!ValidatePlacedItemsSpacing(ANestItems, AOptions)){
+				std::cout << "[NEST][FINAL][ERROR] Result does not meet spacing requirements." << std::endl;
 				return NEST2D_ERR_CORE_NESTING_FAILED;
 			}
 
@@ -464,7 +507,7 @@ namespace ET {
 				const CetTNestItemVector ItemsBeforeBackfill = BestItems;
 				const std::size_t LayersBeforeBackfill = BestLayers;
 				BestLayers = BackfillClusterSheets(BestItems, AOptions, BestLayers);
-				if (!Nest2DUtils->Nest2DCluster->ValidatePackedResultNoOverlap(OriginalItems, BestItems, BestMetaItems)){
+				if (!Nest2DUtils->Nest2DCluster->ValidatePackedResultSpacing(OriginalItems, BestItems, BestMetaItems, AOptions)){
 					std::cout << "[NEST][CLUSTER BACKFILL][ROLLBACK] Expanded validation failed." << std::endl;
 					BestItems = ItemsBeforeBackfill;
 					BestLayers = LayersBeforeBackfill;
@@ -558,9 +601,9 @@ namespace ET {
 			return std::any_of(AMetaItems.begin(), AMetaItems.end(), [](const TetMetaItem& AMeta) { return AMeta.IsCluster; });
 		}
 
-		std::vector<std::size_t> CetNest2DEngine::_BuildPriorityOrder(CetTNestItemVector& AItems, MetENestOrderStrategy AStrategy) const
+		std::vector<std::size_t> CetNest2DEngine::_BuildPriorityOrder(CetTNestItemVector& AItems, const TetNestOptions& AOptions, MetENestOrderStrategy AStrategy) const
 		{
-			Nest2DUtils->Nest2DStrategy->ApplyNestPriorityStrategy(AItems, AStrategy);
+			Nest2DUtils->Nest2DStrategy->ApplyNestPriorityStrategy(AItems, AOptions, AStrategy);
 			std::vector<std::size_t> Indices(AItems.size());
 			std::iota(Indices.begin(), Indices.end(), 0);
 			std::stable_sort(Indices.begin(), Indices.end(), [&](std::size_t A, std::size_t AB) {
@@ -611,18 +654,18 @@ namespace ET {
 			const bool CurrentHasCluster = _HasClusterItems(AClusterResult.MetaItems);
 			std::vector<MetENestOrderStrategy> Strategies;
 			if (AClusterResult.NestItems.size() > CET_NEST_REDUCED_STRATEGY_ITEM_LIMIT){
-				Strategies = { MetENestOrderStrategy::LargeFirst };
+				Strategies = { MetENestOrderStrategy::LargeFirst, MetENestOrderStrategy::AreaDensityFirst };
 			}
 			else if (AClusterResult.NestItems.size() > CET_NEST_FULL_STRATEGY_ITEM_LIMIT){
-				Strategies = { MetENestOrderStrategy::LargeFirst, MetENestOrderStrategy::LongSideFirst };
+				Strategies = { MetENestOrderStrategy::LargeFirst, MetENestOrderStrategy::AreaDensityFirst, MetENestOrderStrategy::LongSideFirst };
 			}
 			else {
-				Strategies = { MetENestOrderStrategy::LargeFirst, MetENestOrderStrategy::SmallFirst, MetENestOrderStrategy::LongSideFirst, MetENestOrderStrategy::ThinFirst };
+				Strategies = { MetENestOrderStrategy::LargeFirst, MetENestOrderStrategy::AreaDensityFirst, MetENestOrderStrategy::SmallFirst, MetENestOrderStrategy::LongSideFirst, MetENestOrderStrategy::ThinFirst };
 			}
 			std::set<std::vector<std::size_t>> EvaluatedOrders;
 			for (MetENestOrderStrategy Strategy : Strategies){
 				CetTNestItemVector PriorityItems = AClusterResult.NestItems;
-				const std::vector<std::size_t> SortedIndices = _BuildPriorityOrder(PriorityItems, Strategy);
+				const std::vector<std::size_t> SortedIndices = _BuildPriorityOrder(PriorityItems, AOptions, Strategy);
 				if (!EvaluatedOrders.insert(SortedIndices).second){
 					std::cout << "[NEST][EVAL][SKIP] Strategy = " << static_cast<int>(Strategy) << ", reason = duplicate item order" << std::endl;
 					continue;
@@ -631,8 +674,8 @@ namespace ET {
 				std::vector<TetMetaItem> TestMetaItems;
 				_BuildSortedTestData(PriorityItems, AClusterResult.MetaItems, SortedIndices, TestItems, TestMetaItems);
 				const std::size_t Layers = UsePolygonBoard ? RunPolygonNestOnce(TestItems, AOptions, ATracker) : RunRectangleNestOnce(TestItems, AOptions, ATracker);
-				if (CurrentHasCluster && !Nest2DUtils->Nest2DCluster->ValidatePackedResultNoOverlap(AOriginalItems, TestItems, TestMetaItems)){
-					std::cout << "[NEST][EVAL][SKIP] Strategy = " << static_cast<int>(Strategy) << ", reason = expanded cluster overlap" << std::endl;
+				if (CurrentHasCluster && !Nest2DUtils->Nest2DCluster->ValidatePackedResultSpacing(AOriginalItems, TestItems, TestMetaItems, AOptions)){
+					std::cout << "[NEST][EVAL][SKIP] Strategy = " << static_cast<int>(Strategy) << ", reason = expanded cluster spacing violation" << std::endl;
 					continue;
 				}
 				TetTNestEvalResult Eval = Nest2DUtils->Nest2DStrategy->EvaluatePackedResultWithMeta(TestItems, TestMetaItems, AOriginalItems, AOptions, Layers);

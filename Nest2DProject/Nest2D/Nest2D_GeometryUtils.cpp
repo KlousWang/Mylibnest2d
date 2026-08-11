@@ -2,6 +2,34 @@
 #include "Nest2D_GeometryUtils.h"
 #include"Nest2D_PrivateDataType.h"
 
+namespace {
+    double CalcContourArea(const std::vector<TetNestPoint>& APoints)
+    {
+        if (APoints.size() < 3) return 0.0;
+        double TwiceArea = 0.0;
+        for (std::size_t Index = 0; Index < APoints.size(); ++Index) {
+            const TetNestPoint& Current = APoints[Index];
+            const TetNestPoint& Next = APoints[(Index + 1) % APoints.size()];
+            TwiceArea += Current.X * Next.Y - Next.X * Current.Y;
+        }
+        return std::abs(TwiceArea) * 0.5;
+    }
+
+    double CalcPolygonNetArea(const TetNestPolygon& APolygon)
+    {
+        double Result = CalcContourArea(APolygon.Vertices);
+        for (const std::vector<TetNestPoint>& Hole : APolygon.Holes) {
+            Result -= CalcContourArea(Hole);
+        }
+        return std::max(0.0, Result);
+    }
+
+    int CalcAreaBand(double AArea)
+    {
+        return static_cast<int>(std::floor(std::log2(std::max(1.0, AArea))));
+    }
+}
+
 ET::NEST2DMANAGERLIB::CetGeometryUtils::CetGeometryUtils()
 {
 }
@@ -117,5 +145,17 @@ double ET::NEST2DMANAGERLIB::CetGeometryUtils::CalcPolygonBoundingBoxArea(const 
 
 bool ET::NEST2DMANAGERLIB::CetGeometryUtils::ComparePolygonAreaDesc(const TetNestPolygon& ADataa, const TetNestPolygon& ADAtab)
 {
-    return CalcPolygonBoundingBoxArea(ADataa) > CalcPolygonBoundingBoxArea(ADAtab);
+    const double AreaA = CalcPolygonNetArea(ADataa);
+    const double AreaB = CalcPolygonNetArea(ADAtab);
+    const int AreaBandA = CalcAreaBand(AreaA);
+    const int AreaBandB = CalcAreaBand(AreaB);
+    if (AreaBandA != AreaBandB) return AreaBandA > AreaBandB;
+
+    const double BoundingBoxAreaA = CalcPolygonBoundingBoxArea(ADataa);
+    const double BoundingBoxAreaB = CalcPolygonBoundingBoxArea(ADAtab);
+    const double DensityA = AreaA / std::max(1.0, BoundingBoxAreaA);
+    const double DensityB = AreaB / std::max(1.0, BoundingBoxAreaB);
+    if (std::abs(DensityA - DensityB) > 1e-9) return DensityA > DensityB;
+    if (std::abs(AreaA - AreaB) > 1e-9) return AreaA > AreaB;
+    return BoundingBoxAreaA > BoundingBoxAreaB;
 }

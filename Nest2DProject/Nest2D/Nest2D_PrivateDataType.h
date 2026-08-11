@@ -107,7 +107,7 @@ inline const char* ToString(MetClusterProxyMode AMode)
     default: return "Unknown";
     }
 }
-enum class MetENestOrderStrategy { LargeFirst = 0, SmallFirst, LongSideFirst, ThinFirst };
+enum class MetENestOrderStrategy { LargeFirst = 0, SmallFirst, LongSideFirst, ThinFirst, AreaDensityFirst };
 
 enum class MetShapeType
 {

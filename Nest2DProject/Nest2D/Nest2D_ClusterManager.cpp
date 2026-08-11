@@ -222,10 +222,6 @@ namespace ET {
 			if (AStrategy == MetClusterStrategy::TemplateCluster) {
 				return _BuildTemplateClusters(AOriginalItems, AFeatures, AOptions);
 			}
-
-
-
-
 			return BuildClusterItems(AOriginalItems, AOptions, AStrategy);
 		}
 
@@ -251,7 +247,7 @@ namespace ET {
 			std::cout << "[CLUSTER] ExpandClusterResultToOriginalItems done. Original count = " << AOutOriginalItems.size() << std::endl;
 		}
 
-		bool CetClusterManager::ValidatePackedResultNoOverlap(const CetTNestItemVector& AOriginalItems, const CetTNestItemVector& APackedItems, const std::vector<TetMetaItem>& AMetaItems)
+		bool CetClusterManager::ValidatePackedResultSpacing(const CetTNestItemVector& AOriginalItems, const CetTNestItemVector& APackedItems, const std::vector<TetMetaItem>& AMetaItems, const TetNestOptions& AOptions)
 		{
 			if (APackedItems.size() != AMetaItems.size()) {
 				return false;
@@ -262,6 +258,7 @@ namespace ET {
 				_ExpandClusterChildren(APackedItems[PackedIndex], AMetaItems[PackedIndex], ExpandedItems, false);
 			}
 
+			const auto SpacingCoord = NestUtils::ToNestCoord(std::max(0.0, AOptions.Spacing));
 			for (std::size_t FirstIndex = 0; FirstIndex < ExpandedItems.size(); ++FirstIndex) {
 				if (ExpandedItems[FirstIndex].binId() < 0) {
 					continue;
@@ -269,6 +266,9 @@ namespace ET {
 
 				CetNestItem FirstItem = ExpandedItems[FirstIndex];
 				FirstItem.inflation(0);
+				if (SpacingCoord > 0) {
+					FirstItem.inflation(static_cast<decltype(FirstItem.inflation())>(SpacingCoord));
+				}
 				for (std::size_t SecondIndex = FirstIndex + 1; SecondIndex < ExpandedItems.size(); ++SecondIndex) {
 					if (ExpandedItems[SecondIndex].binId() != FirstItem.binId()) {
 						continue;
@@ -277,7 +277,10 @@ namespace ET {
 					CetNestItem SecondItem = ExpandedItems[SecondIndex];
 					SecondItem.inflation(0);
 					if (CetNestItem::intersects(FirstItem, SecondItem)) {
-						std::cout << "[CLUSTER][EXPANDED VALIDATION][REJECT] Overlap between original items " << FirstIndex << " and " << SecondIndex << " on bin " << FirstItem.binId() << std::endl;
+						std::cout << "[CLUSTER][EXPANDED VALIDATION][REJECT] "
+							<< (SpacingCoord > 0 ? "Spacing violation" : "Overlap")
+							<< " between original items " << FirstIndex << " and " << SecondIndex
+							<< " on bin " << FirstItem.binId() << std::endl;
 						return false;
 					}
 				}

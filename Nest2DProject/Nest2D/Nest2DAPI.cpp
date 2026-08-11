@@ -121,7 +121,7 @@ namespace ET {
 			if (NestItemsPtr == nullptr)return NEST2D_ERR_CORE_NESTING_FAILED;
 			CetTNestItemVector& NestItems = *NestItemsPtr;
 			NestItems.clear();
-			std::cout << "[NEST] Sorting working copy by Bounding Box Area (Descending)..." << std::endl;
+			std::cout << "[NEST] Sorting working copy by area-density priority..." << std::endl;
 			std::vector<TetNestPolygon> SortedItems;
 			std::vector<std::size_t> SortedToOriginal;
 			BuildSortedItems(AItems, SortedItems, SortedToOriginal);

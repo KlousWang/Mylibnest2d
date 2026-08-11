@@ -299,11 +299,11 @@ namespace ET {
                         return NEST2D_ERR_FILE_ROTATIONS_VAL;
                     }
                 }
-                else if (token == "LAST_BIN_EVACUATION"){
+                else if (token == "LAST_BIN_EVACUATION" || token == "EnableLastBin"){
                     int value = 0;
                     if (!(fin >> value) || (value != 0 && value != 1)){
                         if (AErrorMessage){
-                            *AErrorMessage = "Invalid LAST_BIN_EVACUATION format. Expected: LAST_BIN_EVACUATION 0/1";
+                            *AErrorMessage = "Invalid last-bin evacuation format. Expected: LAST_BIN_EVACUATION 0/1";
                         }
                         return NEST2D_ERR_FILE_UNKNOWN_TOKEN;
                     }
@@ -356,17 +356,6 @@ namespace ET {
                             return NEST2D_ERR_FILE_UNKNOWN_TOKEN;
                         }
                         }
-				else if (token == "EnableLastBin") {
-					int value = 0;
-					if (!(fin >> value)) {
-						if (AErrorMessage) {
-							*AErrorMessage = "Invalid EnableLastBin format. Expected: EnableLastBin 0/1";
-						}
-						return NEST2D_ERR_FILE_UNKNOWN_TOKEN;
-					}
-
-					AOptions.EnableLastBinEvacuation = (value != 0);
-}
                 else if (token == "PLACER_PARALLEL"){
                             int value = 0;
                             if (!(fin >> value)){
@@ -545,7 +534,6 @@ namespace ET {
             Out << "PLACER_ACCURACY " << AOptions.Placer.Accuracy << "\n";
             Out << "PLACER_ALIGNMENT " << _NestAlignmentToString(AOptions.Placer.Alignment) << "\n";
             Out << "PLACER_STARTING_POINT " << _NestAlignmentToString(AOptions.Placer.StartingPoint) << "\n";
-            Out << "EnableLastBin" << (AOptions.EnableLastBinEvacuation ? 1 : 0) << "\n";
             Out << "PLACER_PARALLEL " << (AOptions.Placer.Parallel ? 1 : 0) << "\n";
             Out << "PLACER_EXPLORE_HOLES " << (AOptions.Placer.ExploreHoles ? 1 : 0) << "\n";
             Out << "USED_BINS " << AUsedBins << "\n";
