@@ -76,6 +76,26 @@ constexpr std::size_t CET_RECTANGLE_FILL_MEDIUM_BASE_MAX_ACCEPTED_ITEMS = 4;
 constexpr std::size_t CET_RECTANGLE_FILL_LARGE_BASE_MAX_ACCEPTED_ITEMS = 2;
 constexpr double CET_RECTANGLE_FILL_POSITION_TOLERANCE = 1.0;
 
+// Template fill search is intentionally bounded so large orders cannot turn
+// candidate construction into an exhaustive subset search.
+constexpr double CET_CLUSTER_FILL_MAX_PROXY_GROWTH_RATIO = 0.01;
+constexpr std::size_t CET_CLUSTER_FILL_BEAM_WIDTH = 6;
+constexpr std::size_t CET_CLUSTER_FILL_MAX_DEPTH = 3;
+constexpr std::size_t CET_CLUSTER_FILL_MAX_CANDIDATE_FILLERS = 12;
+constexpr std::size_t CET_CLUSTER_FILL_MAX_VARIANTS_PER_BASE = 8;
+constexpr std::size_t CET_CLUSTER_FILL_MAX_FREE_REGIONS = 16;
+constexpr std::size_t CET_CLUSTER_FILL_MAX_PLACEMENT_ATTEMPTS = 768;
+constexpr std::size_t CET_CLUSTER_FILL_LARGE_ORDER_BEAM_WIDTH = 3;
+constexpr std::size_t CET_CLUSTER_FILL_LARGE_ORDER_MAX_DEPTH = 2;
+constexpr std::size_t CET_CLUSTER_FILL_LARGE_ORDER_MAX_CANDIDATE_FILLERS = 6;
+constexpr std::size_t CET_CLUSTER_FILL_LARGE_ORDER_MAX_PLACEMENT_ATTEMPTS = 192;
+constexpr std::size_t CET_CLUSTER_FILL_REDUCED_ORDER_BEAM_WIDTH = 2;
+constexpr std::size_t CET_CLUSTER_FILL_REDUCED_ORDER_MAX_DEPTH = 1;
+constexpr std::size_t CET_CLUSTER_FILL_REDUCED_ORDER_MAX_CANDIDATE_FILLERS = 4;
+constexpr std::size_t CET_CLUSTER_FILL_REDUCED_ORDER_MAX_PLACEMENT_ATTEMPTS = 96;
+constexpr double CET_CLUSTER_FILL_VARIANT_POSITION_TOLERANCE = 1.0;
+constexpr double CET_CLUSTER_FILL_VARIANT_ROTATION_TOLERANCE = 1e-9;
+
 constexpr std::size_t CET_NEST_FULL_STRATEGY_ITEM_LIMIT = 96;
 constexpr std::size_t CET_NEST_REDUCED_STRATEGY_ITEM_LIMIT = 256;
 constexpr int CET_LAST_BIN_MAX_TARGET_BINS_PER_ITEM = 4;
@@ -86,6 +106,7 @@ constexpr double CET_LAST_BIN_SMALL_ITEM_AREA_RATIO = 0.01;
 constexpr long long CET_REPAIR_MAX_PLACEMENT_CHECKS_PER_ITEM = 20000;
 constexpr long long CET_REPAIR_MAX_TOTAL_PLACEMENT_CHECKS = 120000;
 constexpr long long CET_REPAIR_MAX_SEARCH_TIME_MS = 5000;
+constexpr std::size_t CET_BOARD_FILL_MAX_FREE_REGIONS = 16;
 constexpr long long CET_LAST_BIN_MAX_PLACEMENT_CHECKS_PER_ITEM = 30000;
 constexpr long long CET_LAST_BIN_MAX_TOTAL_PLACEMENT_CHECKS = 240000;
 constexpr long long CET_LAST_BIN_MAX_SEARCH_TIME_MS = 15000;
@@ -316,6 +337,19 @@ struct TetClusterCandidate {
     double BoundingBoxArea = 0.0; double BoundingFillRatio = 0.0; double CompactnessRatio = 0.0; double BoardSpanRatio = 0.0;
     double SheetReuseScore = 0.0; double FragmentationRisk = 1.0; double BaselineArea = 0.0; double AreaSavingRatio = 0.0;
     double Confidence = 1.0; double Score = 0.0;
+};
+
+struct TetClusterFreeRegion {
+    CetPath Contour;
+    std::vector<CetPath> Holes;
+    double Area = 0.0;
+    double MinX = 0.0;
+    double MinY = 0.0;
+    double MaxX = 0.0;
+    double MaxY = 0.0;
+    double Width = 0.0;
+    double Height = 0.0;
+    bool IsClosed = false;
 };
 
 

@@ -1,4 +1,4 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "Nest2D_SelfFunction.h"
 #include "Nest2D_PrivateDataType.h"
 #include "Nest2D_TriangleClusterBuilder.h"
@@ -17,6 +17,7 @@
 #include <cmath>
 #include <set>
 #include <map>
+#include <sstream>
 #include <unordered_map>
 
 using namespace ClipperLib;
@@ -27,6 +28,170 @@ namespace {
 constexpr int kMaxSwapRounds = 2;
 constexpr int kMaxSwapClusters = 64;
 constexpr double kMinSwapGainRatio = 0.05;
+
+struct TetClusterFillSearchConfig {
+	std::size_t BeamWidth = CET_CLUSTER_FILL_BEAM_WIDTH;
+	std::size_t MaxDepth = CET_CLUSTER_FILL_MAX_DEPTH;
+	std::size_t MaxCandidateFillers = CET_CLUSTER_FILL_MAX_CANDIDATE_FILLERS;
+	std::size_t MaxPlacementAttempts = CET_CLUSTER_FILL_MAX_PLACEMENT_ATTEMPTS;
+};
+
+struct TetClusterFillSearchState {
+	TetClusterCandidate Candidate;
+	std::size_t FillerCount = 0;
+};
+
+struct TetClusterFillSearchStats {
+	std::size_t GeneratedVariantCount = 0;
+	std::size_t DeduplicatedVariantCount = 0;
+	std::size_t SearchAttempts = 0;
+	std::size_t FreeRegionCount = 0;
+	double BaseFillRatioSum = 0.0;
+	double FilledFillRatioSum = 0.0;
+	double BestFillRatioGain = 0.0;
+};
+
+TetClusterFillSearchConfig GetClusterFillSearchConfig(std::size_t AItemCount) {
+	if (AItemCount > CET_NEST_REDUCED_STRATEGY_ITEM_LIMIT) {
+		return { CET_CLUSTER_FILL_REDUCED_ORDER_BEAM_WIDTH, CET_CLUSTER_FILL_REDUCED_ORDER_MAX_DEPTH, CET_CLUSTER_FILL_REDUCED_ORDER_MAX_CANDIDATE_FILLERS, CET_CLUSTER_FILL_REDUCED_ORDER_MAX_PLACEMENT_ATTEMPTS };
+	}
+	if (AItemCount > CET_NEST_FULL_STRATEGY_ITEM_LIMIT) {
+		return { CET_CLUSTER_FILL_LARGE_ORDER_BEAM_WIDTH, CET_CLUSTER_FILL_LARGE_ORDER_MAX_DEPTH, CET_CLUSTER_FILL_LARGE_ORDER_MAX_CANDIDATE_FILLERS, CET_CLUSTER_FILL_LARGE_ORDER_MAX_PLACEMENT_ATTEMPTS };
+	}
+	return {};
+}
+
+bool ContainsOriginalIndex(const TetClusterCandidate& ACandidate, int AOriginalIndex) {
+	return std::find(ACandidate.OriginalIndices.begin(), ACandidate.OriginalIndices.end(), AOriginalIndex) != ACandidate.OriginalIndices.end();
+}
+
+bool IsFillMetricLess(double ALeft, double ARight) {
+	return ALeft < ARight - CET_CLUSTER_FILL_VARIANT_POSITION_TOLERANCE;
+}
+
+bool IsFilledVariantBetter(const TetClusterFillSearchState& AFirst, const TetClusterFillSearchState& ASecond) {
+	const TetClusterCandidate& First = AFirst.Candidate;
+	const TetClusterCandidate& Second = ASecond.Candidate;
+	if (IsFillMetricLess(First.ProxyWasteArea, Second.ProxyWasteArea)) return true;
+	if (IsFillMetricLess(Second.ProxyWasteArea, First.ProxyWasteArea)) return false;
+	if (First.FillRatio > Second.FillRatio + 1e-9) return true;
+	if (Second.FillRatio > First.FillRatio + 1e-9) return false;
+	if (First.ProxyWasteRatio < Second.ProxyWasteRatio - 1e-9) return true;
+	if (Second.ProxyWasteRatio < First.ProxyWasteRatio - 1e-9) return false;
+	if (IsFillMetricLess(First.ProxyArea, Second.ProxyArea)) return true;
+	if (IsFillMetricLess(Second.ProxyArea, First.ProxyArea)) return false;
+	if (First.FragmentationRisk < Second.FragmentationRisk - 1e-9) return true;
+	if (Second.FragmentationRisk < First.FragmentationRisk - 1e-9) return false;
+	if (AFirst.FillerCount != ASecond.FillerCount) return AFirst.FillerCount < ASecond.FillerCount;
+	return First.OriginalIndices < Second.OriginalIndices;
+}
+
+bool IsFilledVariantWorthKeeping(const TetClusterCandidate& ABaseCandidate, const TetClusterCandidate& ACandidate) {
+	const double AreaTolerance = std::max(1.0, ABaseCandidate.ProxyArea * CET_CLUSTER_GEOMETRY_RELATIVE_AREA_TOLERANCE);
+	return ACandidate.Valid && ACandidate.ProxyWasteArea < ABaseCandidate.ProxyWasteArea - AreaTolerance
+		&& ACandidate.FillRatio > ABaseCandidate.FillRatio + 1e-9;
+}
+
+std::string MakeFilledVariantKey(const TetClusterCandidate& ACandidate) {
+	std::vector<TetItemTransform> Transforms = ACandidate.Transforms;
+	std::sort(Transforms.begin(), Transforms.end(), [](const TetItemTransform& AFirst, const TetItemTransform& ASecond) { return AFirst.OriginalId < ASecond.OriginalId; });
+	std::vector<int> Indices = ACandidate.OriginalIndices;
+	std::sort(Indices.begin(), Indices.end());
+	std::ostringstream Stream;
+	for (int Index : Indices) Stream << Index << ',';
+	Stream << '|';
+	for (const TetItemTransform& Transform : Transforms) {
+		Stream << Transform.OriginalId << ':'
+			<< std::llround(Transform.RelativeX / CET_CLUSTER_FILL_VARIANT_POSITION_TOLERANCE) << ':'
+			<< std::llround(Transform.RelativeY / CET_CLUSTER_FILL_VARIANT_POSITION_TOLERANCE) << ':'
+			<< std::llround(Transform.RelativeRotation / CET_CLUSTER_FILL_VARIANT_ROTATION_TOLERANCE) << ';';
+	}
+	return Stream.str();
+}
+
+void DeduplicateFilledStates(std::vector<TetClusterFillSearchState>& AStates) {
+	std::map<std::string, TetClusterFillSearchState> UniqueStates;
+	for (const TetClusterFillSearchState& State : AStates) {
+		const std::string Key = MakeFilledVariantKey(State.Candidate);
+		auto It = UniqueStates.find(Key);
+		if (It == UniqueStates.end() || IsFilledVariantBetter(State, It->second)) UniqueStates[Key] = State;
+	}
+	AStates.clear();
+	for (const auto& Entry : UniqueStates) AStates.push_back(Entry.second);
+}
+
+void TrimFillBeam(std::vector<TetClusterFillSearchState>& AStates, std::size_t AMaxCount) {
+	std::stable_sort(AStates.begin(), AStates.end(), IsFilledVariantBetter);
+	if (AStates.size() > AMaxCount) AStates.resize(AMaxCount);
+}
+
+bool FitsAnyFreeRegion(const TetShapeFeature& AFeature, const std::vector<TetClusterFreeRegion>& AFreeRegions) {
+	for (const TetClusterFreeRegion& Region : AFreeRegions) {
+		const bool FitsNormal = AFeature.Width <= Region.Width && AFeature.Height <= Region.Height;
+		const bool FitsRotated = AFeature.Height <= Region.Width && AFeature.Width <= Region.Height;
+		if (AFeature.Area <= Region.Area && (FitsNormal || FitsRotated)) return true;
+	}
+	return false;
+}
+
+std::vector<int> CollectCompatibleFillers(const std::vector<TetShapeFeature>& AFeatures, const TetClusterCandidate& ABaseCandidate, const std::vector<TetClusterFreeRegion>& AFreeRegions, const TetClusterFillSearchConfig& AConfig) {
+	std::vector<int> Fillers;
+	const double AvailableArea = std::max(0.0, ABaseCandidate.ProxyWasteArea);
+	const double AreaTolerance = std::max(1.0, ABaseCandidate.ProxyArea * CET_CLUSTER_GEOMETRY_RELATIVE_AREA_TOLERANCE);
+	for (int Index = 0; Index < static_cast<int>(AFeatures.size()); ++Index) {
+		const TetShapeFeature& Feature = AFeatures[Index];
+		if (!ContainsOriginalIndex(ABaseCandidate, Index) && std::isfinite(Feature.Area) && Feature.Area > 0.0
+			&& Feature.Area <= AvailableArea + AreaTolerance && FitsAnyFreeRegion(Feature, AFreeRegions)) Fillers.push_back(Index);
+	}
+	std::stable_sort(Fillers.begin(), Fillers.end(), [&](int AFirst, int ASecond) {
+		if (std::abs(AFeatures[AFirst].Area - AFeatures[ASecond].Area) > 1.0) return AFeatures[AFirst].Area > AFeatures[ASecond].Area;
+		if (std::abs(AFeatures[AFirst].OrientedFillRatio - AFeatures[ASecond].OrientedFillRatio) > 1e-9) return AFeatures[AFirst].OrientedFillRatio > AFeatures[ASecond].OrientedFillRatio;
+		return AFirst < ASecond;
+	});
+	if (Fillers.size() > AConfig.MaxCandidateFillers) Fillers.resize(AConfig.MaxCandidateFillers);
+	return Fillers;
+}
+
+void BuildFilledVariantsForBase(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions, const TetClusterCandidate& ABaseCandidate, const TetClusterFillSearchConfig& AConfig, std::vector<TetClusterCandidate>& AOutVariants, TetClusterFillSearchStats& AStats) {
+	AOutVariants.clear();
+	if (!ABaseCandidate.Valid || ABaseCandidate.OriginalIndices.size() < 2 || ABaseCandidate.ProxyWasteArea <= 0.0) return;
+	ET::NEST2DMANAGERLIB::CetRectangleFillClusterBuilder Builder;
+	ET::NEST2DMANAGERLIB::CetClusterGeometryHelper Geometry;
+	std::vector<TetClusterFillSearchState> Beam{ { ABaseCandidate, 0 } };
+	std::vector<TetClusterFillSearchState> AllVariants;
+	for (std::size_t Depth = 0; Depth < AConfig.MaxDepth && !Beam.empty(); ++Depth) {
+		std::vector<TetClusterFillSearchState> NextBeam;
+		for (const TetClusterFillSearchState& State : Beam) {
+			std::vector<TetClusterFreeRegion> FreeRegions;
+			if (!Geometry.ExtractCandidateFreeRegions(AOriginalItems, AOptions, State.Candidate, FreeRegions) || FreeRegions.empty()) continue;
+			AStats.FreeRegionCount += FreeRegions.size();
+			const std::vector<int> Fillers = CollectCompatibleFillers(AFeatures, State.Candidate, FreeRegions, AConfig);
+			for (int FillerIndex : Fillers) {
+				if (AStats.SearchAttempts >= AConfig.MaxPlacementAttempts) break;
+				if (ContainsOriginalIndex(State.Candidate, FillerIndex)) continue;
+				++AStats.SearchAttempts;
+				TetClusterCandidate Candidate;
+				if (!Builder.TryAppendFillerInFreeRegions(AOriginalItems, AFeatures, ABaseCandidate, State.Candidate, FreeRegions, FillerIndex, AOptions, Candidate)) continue;
+				if (!IsFilledVariantWorthKeeping(ABaseCandidate, Candidate)) continue;
+				NextBeam.push_back({ std::move(Candidate), State.FillerCount + 1 });
+				++AStats.GeneratedVariantCount;
+			}
+		}
+		if (AStats.SearchAttempts >= AConfig.MaxPlacementAttempts) break;
+		DeduplicateFilledStates(NextBeam);
+		TrimFillBeam(NextBeam, AConfig.BeamWidth);
+		AllVariants.insert(AllVariants.end(), NextBeam.begin(), NextBeam.end());
+		Beam = std::move(NextBeam);
+	}
+	DeduplicateFilledStates(AllVariants);
+	TrimFillBeam(AllVariants, CET_CLUSTER_FILL_MAX_VARIANTS_PER_BASE);
+	AStats.DeduplicatedVariantCount += AllVariants.size();
+	for (const TetClusterFillSearchState& State : AllVariants) {
+		AStats.FilledFillRatioSum += State.Candidate.FillRatio;
+		AStats.BestFillRatioGain = std::max(AStats.BestFillRatioGain, State.Candidate.FillRatio - ABaseCandidate.FillRatio);
+		AOutVariants.push_back(State.Candidate);
+	}
+}
 
 TetPairCandidateKey MakePairCandidateKey(int AFirst, int ASecond) {
 	if (AFirst > ASecond) {
@@ -111,42 +276,6 @@ bool TryFindBetterPairSwap(const TPairCandidateLookup& APairCandidateLookup, con
 	TrySelectSwap(A, C, B, D);
 	TrySelectSwap(A, D, B, C);
 	return AOutFirstCandidate != nullptr && AOutSecondCandidate != nullptr;
-}
-
-double GetLargestChildArea(const TetClusterCandidate& ACandidate, const std::vector<TetShapeFeature>& AFeatures) {
-	double LargestArea = 0.0;
-	for (int OriginalIndex : ACandidate.OriginalIndices) {
-		if (OriginalIndex >= 0 && OriginalIndex < static_cast<int>(AFeatures.size())) {
-			LargestArea = std::max(LargestArea, AFeatures[OriginalIndex].Area);
-		}
-	}
-	return LargestArea;
-}
-
-bool IsGapFillCandidateBefore(const TetClusterCandidate& AFirst, const TetClusterCandidate& ASecond, const std::vector<TetShapeFeature>& AFeatures) {
-	const double FirstFreeArea = std::max(0.0, AFirst.BoundingBoxArea - AFirst.ReservedArea);
-	const double SecondFreeArea = std::max(0.0, ASecond.BoundingBoxArea - ASecond.ReservedArea);
-	if (std::abs(FirstFreeArea - SecondFreeArea) > 1.0) return FirstFreeArea > SecondFreeArea;
-	const double FirstFillPriority = AFirst.ProxyWasteArea / std::max(1.0, AFirst.ProxyArea);
-	const double SecondFillPriority = ASecond.ProxyWasteArea / std::max(1.0, ASecond.ProxyArea);
-	if (std::abs(FirstFillPriority - SecondFillPriority) > 1e-9) return FirstFillPriority > SecondFillPriority;
-	if (std::abs(AFirst.SheetReuseScore - ASecond.SheetReuseScore) > 1e-9) return AFirst.SheetReuseScore > ASecond.SheetReuseScore;
-	if (std::abs(AFirst.FragmentationRisk - ASecond.FragmentationRisk) > 1e-9) return AFirst.FragmentationRisk < ASecond.FragmentationRisk;
-	const double FirstLargestArea = GetLargestChildArea(AFirst, AFeatures);
-	const double SecondLargestArea = GetLargestChildArea(ASecond, AFeatures);
-	if (std::abs(FirstLargestArea - SecondLargestArea) > 1.0) return FirstLargestArea > SecondLargestArea;
-	return AFirst.Score > ASecond.Score;
-}
-
-std::vector<bool> BuildCandidateUsageMask(const std::vector<bool>& AReserved, const std::vector<bool>& AProcessed, const TetClusterCandidate& ABaseCandidate) {
-	std::vector<bool> Result = AReserved;
-	for (int OriginalIndex : ABaseCandidate.OriginalIndices) {
-		if (OriginalIndex >= 0 && OriginalIndex < static_cast<int>(Result.size())) Result[OriginalIndex] = false;
-	}
-	for (std::size_t OriginalIndex = 0; OriginalIndex < Result.size(); ++OriginalIndex) {
-		if (AProcessed[OriginalIndex]) Result[OriginalIndex] = true;
-	}
-	return Result;
 }
 
 }
@@ -371,23 +500,27 @@ namespace ET {
 			std::vector<bool> Used(Count, false);
 			std::map<MetShapeType, std::vector<int>> IndicesByType;
 
-			//  形状分类
+			//  褰㈢姸鍒嗙被
 			_CollectTemplateShapeIndices(AFeatures, IndicesByType);
 			// Collect all template candidates.
 			std::vector<TetClusterCandidate> BaseCandidates;
 			_BuildTemplateCandidates(AOriginalItems, AFeatures, AOptions, IndicesByType, BaseCandidates);
-			// Select candidates and apply bounded local optimization.
-			std::vector<TetClusterCandidate> AcceptedCandidates = _SelectAndOptimizeTemplateCandidates(AOriginalItems, AOptions, BaseCandidates, Used, Count);
-			// Fill internal gaps without consuming other accepted cluster members.
-			_OptimizeTemplateCandidatesWithFill(AOriginalItems, AFeatures, AOptions, Used, AcceptedCandidates);
+			// Keep skeletons and their bounded fill variants together for global selection.
+			std::vector<TetClusterCandidate> ExpandedCandidates;
+			_BuildFilledTemplateCandidateVariants(AOriginalItems, AFeatures, AOptions, BaseCandidates, ExpandedCandidates);
+			std::vector<TetClusterCandidate> AcceptedCandidates = _SelectAndOptimizeTemplateCandidates(AOriginalItems, AOptions, ExpandedCandidates, Used, Count);
 			// Assemble clusters and append remaining singles.
 			int AcceptedClusterCount = 0;
+			int AcceptedFilledClusterCount = 0;
 			for (const TetClusterCandidate& Candidate : AcceptedCandidates) {
 				if (!_AddClusterCandidate(Candidate, Result)) {
 					std::cout << "[TEMPLATE][ADD FAILED] Builder=" << Candidate.BuilderName << " Type=" << Candidate.ClusterType << std::endl;
 					continue;
 				}
 				++AcceptedClusterCount;
+				if (Candidate.BuilderName == "TemplateFillSearch") {
+					++AcceptedFilledClusterCount;
+				}
 				std::cout << "[TEMPLATE][ACCEPT] Builder=" << Candidate.BuilderName << " Type=" << Candidate.ClusterType << " ChildCount=" << Candidate.OriginalIndices.size() << " Score=" << Candidate.Score << std::endl;
 			}
 			int SingleCount = 0;
@@ -400,7 +533,7 @@ namespace ET {
 				++SingleCount;
 			}
 			const bool CoverageValid = _ValidateBuildResultCoverage(Result, Count);
-			std::cout << "[TEMPLATE][SUMMARY] OriginalCount=" << Count << " BaseCandidateCount=" << BaseCandidates.size() << " AcceptedClusterCount=" << AcceptedClusterCount << " SingleCount=" << SingleCount << " PackedItemCount=" << Result.NestItems.size() << " MetaItemCount=" << Result.MetaItems.size() << " CoverageValid=" << CoverageValid << std::endl;
+			std::cout << "[TEMPLATE][SUMMARY] OriginalCount=" << Count << " BaseCandidateCount=" << BaseCandidates.size() << " ExpandedCandidateCount=" << ExpandedCandidates.size() << " AcceptedClusterCount=" << AcceptedClusterCount << " AcceptedFilledClusterCount=" << AcceptedFilledClusterCount << " SingleCount=" << SingleCount << " PackedItemCount=" << Result.NestItems.size() << " MetaItemCount=" << Result.MetaItems.size() << " CoverageValid=" << CoverageValid << std::endl;
 			if (!CoverageValid) {
 				std::cout << "[TEMPLATE][FALLBACK] Coverage invalid, use all singles." << std::endl;
 				return _BuildAllSingles(AOriginalItems);
@@ -481,6 +614,42 @@ namespace ET {
 				Builder.BuildCandidates(AOriginalItems, AFeatures, CustomIndices, AOptions, ABaseCandidates);
 				AppendBuilderLog("CustomBuilder", OldCount);
 			}
+		}
+
+		void CetClusterManager::_BuildFilledTemplateCandidateVariants(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions, const std::vector<TetClusterCandidate>& ABaseCandidates, std::vector<TetClusterCandidate>& AOutCandidates)
+		{
+			AOutCandidates = ABaseCandidates;
+			TetClusterFillSearchStats Stats;
+			const TetClusterFillSearchConfig Config = GetClusterFillSearchConfig(AOriginalItems.size());
+			std::size_t ValidBaseCandidateCount = 0;
+			std::size_t FilledVariantCount = 0;
+			for (const TetClusterCandidate& BaseCandidate : ABaseCandidates) {
+				if (!BaseCandidate.Valid) continue;
+				++ValidBaseCandidateCount;
+				Stats.BaseFillRatioSum += BaseCandidate.FillRatio;
+				std::vector<TetClusterCandidate> Variants;
+				BuildFilledVariantsForBase(AOriginalItems, AFeatures, AOptions, BaseCandidate, Config, Variants, Stats);
+				if (!Variants.empty()) {
+					FilledVariantCount += Variants.size();
+					std::cout << "[TEMPLATE][FILL VARIANT] BaseType=" << BaseCandidate.ClusterType << " Generated=" << Variants.size() << " BaseFillRatio=" << BaseCandidate.FillRatio << " BestFillRatio=" << Variants.front().FillRatio << std::endl;
+					AOutCandidates.insert(AOutCandidates.end(), Variants.begin(), Variants.end());
+				}
+			}
+			const double BaseAverage = ValidBaseCandidateCount == 0 ? 0.0 : Stats.BaseFillRatioSum / static_cast<double>(ValidBaseCandidateCount);
+			const double FilledAverage = FilledVariantCount == 0 ? 0.0 : Stats.FilledFillRatioSum / static_cast<double>(FilledVariantCount);
+			std::cout << "[TEMPLATE][FILL SUMMARY] BaseCandidateCount=" << ABaseCandidates.size()
+				<< " GeneratedVariantCount=" << Stats.GeneratedVariantCount
+				<< " DeduplicatedVariantCount=" << Stats.DeduplicatedVariantCount
+				<< " FilledVariantCount=" << FilledVariantCount
+				<< " AverageBaseFillRatio=" << BaseAverage
+				<< " AverageFilledFillRatio=" << FilledAverage
+				<< " BestFillRatioGain=" << Stats.BestFillRatioGain
+				<< " FreeRegionCount=" << Stats.FreeRegionCount
+				<< " SearchAttempts=" << Stats.SearchAttempts
+				<< " BeamWidth=" << Config.BeamWidth
+				<< " MaxDepth=" << Config.MaxDepth
+				<< " MaxFillers=" << Config.MaxCandidateFillers
+				<< " MaxPlacementAttempts=" << Config.MaxPlacementAttempts << std::endl;
 		}
 
 		std::vector<TetClusterCandidate> CetClusterManager::_SelectTemplateCandidates(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const std::vector<TetClusterCandidate>& ABaseCandidates, std::vector<bool>& AUsed)
@@ -676,83 +845,6 @@ namespace ET {
 				}
 			}
 			return true;
-		}
-
-		void CetClusterManager::_OptimizeTemplateCandidatesWithFill(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions, std::vector<bool>& AUsed, std::vector<TetClusterCandidate>& ACandidates)
-		{
-			const int Count = static_cast<int>(AOriginalItems.size());
-			int RectangleFilledClusterCount = 0;
-			int RectangleFillerItemCount = 0;
-			std::size_t GapFillAttemptCount = 0;
-			std::size_t GapFillSkippedClusterCount = 0;
-
-			std::stable_sort(ACandidates.begin(), ACandidates.end(), [&](const TetClusterCandidate& AFirstCandidate, const TetClusterCandidate& ASecondCandidate) {
-				return IsGapFillCandidateBefore(AFirstCandidate, ASecondCandidate, AFeatures);
-				});
-
-			const std::vector<bool> ReservedByCluster = AUsed;
-			std::fill(AUsed.begin(), AUsed.end(), false);
-			std::vector<TetClusterCandidate> LocallyOptimizedCandidates;
-			LocallyOptimizedCandidates.reserve(ACandidates.size());
-
-			CetRectangleFillClusterBuilder RectangleFillBuilder;
-			CetClusterGeometryHelper Geometry;
-			const std::size_t GapFillAttemptLimit = Count > static_cast<int>(CET_NEST_FULL_STRATEGY_ITEM_LIMIT)
-				? CET_RECTANGLE_FILL_LARGE_ORDER_MAX_BASE_CANDIDATES
-				: CET_RECTANGLE_FILL_MAX_BASE_CANDIDATES;
-
-			for (const TetClusterCandidate& BaseCandidate : ACandidates) {
-				const std::vector<bool> CandidateUsage = BuildCandidateUsageMask(ReservedByCluster, AUsed, BaseCandidate);
-				TetClusterCandidate AvailableCandidate = BaseCandidate;
-				bool RemovedUsedChild = false;
-				AvailableCandidate.OriginalIndices.clear();
-				AvailableCandidate.Transforms.clear();
-				for (const TetItemTransform& Transform : BaseCandidate.Transforms) {
-					if (Transform.OriginalId < 0 || Transform.OriginalId >= Count || AUsed[Transform.OriginalId]) {
-						RemovedUsedChild = true;
-						continue;
-					}
-					AvailableCandidate.OriginalIndices.push_back(Transform.OriginalId);
-					AvailableCandidate.Transforms.push_back(Transform);
-				}
-
-				if (AvailableCandidate.OriginalIndices.size() < 2) {
-					continue;
-				}
-				if (RemovedUsedChild) {
-					AvailableCandidate.ClusterType += "_Reduced" + std::to_string(AvailableCandidate.OriginalIndices.size());
-					if (!Geometry.FinalizeCandidate(AOriginalItems, AOptions, AvailableCandidate)) {
-						continue;
-					}
-				}
-				if (!_CanAcceptClusterCandidate(AOriginalItems, AOptions, AvailableCandidate, CandidateUsage, Count)) {
-					continue;
-				}
-
-				TetClusterCandidate FilledCandidate;
-				const bool TryGapFill = GapFillAttemptCount < GapFillAttemptLimit;
-				if (TryGapFill) {
-					++GapFillAttemptCount;
-				}
-				else {
-					++GapFillSkippedClusterCount;
-				}
-				if (TryGapFill && RectangleFillBuilder.BuildCandidateForBase(AOriginalItems, AFeatures, AvailableCandidate, AOptions, CandidateUsage, FilledCandidate) && _CanAcceptClusterCandidate(AOriginalItems, AOptions, FilledCandidate, CandidateUsage, Count)) {
-					const int NewFillerCount = static_cast<int>(FilledCandidate.OriginalIndices.size() - AvailableCandidate.OriginalIndices.size());
-					RectangleFillerItemCount += std::max(0, NewFillerCount);
-					if (NewFillerCount > 0) {
-						++RectangleFilledClusterCount;
-						std::cout << "[TEMPLATE][RECT_FILL ACCEPT] BaseType=" << AvailableCandidate.ClusterType << " FilledType=" << FilledCandidate.ClusterType << " Added=" << NewFillerCount << " ChildCount=" << FilledCandidate.OriginalIndices.size() << " Score=" << FilledCandidate.Score << std::endl;
-					}
-					AvailableCandidate = std::move(FilledCandidate);
-				}
-
-				for (int OriginalIndex : AvailableCandidate.OriginalIndices) {
-					AUsed[OriginalIndex] = true;
-				}
-				LocallyOptimizedCandidates.push_back(std::move(AvailableCandidate));
-			}
-			ACandidates = std::move(LocallyOptimizedCandidates);
 		}
 
 		TetClusterBuildResult CetClusterManager::_BuildAutoPairClusters(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions)

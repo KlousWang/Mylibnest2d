@@ -38,12 +38,12 @@ namespace ET {
             TetClusterBuildResult _BuildTemplateClusters(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions);
             void _CollectTemplateShapeIndices(const std::vector<TetShapeFeature>& AFeatures, std::map<MetShapeType, std::vector<int>>& AIndicesByType);
             void _BuildTemplateCandidates(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions, const std::map<MetShapeType, std::vector<int>>& AIndicesByType, std::vector<TetClusterCandidate>& ABaseCandidates);
+            void _BuildFilledTemplateCandidateVariants(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions, const std::vector<TetClusterCandidate>& ABaseCandidates, std::vector<TetClusterCandidate>& AOutCandidates);
             std::vector<TetClusterCandidate> _SelectTemplateCandidates(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const std::vector<TetClusterCandidate>& ABaseCandidates, std::vector<bool>& AUsed);
             std::vector<TetClusterCandidate> _SelectAndOptimizeTemplateCandidates(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const std::vector<TetClusterCandidate>& ABaseCandidates, std::vector<bool>& AUsed, int AOriginalItemCount);
             int _OptimizePairClusterSelection(const std::vector<TetClusterCandidate>& AAllCandidates, std::vector<TetClusterCandidate>& AAcceptedCandidates, int AOriginalItemCount);
             double _CalculateCandidateSelectionScore(const std::vector<TetClusterCandidate>& ACandidates);
             bool _ValidateClusterSelection(const std::vector<TetClusterCandidate>& ACandidates, int AOriginalItemCount);
-            void _OptimizeTemplateCandidatesWithFill(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions, std::vector<bool>& AUsed, std::vector<TetClusterCandidate>& ACandidates);
            // void _AppendTemplateSingles(const CetTNestItemVector& AOriginalItems, std::vector<bool>& AUsed, TetClusterBuildResult& AResult);
 
             TetClusterBuildResult _BuildAllSingles(const CetTNestItemVector& AOriginalItems);

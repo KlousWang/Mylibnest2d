@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Nest2D_PolygonBoardRepairer.h"
 
+#include "Nest2D_ClusterGeometryHelper.h"
 #include "Nest2D_RotationUtils.h"
 
 #include "NestUtils.h"
@@ -954,13 +955,13 @@ namespace ET {
                 return;
             }
 			auto& Items = *_Items;
-
+			const int BeforeUsedBins = _CountUsedBins();
+			const double BeforeFirstBinArea = _CalculateBinOccupiedArea(0);
+			const long long BeforePlacementChecks = m_PlacementChecks;
+			std::size_t AcceptedMoves = 0;
 			bool Changed = true;
-
 			int Iteration = 0;
 			int MaxIterations = static_cast<int>(Items.size())*3;
-
-			
 
 			while (Changed && Iteration < MaxIterations){
 				if (!_CanContinueSearch()) {
@@ -973,116 +974,203 @@ namespace ET {
 					if (!_CanContinueSearch()) {
 						break;
 					}
+					std::vector<TetClusterFreeRegion> FreeRegions;
+					const bool ExtractedFreeRegions = _ExtractBoardFreeRegions(TargetBin, FreeRegions);
+					std::cout << "[BOARD FILL][SEARCH] Bin=" << TargetBin
+						<< " FreeRegionCount=" << FreeRegions.size()
+						<< " Extracted=" << ExtractedFreeRegions << std::endl;
 					TetHoleFillCandidate BestCandidate;
-                    if (!_FindBestCandidateForTargetBin(TargetBin,BestCandidate)){
+                    if (!_FindBestCandidateForTargetBin(TargetBin, FreeRegions, BestCandidate)){
                         continue;
                     }
-                    _ApplyHoleFillCandidate(BestCandidate);
+					if (!_ApplyHoleFillCandidate(BestCandidate)) {
+						continue;
+					}
                     Changed = true;
-
-                    std::cout << "[HOLE_FILL] move item " << BestCandidate.ItemIndex << " from bin " << BestCandidate.OldBin << " to bin " << BestCandidate.TargetBin << ", score = " << BestCandidate.Score << std::endl;
+					++AcceptedMoves;
+					std::cout << "[BOARD FILL][MOVE] Item=" << BestCandidate.ItemIndex
+						<< " From=" << BestCandidate.OldBin << " To=" << BestCandidate.TargetBin
+						<< " Score=" << BestCandidate.Score << std::endl;
                 }
                 ALayers = _CompactItemBins();
             }
-            std::cout << "[HOLE_FILL] finish. Iteration = " << Iteration << ", Layers = " << ALayers << std::endl;
+			std::cout << "[BOARD FILL][SUMMARY] MoveAttempts=" << (m_PlacementChecks - BeforePlacementChecks)
+				<< " AcceptedMoves=" << AcceptedMoves << " BeforeFirstBinArea=" << BeforeFirstBinArea
+				<< " AfterFirstBinArea=" << _CalculateBinOccupiedArea(0)
+				<< " BeforeUsedBins=" << BeforeUsedBins << " AfterUsedBins=" << _CountUsedBins()
+				<< " Iterations=" << Iteration << std::endl;
         }
 
-        bool CetPolygonBoardRepairer::_FindBestCandidateForTargetBin(int ATargetBin, TetHoleFillCandidate& ABestCandidate)
+        bool CetPolygonBoardRepairer::_ExtractBoardFreeRegions(int ATargetBin, std::vector<TetClusterFreeRegion>& AOutRegions) const
         {
-            if (_Items == nullptr){
-                return false;
+            AOutRegions.clear();
+            if (_Items == nullptr || _BinPoly == nullptr || ATargetBin < 0 || _BinPoly->Contour.size() < 3) return false;
+            ClipperLib::Paths ReservedContours;
+            if (!_BuildBoardReservedContours(ATargetBin, ReservedContours)) return false;
+            ClipperLib::Clipper DifferenceClipper;
+            if (!DifferenceClipper.AddPath(_BinPoly->Contour, ClipperLib::ptSubject, true)) return false;
+            if (!_BinPoly->Holes.empty() && !DifferenceClipper.AddPaths(_BinPoly->Holes, ClipperLib::ptSubject, true)) return false;
+            if (!ReservedContours.empty() && !DifferenceClipper.AddPaths(ReservedContours, ClipperLib::ptClip, true)) return false;
+            ClipperLib::PolyTree Tree;
+            if (!DifferenceClipper.Execute(ClipperLib::ctDifference, Tree, ClipperLib::pftNonZero, ClipperLib::pftNonZero)) return false;
+            for (const ClipperLib::PolyNode* Node : Tree.Childs) if (Node != nullptr && !_AppendBoardFreeRegion(*Node, AOutRegions)) return false;
+            std::stable_sort(AOutRegions.begin(), AOutRegions.end(), [](const TetClusterFreeRegion& AFirst, const TetClusterFreeRegion& ASecond) {
+                if (std::abs(AFirst.Area - ASecond.Area) > CET_CLUSTER_GEOMETRY_AREA_TOLERANCE) return AFirst.Area > ASecond.Area;
+                if (AFirst.MinY != ASecond.MinY) return AFirst.MinY < ASecond.MinY;
+                return AFirst.MinX < ASecond.MinX;
+                });
+            if (AOutRegions.size() > CET_BOARD_FILL_MAX_FREE_REGIONS) AOutRegions.resize(CET_BOARD_FILL_MAX_FREE_REGIONS);
+            return !AOutRegions.empty();
+        }
+
+        bool CetPolygonBoardRepairer::_BuildBoardReservedContours(int ATargetBin, ClipperLib::Paths& AOutContours) const
+        {
+            AOutContours.clear();
+            if (_Items == nullptr || ATargetBin < 0) return false;
+            for (const CetNestItem& SourceItem : *_Items) {
+                if (SourceItem.binId() != ATargetBin) continue;
+                CetNestItem Item = SourceItem;
+                Item.inflation(0);
+                const CetPolygonImpl& Shape = Item.transformedShape();
+                CetPath Contour = Shape.Contour;
+                ClipperLib::CleanPolygon(Contour, 1.0);
+                if (Contour.size() < 3 || std::abs(ClipperLib::Area(Contour)) <= 0.0) return false;
+                if (!ClipperLib::Orientation(Contour)) std::reverse(Contour.begin(), Contour.end());
+                AOutContours.push_back(std::move(Contour));
+                for (CetPath Hole : Shape.Holes) {
+                    ClipperLib::CleanPolygon(Hole, 1.0);
+                    if (Hole.size() < 3 || std::abs(ClipperLib::Area(Hole)) <= 0.0) return false;
+                    if (ClipperLib::Orientation(Hole)) std::reverse(Hole.begin(), Hole.end());
+                    AOutContours.push_back(std::move(Hole));
+                }
             }
+            if (AOutContours.empty() || m_SpacingCoord <= 0) return true;
+            ClipperLib::Paths OffsetContours;
+            ClipperLib::ClipperOffset OffsetBuilder(2.0, std::max(1.0, static_cast<double>(m_SpacingCoord) * 0.02));
+            OffsetBuilder.AddPaths(AOutContours, ClipperLib::jtRound, ClipperLib::etClosedPolygon);
+            OffsetBuilder.Execute(OffsetContours, m_SpacingCoord);
+            if (OffsetContours.empty()) return false;
+            AOutContours = std::move(OffsetContours);
+            return true;
+        }
 
-			auto& Items = *_Items;
+        bool CetPolygonBoardRepairer::_AppendBoardFreeRegion(const ClipperLib::PolyNode& ANode, std::vector<TetClusterFreeRegion>& AOutRegions) const
+        {
+            if (!ANode.IsHole() && ANode.Contour.size() >= 3) {
+                TetClusterFreeRegion Region;
+                Region.Contour = ANode.Contour;
+                Region.IsClosed = true;
+                Region.Area = std::abs(static_cast<double>(ClipperLib::Area(Region.Contour)));
+                if (!std::isfinite(Region.Area) || Region.Area <= 0.0) return false;
+                Region.MinX = Region.MaxX = static_cast<double>(Region.Contour.front().X);
+                Region.MinY = Region.MaxY = static_cast<double>(Region.Contour.front().Y);
+                for (const ClipperLib::IntPoint& Point : Region.Contour) {
+                    Region.MinX = std::min(Region.MinX, static_cast<double>(Point.X));
+                    Region.MinY = std::min(Region.MinY, static_cast<double>(Point.Y));
+                    Region.MaxX = std::max(Region.MaxX, static_cast<double>(Point.X));
+                    Region.MaxY = std::max(Region.MaxY, static_cast<double>(Point.Y));
+                }
+                for (const ClipperLib::PolyNode* Child : ANode.Childs) {
+                    if (Child == nullptr || !Child->IsHole()) continue;
+                    const double HoleArea = std::abs(static_cast<double>(ClipperLib::Area(Child->Contour)));
+                    if (!std::isfinite(HoleArea) || HoleArea >= Region.Area) return false;
+                    Region.Area -= HoleArea;
+                    Region.Holes.push_back(Child->Contour);
+                }
+                Region.Width = Region.MaxX - Region.MinX;
+                Region.Height = Region.MaxY - Region.MinY;
+                if (Region.Area <= 0.0 || Region.Width <= 0.0 || Region.Height <= 0.0) return false;
+                AOutRegions.push_back(std::move(Region));
+            }
+            for (const ClipperLib::PolyNode* Child : ANode.Childs) if (Child != nullptr && !_AppendBoardFreeRegion(*Child, AOutRegions)) return false;
+            return true;
+        }
+
+        bool CetPolygonBoardRepairer::_FindBestCandidateForTargetBin(int ATargetBin, const std::vector<TetClusterFreeRegion>& AFreeRegions, TetHoleFillCandidate& ABestCandidate)
+        {
+            if (_Items == nullptr) return false;
             bool Found = false;
-
-            for (std::size_t i = 0; i < Items.size(); ++i){
-                int OldBin = static_cast<int>(Items[i].binId());
-
-                
-				
-				if (OldBin >= 0 && OldBin <= ATargetBin){
-					continue;
-				}
-				TetHoleFillCandidate Candidate;
-
-				if (!_TryFindBestPlacementInBin(i, ATargetBin, Candidate)){
-					continue;
-				}
-				if (!Found || Candidate.Score > ABestCandidate.Score){
-					ABestCandidate = Candidate;
-					Found = true;
-				}
-			}
+            for (std::size_t i = 0; i < _Items->size(); ++i) {
+                const int OldBin = static_cast<int>((*_Items)[i].binId());
+                if (OldBin >= 0 && OldBin <= ATargetBin) continue;
+                TetHoleFillCandidate Candidate;
+                if (_TryFindBestPlacementInBin(i, ATargetBin, AFreeRegions, Candidate) && (!Found || Candidate.Score > ABestCandidate.Score)) {
+                    ABestCandidate = Candidate;
+                    Found = true;
+                }
+            }
             return Found;
         }
 
-        bool CetPolygonBoardRepairer::_TryFindBestPlacementInBin(std::size_t AItemIndex, int ATargetBin, TetHoleFillCandidate& ABestCandidate)
+        bool CetPolygonBoardRepairer::_TryFindBestPlacementInBin(std::size_t AItemIndex, int ATargetBin, const std::vector<TetClusterFreeRegion>& AFreeRegions, TetHoleFillCandidate& ABestCandidate)
         {
-            if (_Items == nullptr || _Options == nullptr || _BinPoly == nullptr){
-                return false;
-            }
-            auto& Items = *_Items;
-            if (AItemIndex >= Items.size()){
-                return false;
-            }
-            int OldBin = static_cast<int>(Items[AItemIndex].binId());
-            bool Found = false;
-            if (!_CanContinueSearch()) {
-                return false;
-            }
+            if (_Items == nullptr || _Options == nullptr || _BinPoly == nullptr || AItemIndex >= _Items->size() || !_CanContinueSearch()) return false;
+            const int OldBin = static_cast<int>((*_Items)[AItemIndex].binId());
             const long long CheckLimit = std::min(m_PerItemPlacementCheckLimit, m_RemainingPlacementChecks);
             const double GridStep = _GetEffectiveGridStep(CheckLimit);
             long long CheckedCount = 0;
-            for (const auto Angle : m_Rotations){
-                for (double Y = 0.0; Y < m_BoardBinHeight; Y += GridStep){
-                    for (double X = 0.0; X < m_BoardBinWidth; X += GridStep){
-                        if (CheckedCount >= CheckLimit || !_CanContinueSearch()) {
-                            return Found;
-                        }
-                        ++CheckedCount;
-                        ++m_PlacementChecks;
-                        --m_RemainingPlacementChecks;
-
-                        TetPlacementCandidate Placement;
-                        Placement.ItemIndex = AItemIndex;
-                        Placement.TargetBin = ATargetBin;
-                        Placement.Rotation = Angle;
-                        _FillTranslationForBBoxMin(Placement,X,Y);
-                        if (!_CanPlaceAt(Placement)){
-                            continue;
-                        }
-                        double Score = _CalcHoleFillScore(AItemIndex,OldBin,ATargetBin,Placement.Translation);
-                        if (!Found || Score > ABestCandidate.Score){
-                            ABestCandidate.Valid = true;
-                            ABestCandidate.ItemIndex = AItemIndex;
-                            ABestCandidate.OldBin = OldBin;
-                            ABestCandidate.TargetBin = ATargetBin;
-                            ABestCandidate.Translation = Placement.Translation;
-                            ABestCandidate.Rotation = Placement.Rotation;
-                            ABestCandidate.Score = Score;
-                            Found = true;
+            bool Found = false;
+            for (const Radians Angle : m_Rotations) {
+                CetNestItem RotatedItem = (*_Items)[AItemIndex];
+                RotatedItem.translation(Point(0, 0));
+                RotatedItem.rotation(Angle);
+                RotatedItem.inflation(0);
+                const auto RotatedBounds = RotatedItem.boundingBox();
+                const double ItemWidth = static_cast<double>(RotatedBounds.width());
+                const double ItemHeight = static_cast<double>(RotatedBounds.height());
+                for (const TetClusterFreeRegion& FreeRegion : AFreeRegions) {
+                    if (ItemWidth > FreeRegion.Width || ItemHeight > FreeRegion.Height) continue;
+                    for (double Y = NestUtils::FromNestCoord(static_cast<decltype(NestUtils::ToNestCoord(0.0))>(std::llround(FreeRegion.MinY))); Y <= NestUtils::FromNestCoord(static_cast<decltype(NestUtils::ToNestCoord(0.0))>(std::llround(FreeRegion.MaxY))); Y += GridStep) {
+                        for (double X = NestUtils::FromNestCoord(static_cast<decltype(NestUtils::ToNestCoord(0.0))>(std::llround(FreeRegion.MinX))); X <= NestUtils::FromNestCoord(static_cast<decltype(NestUtils::ToNestCoord(0.0))>(std::llround(FreeRegion.MaxX))); X += GridStep) {
+                            if (CheckedCount >= CheckLimit || !_CanContinueSearch()) return Found;
+                            ++CheckedCount;
+                            ++m_PlacementChecks;
+                            --m_RemainingPlacementChecks;
+                            TetPlacementCandidate Placement;
+                            Placement.ItemIndex = AItemIndex;
+                            Placement.TargetBin = ATargetBin;
+                            Placement.Rotation = Angle;
+                            _FillTranslationForBBoxMin(Placement, X, Y);
+                            if (!_IsPlacementInsideFreeRegion(Placement, FreeRegion) || !_CanPlaceAt(Placement)) continue;
+                            const double Score = _CalcHoleFillScore(AItemIndex, OldBin, ATargetBin, Placement.Translation);
+                            if (!Found || Score > ABestCandidate.Score) {
+                                ABestCandidate = { true, AItemIndex, OldBin, ATargetBin, Placement.Translation, Placement.Rotation, Score };
+                                Found = true;
+                            }
                         }
                     }
                 }
             }
-
             return Found;
         }
 
-        void CetPolygonBoardRepairer::_ApplyHoleFillCandidate(const TetHoleFillCandidate& ACandidate)
+        bool CetPolygonBoardRepairer::_IsPlacementInsideFreeRegion(const TetPlacementCandidate& APlacement, const TetClusterFreeRegion& AFreeRegion) const
         {
-            if (_Items == nullptr || !ACandidate.Valid){
-                return;
-            }
-            auto& Items = *_Items;
-            if (ACandidate.ItemIndex >= Items.size()){
-                return;
-            }
-            auto& Item = Items[ACandidate.ItemIndex];
+            if (_Items == nullptr || APlacement.ItemIndex >= _Items->size()) return false;
+            CetNestItem Item = (*_Items)[APlacement.ItemIndex];
+            Item.translation(APlacement.Translation);
+            Item.rotation(APlacement.Rotation);
+            Item.inflation(0);
+            const double Tolerance = std::max(1.0, AFreeRegion.Area * CET_CLUSTER_GEOMETRY_RELATIVE_AREA_TOLERANCE);
+            CetClusterGeometryHelper Geometry;
+            return Geometry.IsContourInsideFreeRegion(Item.transformedShape().Contour, AFreeRegion, Tolerance);
+        }
+
+        bool CetPolygonBoardRepairer::_ApplyHoleFillCandidate(const TetHoleFillCandidate& ACandidate)
+        {
+            if (_Items == nullptr || !ACandidate.Valid || ACandidate.ItemIndex >= _Items->size()) return false;
+            CetNestItem& Item = (*_Items)[ACandidate.ItemIndex];
+            const Point OldTranslation = Item.translation();
+            const Radians OldRotation = Item.rotation();
+            const int OldBin = Item.binId();
             Item.translation(ACandidate.Translation);
             Item.rotation(ACandidate.Rotation);
             Item.binId(ACandidate.TargetBin);
+            if (_IsCurrentPlacementValid(ACandidate.ItemIndex)) return true;
+            Item.translation(OldTranslation);
+            Item.rotation(OldRotation);
+            Item.binId(OldBin);
+            return false;
         }
 
         double CetPolygonBoardRepairer::_CalcHoleFillScore(std::size_t AItemIndex, int AOldBin, int ATargetBin, const libnest2d::Point& ATranslation)
@@ -1099,6 +1187,16 @@ namespace ET {
             double YPenalty = static_cast<double>(ATranslation.Y) * 0.000001;
             double Score =ItemArea * 10.0+ BinImprove * 1000000.0- XPenalty- YPenalty;
             return Score;
+        }
+
+        double CetPolygonBoardRepairer::_CalculateBinOccupiedArea(int ABinId) const
+        {
+            if (_Items == nullptr || ABinId < 0) return 0.0;
+            double Area = 0.0;
+            for (const CetNestItem& Item : *_Items) {
+                if (Item.binId() == ABinId) Area += std::abs(static_cast<double>(Item.area()));
+            }
+            return Area;
         }
 
     } // namespace NEST2DMANAGERLIB

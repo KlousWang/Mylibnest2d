@@ -48,9 +48,7 @@ namespace ET {
             Nest2dClusterTri = (decltype(Nest2dClusterTri))m_LibConfig->GetLocalCoreObjIns("l_TriangleClusterBuilder");
             Nest2dClusterCircle = (decltype(Nest2dClusterCircle))m_LibConfig->GetLocalCoreObjIns("l_CircleClusterBuilder");
 
-            const char* FuncName = m_LibConfig->GetClassFuncName("Nest2D_Engine", "localNest2D_Engine");
-      
-			PerformNestingEx.Reload(m_Engine, FuncName);
+            PerformNestingEx.Reload(m_Engine, "RunNesting");
            /* CetNest2DInvokeFunctor::MakeBoardSvgPath.Reload(m_SvgUtils, "MakeBoardSvgPath");
             CetNest2DInvokeFunctor::InsertTextBeforeSvgEnd.Reload(m_SvgUtils, "InsertTextBeforeSvgEnd");*/
 

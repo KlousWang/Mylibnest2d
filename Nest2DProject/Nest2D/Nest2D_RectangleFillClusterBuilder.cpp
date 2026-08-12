@@ -1,4 +1,4 @@
-#include "pch.h"
+Ôªø#include "pch.h"
 #include "Nest2D_RectangleFillClusterBuilder.h"
 #include "Nest2D_ClusterGeometryHelper.h"
 #include "Nest2D_RotationUtils.h"
@@ -43,7 +43,7 @@ namespace ET {
                 return false;
             }
 
-            // Ω´∑±‘”µƒ ’ºØ∫Õ≈≈–ÚÃ·»°≥ˆ»•
+            // Â∞ÜÁπÅÊùÇÁöÑÊî∂ÈõÜÂíåÊéíÂ∫èÊèêÂèñÂá∫Âéª
             TetRectangleFillContext FillCtx{ AOriginalItems, AFeatures, AOptions, AUsed };
             std::vector<int> FillerIndices = _PrepareFillerIndices(FillCtx, CurrentCandidate, BaseAvailableArea);
 
@@ -75,7 +75,7 @@ namespace ET {
                     continue;
                 }
 
-                // µ˜”√Ã·»°≥ˆµƒ«©√˚º∆À„∫Ø ˝
+                // Ë∞ÉÁî®ÊèêÂèñÂá∫ÁöÑÁ≠æÂêçËÆ°ÁÆóÂáΩÊï∞
                 const std::uint64_t FillerShapeSignature = _BuildFillerShapeSignature(AFeatures[FillerIndex], FillerIndex);
                 if (FailedFillerShapes.find(FillerShapeSignature) != FailedFillerShapes.end()) {
                     continue;
@@ -103,8 +103,72 @@ namespace ET {
         }
         bool CetRectangleFillClusterBuilder::_TryAddFiller(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetClusterCandidate& ACurrentCandidate, int AFillerIndex, const TetNestOptions& AOptions, double AEnvelopeWidth, double AEnvelopeHeight, TetClusterCandidate& AOutCandidate)
         {
-            // ... «∞÷√–£—È±£≥÷≤ª±‰ ...
             AOutCandidate = TetClusterCandidate{};
+            TetItemTransform FillerTransform;
+            CetClusterGeometryHelper Geometry;
+            std::vector<TetClusterFreeRegion> FreeRegions;
+            if (!Geometry.ExtractCandidateFreeRegions(AOriginalItems, AOptions, ACurrentCandidate, FreeRegions)
+                || !_TryFindFillerTransform(AOriginalItems, AFeatures, ACurrentCandidate, FreeRegions, AFillerIndex, AOptions, AEnvelopeWidth, AEnvelopeHeight, FillerTransform)) {
+                return false;
+            }
+
+            TetClusterCandidate BestCandidate = ACurrentCandidate;
+            BestCandidate.OriginalIndices.push_back(AFillerIndex);
+            BestCandidate.Transforms.push_back(FillerTransform);
+            if (!Geometry.FinalizeCandidateInRectangle(AOriginalItems, AOptions, BestCandidate, AEnvelopeWidth, AEnvelopeHeight)) {
+                return false;
+            }
+
+            BestCandidate.BuilderName = "GapFillBuilder";
+            AOutCandidate = std::move(BestCandidate);
+            return true;
+        }
+
+        bool CetRectangleFillClusterBuilder::TryAppendFiller(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetClusterCandidate& ABaseCandidate, const TetClusterCandidate& ACurrentCandidate, int AFillerIndex, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate)
+        {
+            CetClusterGeometryHelper Geometry;
+            std::vector<TetClusterFreeRegion> FreeRegions;
+            return Geometry.ExtractCandidateFreeRegions(AOriginalItems, AOptions, ACurrentCandidate, FreeRegions)
+                && TryAppendFillerInFreeRegions(AOriginalItems, AFeatures, ABaseCandidate, ACurrentCandidate, FreeRegions, AFillerIndex, AOptions, AOutCandidate);
+        }
+
+        bool CetRectangleFillClusterBuilder::TryAppendFillerInFreeRegions(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetClusterCandidate& ABaseCandidate, const TetClusterCandidate& ACurrentCandidate, const std::vector<TetClusterFreeRegion>& AFreeRegions, int AFillerIndex, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate)
+        {
+            AOutCandidate = TetClusterCandidate{};
+            if (!ABaseCandidate.Valid || !ACurrentCandidate.Valid || ABaseCandidate.ProxyContour.size() < 3 || ABaseCandidate.ProxyArea <= 0.0 || AFreeRegions.empty()) {
+                return false;
+            }
+
+            TetItemTransform FillerTransform;
+            if (!_TryFindFillerTransform(AOriginalItems, AFeatures, ACurrentCandidate, AFreeRegions, AFillerIndex, AOptions, ABaseCandidate.ClusterWidth, ABaseCandidate.ClusterHeight, FillerTransform)) {
+                return false;
+            }
+
+            CetClusterGeometryHelper Geometry;
+            const CetPath FillerContour = Geometry.TransformContour(Geometry.GetIdentityContour(AOriginalItems[AFillerIndex]), FillerTransform.RelativeRotation, FillerTransform.RelativeX, FillerTransform.RelativeY);
+            const double AreaTolerance = std::max(1.0, ABaseCandidate.ProxyArea * CET_CLUSTER_GEOMETRY_RELATIVE_AREA_TOLERANCE);
+            if (!_IsTransformInsideFreeRegions(AOriginalItems, FillerTransform, AFreeRegions) || !Geometry.IsContourFullyContained(FillerContour, ACurrentCandidate.ProxyContour, AreaTolerance)) {
+                return false;
+            }
+
+            TetClusterCandidate Candidate = ACurrentCandidate;
+            Candidate.OriginalIndices.push_back(AFillerIndex);
+            Candidate.Transforms.push_back(FillerTransform);
+            if (!Geometry.FinalizeCandidate(AOriginalItems, AOptions, Candidate)) {
+                return false;
+            }
+            if (Candidate.ProxyArea > ABaseCandidate.ProxyArea * (1.0 + CET_CLUSTER_FILL_MAX_PROXY_GROWTH_RATIO)) {
+                return false;
+            }
+
+            Candidate.BuilderName = "TemplateFillSearch";
+            Candidate.ClusterType = ABaseCandidate.ClusterType + "_Fill";
+            AOutCandidate = std::move(Candidate);
+            return true;
+        }
+
+        bool CetRectangleFillClusterBuilder::_TryFindFillerTransform(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetClusterCandidate& ACurrentCandidate, const std::vector<TetClusterFreeRegion>& AFreeRegions, int AFillerIndex, const TetNestOptions& AOptions, double AEnvelopeWidth, double AEnvelopeHeight, TetItemTransform& AOutTransform) const
+        {
             if (AFillerIndex < 0 || AFillerIndex >= static_cast<int>(AOriginalItems.size()) || AFillerIndex >= static_cast<int>(AFeatures.size()) || _ContainsOriginalIndex(ACurrentCandidate, AFillerIndex)) {
                 return false;
             }
@@ -112,9 +176,7 @@ namespace ET {
             CetClusterGeometryHelper Geometry;
             const double RequiredGap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
             const std::vector<double> Rotations = CetRotationUtils::BuildAllowedRotations(AOptions.Rotations);
-            if (Rotations.empty()) {
-                return false;
-            }
+            if (Rotations.empty()) return false;
 
             bool FoundPlacement = false;
             double BestPlacementScore = -std::numeric_limits<double>::infinity();
@@ -136,7 +198,7 @@ namespace ET {
                 const double MaxX = AEnvelopeWidth - FillerWidth;
                 const double MaxY = AEnvelopeHeight - FillerHeight;
 
-                // ≥ı ºªØ Probe ÃΩ≤‚…œœ¬ŒƒΩ·ππÃÂ≤¢¥´µ›
+                // ÂàùÂßãÂåñ Probe Êé¢Êµã‰∏ä‰∏ãÊñáÁªìÊûÑ‰ΩìÂπ∂‰º†ÈÄí
                 TetProbeContext ProbeCtx{
                     AOriginalItems, AFeatures, ACurrentCandidate, AFillerIndex,
                     RotatedFiller, FillerMinX, FillerMinY, FillerWidth, FillerHeight,
@@ -164,7 +226,8 @@ namespace ET {
                     FillerTransform.RelativeX = PositionX - FillerMinX;
                     FillerTransform.RelativeY = PositionY - FillerMinY;
 
-                    if (!Geometry.CanAppendTransformWithSpacing(AOriginalItems, AOptions, ACurrentCandidate.Transforms, FillerTransform)) {
+                    if (!Geometry.CanAppendTransformWithSpacing(AOriginalItems, AOptions, ACurrentCandidate.Transforms, FillerTransform)
+                        || !_IsTransformInsideFreeRegions(AOriginalItems, FillerTransform, AFreeRegions)) {
                         continue;
                     }
 
@@ -180,15 +243,20 @@ namespace ET {
             if (!FoundPlacement) {
                 return false;
             }
-            TetClusterCandidate BestCandidate = ACurrentCandidate;
-            BestCandidate.OriginalIndices.push_back(AFillerIndex);
-            BestCandidate.Transforms.push_back(BestTransform);
-            if (!Geometry.FinalizeCandidateInRectangle(AOriginalItems, AOptions, BestCandidate, AEnvelopeWidth, AEnvelopeHeight)) {
-                return false;
-            }
-            BestCandidate.BuilderName = "GapFillBuilder";
-            AOutCandidate = std::move(BestCandidate);
+            AOutTransform = BestTransform;
             return true;
+        }
+
+        bool CetRectangleFillClusterBuilder::_IsTransformInsideFreeRegions(const CetTNestItemVector& AOriginalItems, const TetItemTransform& ATransform, const std::vector<TetClusterFreeRegion>& AFreeRegions) const
+        {
+            if (ATransform.OriginalId < 0 || ATransform.OriginalId >= static_cast<int>(AOriginalItems.size())) return false;
+            CetClusterGeometryHelper Geometry;
+            const CetPath Contour = Geometry.TransformContour(Geometry.GetIdentityContour(AOriginalItems[ATransform.OriginalId]), ATransform.RelativeRotation, ATransform.RelativeX, ATransform.RelativeY);
+            for (const TetClusterFreeRegion& FreeRegion : AFreeRegions) {
+                const double Tolerance = std::max(1.0, FreeRegion.Area * CET_CLUSTER_GEOMETRY_RELATIVE_AREA_TOLERANCE);
+                if (Geometry.IsContourInsideFreeRegion(Contour, FreeRegion, Tolerance)) return true;
+            }
+            return false;
         }
         void CetRectangleFillClusterBuilder::_BuildProbePositions(const TetProbeContext& ACtx, std::vector<std::pair<double, double>>& AOutPositions) const
         {

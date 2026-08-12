@@ -122,6 +122,93 @@ namespace ET {
             return DifferenceArea <= AAreaTolerance;
         }
 
+        bool CetClusterGeometryHelper::ExtractCandidateFreeRegions(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const TetClusterCandidate& ACandidate, std::vector<TetClusterFreeRegion>& AOutRegions) const
+        {
+            AOutRegions.clear();
+            if (!ACandidate.Valid || ACandidate.ProxyContour.size() < 3 || ACandidate.ProxyArea <= 0.0) return false;
+            CetPath ProxyContour;
+            if (!_NormalizeContourForClipper(ACandidate.ProxyContour, ProxyContour, 0.0)) return false;
+            ClipperLib::Paths ReservedContours;
+            if (!_BuildReservedChildContours(AOriginalItems, AOptions, ACandidate, ReservedContours)) return false;
+            ClipperLib::Clipper DifferenceClipper;
+            if (!DifferenceClipper.AddPath(ProxyContour, ClipperLib::ptSubject, true)) return false;
+            if (!ReservedContours.empty() && !DifferenceClipper.AddPaths(ReservedContours, ClipperLib::ptClip, true)) return false;
+            ClipperLib::PolyTree Tree;
+            if (!DifferenceClipper.Execute(ClipperLib::ctDifference, Tree, ClipperLib::pftNonZero, ClipperLib::pftNonZero)) return false;
+            for (const ClipperLib::PolyNode* Node : Tree.Childs) {
+                if (Node != nullptr && !_AppendFreeRegion(*Node, AOutRegions)) return false;
+            }
+            std::stable_sort(AOutRegions.begin(), AOutRegions.end(), [](const TetClusterFreeRegion& AFirst, const TetClusterFreeRegion& ASecond) {
+                if (std::abs(AFirst.Area - ASecond.Area) > CET_CLUSTER_GEOMETRY_AREA_TOLERANCE) return AFirst.Area > ASecond.Area;
+                if (AFirst.MinY != ASecond.MinY) return AFirst.MinY < ASecond.MinY;
+                return AFirst.MinX < ASecond.MinX;
+            });
+            if (AOutRegions.size() > CET_CLUSTER_FILL_MAX_FREE_REGIONS) AOutRegions.resize(CET_CLUSTER_FILL_MAX_FREE_REGIONS);
+            return true;
+        }
+
+        bool CetClusterGeometryHelper::IsContourInsideFreeRegion(const CetPath& AContour, const TetClusterFreeRegion& AFreeRegion, double AAreaTolerance) const
+        {
+            if (!AFreeRegion.IsClosed || !IsContourFullyContained(AContour, AFreeRegion.Contour, AAreaTolerance)) return false;
+            for (const CetPath& Hole : AFreeRegion.Holes) {
+                ClipperLib::Clipper IntersectionClipper;
+                if (!IntersectionClipper.AddPath(AContour, ClipperLib::ptSubject, true) || !IntersectionClipper.AddPath(Hole, ClipperLib::ptClip, true)) return false;
+                ClipperLib::Paths Intersections;
+                if (!IntersectionClipper.Execute(ClipperLib::ctIntersection, Intersections, ClipperLib::pftNonZero, ClipperLib::pftNonZero)) return false;
+                if (_CalculateUnionArea(Intersections) > AAreaTolerance) return false;
+            }
+            return true;
+        }
+
+        bool CetClusterGeometryHelper::_BuildReservedChildContours(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const TetClusterCandidate& ACandidate, ClipperLib::Paths& AOutContours) const
+        {
+            AOutContours.clear();
+            if (ACandidate.Transforms.empty()) return false;
+            for (const TetItemTransform& Transform : ACandidate.Transforms) {
+                if (Transform.OriginalId < 0 || Transform.OriginalId >= static_cast<int>(AOriginalItems.size())) return false;
+                CetNestItem Item = AOriginalItems[Transform.OriginalId];
+                Item.translation(libnest2d::Point(static_cast<ClipperLib::cInt>(std::llround(Transform.RelativeX)), static_cast<ClipperLib::cInt>(std::llround(Transform.RelativeY))));
+                Item.rotation(libnest2d::Radians(Transform.RelativeRotation));
+                Item.inflation(0);
+                const CetPolygonImpl& Shape = Item.transformedShape();
+                if (Shape.Contour.size() < 3) return false;
+                AOutContours.push_back(Shape.Contour);
+                for (const CetPath& Hole : Shape.Holes) if (Hole.size() >= 3) AOutContours.push_back(Hole);
+            }
+            const double SpacingCoord = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
+            if (SpacingCoord <= 0.0) return true;
+            ClipperLib::Paths OffsetContours;
+            ClipperLib::ClipperOffset OffsetBuilder(2.0, std::max(1.0, SpacingCoord * 0.02));
+            OffsetBuilder.AddPaths(AOutContours, ClipperLib::jtRound, ClipperLib::etClosedPolygon);
+            OffsetBuilder.Execute(OffsetContours, SpacingCoord);
+            if (!OffsetContours.empty()) AOutContours = std::move(OffsetContours);
+            return true;
+        }
+
+        bool CetClusterGeometryHelper::_AppendFreeRegion(const ClipperLib::PolyNode& ANode, std::vector<TetClusterFreeRegion>& AOutRegions) const
+        {
+            if (!ANode.IsHole() && ANode.Contour.size() >= 3) {
+                TetClusterFreeRegion Region;
+                Region.Contour = ANode.Contour;
+                Region.IsClosed = true;
+                Region.Area = std::abs(static_cast<double>(ClipperLib::Area(Region.Contour)));
+                if (!std::isfinite(Region.Area) || Region.Area <= 0.0 || !GetBounds(Region.Contour, Region.MinX, Region.MinY, Region.MaxX, Region.MaxY)) return false;
+                Region.Width = Region.MaxX - Region.MinX;
+                Region.Height = Region.MaxY - Region.MinY;
+                for (const ClipperLib::PolyNode* Child : ANode.Childs) {
+                    if (Child == nullptr || !Child->IsHole()) continue;
+                    const double HoleArea = std::abs(static_cast<double>(ClipperLib::Area(Child->Contour)));
+                    if (!std::isfinite(HoleArea) || HoleArea >= Region.Area) return false;
+                    Region.Area -= HoleArea;
+                    Region.Holes.push_back(Child->Contour);
+                }
+                if (Region.Area <= 0.0) return false;
+                AOutRegions.push_back(std::move(Region));
+            }
+            for (const ClipperLib::PolyNode* Child : ANode.Childs) if (Child != nullptr && !_AppendFreeRegion(*Child, AOutRegions)) return false;
+            return true;
+        }
+
         bool CetClusterGeometryHelper::_NormalizeContourForClipper(const CetPath& AInputContour, CetPath& AOutContour, double AAreaTolerance) const
         {
             AOutContour = AInputContour;

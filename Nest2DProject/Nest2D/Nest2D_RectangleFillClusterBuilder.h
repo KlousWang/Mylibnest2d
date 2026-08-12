@@ -13,6 +13,8 @@ namespace ET {
         {
             Inherit_Invoke_Hook(CetRectangleFillClusterBuilder)
 
+            friend class CetClusterManager;
+
         protected:
             int _Init() override
             {
@@ -24,6 +26,7 @@ namespace ET {
             {
                 CetCoreObject::_WrapFuncs();
                 _WrapFunc("BuildCandidateForBase", Type_Class_Func(BuildCandidateForBase));
+                _WrapFunc("TryAppendFiller", Type_Class_Func(TryAppendFiller));
             }
 
         public:
@@ -31,8 +34,12 @@ namespace ET {
             ~CetRectangleFillClusterBuilder();
 
             bool BuildCandidateForBase(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetClusterCandidate& ABaseCandidate, const TetNestOptions& AOptions, const std::vector<bool>& AUsed, TetClusterCandidate& AOutCandidate);
-        protected:
+            bool TryAppendFiller(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetClusterCandidate& ABaseCandidate, const TetClusterCandidate& ACurrentCandidate, int AFillerIndex, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate);
+            bool TryAppendFillerInFreeRegions(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetClusterCandidate& ABaseCandidate, const TetClusterCandidate& ACurrentCandidate, const std::vector<TetClusterFreeRegion>& AFreeRegions, int AFillerIndex, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate);
+           protected:
             bool _TryAddFiller(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetClusterCandidate& ACurrentCandidate, int AFillerIndex, const TetNestOptions& AOptions, double AEnvelopeWidth, double AEnvelopeHeight, TetClusterCandidate& AOutCandidate);
+            bool _TryFindFillerTransform(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetClusterCandidate& ACurrentCandidate, const std::vector<TetClusterFreeRegion>& AFreeRegions, int AFillerIndex, const TetNestOptions& AOptions, double AEnvelopeWidth, double AEnvelopeHeight, TetItemTransform& AOutTransform) const;
+            bool _IsTransformInsideFreeRegions(const CetTNestItemVector& AOriginalItems, const TetItemTransform& ATransform, const std::vector<TetClusterFreeRegion>& AFreeRegions) const;
            // void _BuildProbePositions(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetClusterCandidate& ACandidate, int AFillerIndex, const CetPath& ARotatedFiller, double AFillerMinX, double AFillerMinY, double AFillerMaxX, double AFillerMaxY, double ARequiredGap, std::vector<std::pair<double, double>>& AOutPositions);
             bool _ContainsOriginalIndex(const TetClusterCandidate& ACandidate, int AOriginalIndex) const;
             double _GetFeatureArea(const CetNestItem& AItem, const TetShapeFeature& AFeature) const;

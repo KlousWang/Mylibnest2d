@@ -51,10 +51,15 @@ namespace ET {
 			void _FixInvalidItems(std::size_t& ALayers);
 			
 			void _FillHoles(std::size_t& ALayers);
-			bool _FindBestCandidateForTargetBin(int ATargetBin,TetHoleFillCandidate& ABestCandidate);
-			bool _TryFindBestPlacementInBin(std::size_t AItemIndex,int ATargetBin,TetHoleFillCandidate& ABestCandidate);
-			void _ApplyHoleFillCandidate(const TetHoleFillCandidate& ACandidate);
+			bool _ExtractBoardFreeRegions(int ATargetBin, std::vector<TetClusterFreeRegion>& AOutRegions) const;
+			bool _BuildBoardReservedContours(int ATargetBin, ClipperLib::Paths& AOutContours) const;
+			bool _AppendBoardFreeRegion(const ClipperLib::PolyNode& ANode, std::vector<TetClusterFreeRegion>& AOutRegions) const;
+			bool _FindBestCandidateForTargetBin(int ATargetBin, const std::vector<TetClusterFreeRegion>& AFreeRegions, TetHoleFillCandidate& ABestCandidate);
+			bool _TryFindBestPlacementInBin(std::size_t AItemIndex, int ATargetBin, const std::vector<TetClusterFreeRegion>& AFreeRegions, TetHoleFillCandidate& ABestCandidate);
+			bool _IsPlacementInsideFreeRegion(const TetPlacementCandidate& APlacement, const TetClusterFreeRegion& AFreeRegion) const;
+			bool _ApplyHoleFillCandidate(const TetHoleFillCandidate& ACandidate);
 			double _CalcHoleFillScore(std::size_t AItemIndex,int AOldBin,int ATargetBin,const libnest2d::Point& ATranslation);
+			double _CalculateBinOccupiedArea(int ABinId) const;
 			std::vector<std::size_t> _CollectLastBinItems(int ALastBinId) const;
 			void _CaptureLastBinStats(const std::vector<std::size_t>& AItemIndices, TetLastBinEvacuationStats& AStats) const;
 			int _CountUsedBins() const;
