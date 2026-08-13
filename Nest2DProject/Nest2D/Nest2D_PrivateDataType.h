@@ -95,6 +95,21 @@ constexpr std::size_t CET_CLUSTER_FILL_REDUCED_ORDER_MAX_CANDIDATE_FILLERS = 4;
 constexpr std::size_t CET_CLUSTER_FILL_REDUCED_ORDER_MAX_PLACEMENT_ATTEMPTS = 96;
 constexpr double CET_CLUSTER_FILL_VARIANT_POSITION_TOLERANCE = 1.0;
 constexpr double CET_CLUSTER_FILL_VARIANT_ROTATION_TOLERANCE = 1e-9;
+// An outer-envelope variant reserves a larger rectangle than the skeleton.
+// Require a visible density gain before allowing it to compete with the
+// original irregular proxy.
+constexpr double CET_CLUSTER_ENVELOPE_FILL_MIN_FILL_RATIO_GAIN = 0.01;
+constexpr double CET_CLUSTER_ENVELOPE_FILL_SCORE_PER_RATIO = 1000.0;
+// Exterior-envelope searches are intentionally tighter than internal fills.
+// A large irregular skeleton already has many contour vertices, so probing all
+// skeletons and all fillers would make this optional regularization dominate
+// an otherwise bounded nesting run.
+constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_MAX_BASE_CANDIDATES = 3;
+constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_LARGE_ORDER_MAX_BASE_CANDIDATES = 2;
+constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_LARGE_ORDER_BEAM_WIDTH = 2;
+constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_LARGE_ORDER_MAX_DEPTH = 1;
+constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_LARGE_ORDER_MAX_CANDIDATE_FILLERS = 4;
+constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_LARGE_ORDER_MAX_PLACEMENT_ATTEMPTS = 48;
 
 constexpr std::size_t CET_NEST_FULL_STRATEGY_ITEM_LIMIT = 96;
 constexpr std::size_t CET_NEST_REDUCED_STRATEGY_ITEM_LIMIT = 256;
@@ -107,6 +122,66 @@ constexpr long long CET_REPAIR_MAX_PLACEMENT_CHECKS_PER_ITEM = 20000;
 constexpr long long CET_REPAIR_MAX_TOTAL_PLACEMENT_CHECKS = 120000;
 constexpr long long CET_REPAIR_MAX_SEARCH_TIME_MS = 5000;
 constexpr std::size_t CET_BOARD_FILL_MAX_FREE_REGIONS = 16;
+// Board-local fill uses a bounded beam so irregular edge regions can accept
+// several small parts without turning repair into a subset enumeration.
+constexpr std::size_t CET_BOARD_LOCAL_FILL_MAX_CANDIDATE_ITEMS = 4;
+constexpr std::size_t CET_BOARD_LOCAL_FILL_LARGE_ORDER_MAX_CANDIDATE_ITEMS = 2;
+constexpr std::size_t CET_BOARD_LOCAL_FILL_BEAM_WIDTH = 3;
+constexpr std::size_t CET_BOARD_LOCAL_FILL_MAX_DEPTH = 3;
+constexpr std::size_t CET_BOARD_LOCAL_FILL_MAX_VARIANTS_PER_REGION = 8;
+constexpr long long CET_BOARD_LOCAL_FILL_MAX_PLACEMENT_CHECKS_PER_ITEM = 1200;
+constexpr long long CET_BOARD_LOCAL_FILL_MAX_PLACEMENT_CHECKS_PER_REGION = 3000;
+constexpr std::size_t CET_BOARD_FEEDBACK_NEST_MAX_ITEM_COUNT = 64;
+// Board-composite search is deliberately small: it supplements an already
+// completed global nest and must never become a second unbounded nester.
+constexpr std::size_t CET_BOARD_COMPOSITE_MAX_FREE_REGIONS_PER_BIN = 6;
+constexpr std::size_t CET_BOARD_COMPOSITE_MAX_SKELETONS_PER_REGION = 4;
+constexpr std::size_t CET_BOARD_COMPOSITE_MAX_FILLERS_PER_STATE = 6;
+constexpr std::size_t CET_BOARD_COMPOSITE_BEAM_WIDTH = 3;
+constexpr std::size_t CET_BOARD_COMPOSITE_MAX_DEPTH = 2;
+constexpr std::size_t CET_BOARD_COMPOSITE_MAX_CANDIDATES_PER_BIN = 8;
+// Skeleton attempts bound failed geometry expansions, which otherwise do not
+// contribute to the successful-candidate limit.
+constexpr std::size_t CET_BOARD_COMPOSITE_MAX_SKELETON_ATTEMPTS_PER_BIN = 8;
+constexpr long long CET_BOARD_COMPOSITE_MAX_EXACT_PLACEMENT_CHECKS = 1800;
+constexpr long long CET_BOARD_COMPOSITE_MAX_GRID_PLACEMENT_CHECKS_PER_FILLER = 600;
+// Reserve most per-filler checks for true-contour boundary contact poses. The
+// remaining checks retain a small deterministic grid fallback.
+constexpr double CET_BOARD_COMPOSITE_CONTACT_PROBE_BUDGET_RATIO = 0.80;
+// Contact vertices are extremal-first and then uniformly sampled. This caps
+// irregular polygon pairings independently of the source contour complexity.
+constexpr std::size_t CET_BOARD_COMPOSITE_MAX_CONTACT_VERTICES_PER_CONTOUR = 4;
+// After a boundary contact, test a few short moves toward the free-region
+// center. This captures narrow curved corners without adding a second grid.
+constexpr std::size_t CET_BOARD_COMPOSITE_CONTACT_INSET_LEVELS = 2;
+constexpr double CET_BOARD_COMPOSITE_CONTACT_INSET_STEP_RATIO = 0.25;
+constexpr std::size_t CET_BOARD_COMPOSITE_MAX_ROLLBACKS_PER_BIN = 2;
+// Composite repair gets its own bounded time slice because the preceding
+// full-placement validation can consume the generic repair deadline.
+constexpr long long CET_BOARD_COMPOSITE_MAX_SEARCH_TIME_MS = 7500;
+// Each board receives a separate slice inside the total deadline so an early
+// fragmented board cannot starve later boards of composite exploration.
+constexpr long long CET_BOARD_COMPOSITE_MAX_SEARCH_TIME_PER_BIN_MS = 2000;
+// Larger orders use one skeleton/filler expansion and fewer exact probes so
+// the repair phase stays a bounded tail of the primary nesting pass.
+constexpr std::size_t CET_BOARD_COMPOSITE_LARGE_ORDER_MAX_SKELETONS_PER_REGION = 2;
+constexpr std::size_t CET_BOARD_COMPOSITE_LARGE_ORDER_MAX_FILLERS_PER_STATE = 3;
+constexpr std::size_t CET_BOARD_COMPOSITE_LARGE_ORDER_BEAM_WIDTH = 2;
+constexpr std::size_t CET_BOARD_COMPOSITE_LARGE_ORDER_MAX_DEPTH = 1;
+constexpr std::size_t CET_BOARD_COMPOSITE_LARGE_ORDER_MAX_CANDIDATES_PER_BIN = 3;
+constexpr std::size_t CET_BOARD_COMPOSITE_LARGE_ORDER_MAX_SKELETON_ATTEMPTS_PER_BIN = 4;
+constexpr long long CET_BOARD_COMPOSITE_LARGE_ORDER_MAX_EXACT_PLACEMENT_CHECKS = 600;
+constexpr long long CET_BOARD_COMPOSITE_LARGE_ORDER_MAX_GRID_PLACEMENT_CHECKS_PER_FILLER = 240;
+constexpr long long CET_BOARD_COMPOSITE_LARGE_ORDER_MAX_SEARCH_TIME_MS = 5400;
+constexpr long long CET_BOARD_COMPOSITE_LARGE_ORDER_MAX_SEARCH_TIME_PER_BIN_MS = 1800;
+constexpr double CET_BOARD_COMPOSITE_ENVELOPE_OPPORTUNITY_WEIGHT = 2.0;
+constexpr double CET_BOARD_COMPOSITE_SCORE_FILL_WEIGHT = 1000.0;
+constexpr double CET_BOARD_COMPOSITE_SCORE_ASPECT_WEIGHT = 100.0;
+constexpr double CET_BOARD_COMPOSITE_SCORE_CONTINUITY_WEIGHT = 100.0;
+constexpr double CET_BOARD_COMPOSITE_SCORE_REMNANT_WEIGHT = 0.001;
+constexpr double CET_BOARD_COMPOSITE_SCORE_SOURCE_BIN_WEIGHT = 10.0;
+constexpr double CET_BOARD_COMPOSITE_SCORE_FRAGMENTATION_WEIGHT = 100.0;
+constexpr double CET_BOARD_COMPOSITE_SCORE_COMPARISON_TOLERANCE = 1.0;
 constexpr long long CET_LAST_BIN_MAX_PLACEMENT_CHECKS_PER_ITEM = 30000;
 constexpr long long CET_LAST_BIN_MAX_TOTAL_PLACEMENT_CHECKS = 240000;
 constexpr long long CET_LAST_BIN_MAX_SEARCH_TIME_MS = 15000;
@@ -444,6 +519,20 @@ struct TetClusterBuildResult {
     std::vector<TetMetaItem> MetaItems;
 };
 
+// Captures the first failed validation pair after cluster proxies have been
+// expanded back into their original items.  The engine uses the packed-item
+// indices to selectively dissolve only the involved clusters before falling
+// back to a fully unclustered nesting pass.
+struct TetExpandedSpacingFailure {
+    bool Valid = false;
+    bool RawContoursIntersect = false;
+    int FirstOriginalIndex = -1;
+    int SecondOriginalIndex = -1;
+    int FirstPackedIndex = -1;
+    int SecondPackedIndex = -1;
+    int BinId = -1;
+};
+
 struct TetLocalBestResult {
     bool HasBest = false;
     std::size_t Layers = 0;
@@ -687,6 +776,58 @@ struct TetHoleFillCandidate
     libnest2d::Point Translation{ 0, 0 };
     libnest2d::Radians Rotation{ 0.0 };
     double Score = 0.0;
+};
+
+struct TetBoardLocalFillCandidate
+{
+    bool Valid = false;
+    int TargetBin = -1;
+    TetClusterFreeRegion FreeRegion;
+    std::vector<TetHoleFillCandidate> Placements;
+    double OccupiedAreaGain = 0.0;
+    double EnvelopeArea = 0.0;
+    double EnvelopeFillRatio = 0.0;
+    double Score = 0.0;
+};
+
+struct TetBoardCompositeScore
+{
+    double InternalFillRatio = 0.0;
+    double OccupiedAreaGain = 0.0;
+    double AspectMatch = 0.0;
+    double RemainingShortSide = 0.0;
+    double Continuity = 0.0;
+    double FragmentationPenalty = 0.0;
+    double ReusableRemnantValue = 0.0;
+    double SourceBinReduction = 0.0;
+    double Total = 0.0;
+};
+
+struct TetBoardCompositeCandidate
+{
+    bool Valid = false;
+    bool AnchoredSkeleton = false;
+    int SkeletonIndex = -1;
+    int TargetBin = -1;
+    TetClusterFreeRegion FreeRegion;
+    TetClusterCandidate Cluster;
+    std::vector<TetHoleFillCandidate> Placements;
+    TetBoardCompositeScore Score;
+};
+
+struct TetBoardCompositeSearchStats
+{
+    std::size_t CandidateCount = 0;
+    std::size_t AcceptedCount = 0;
+    std::size_t RollbackCount = 0;
+    std::size_t FillerCount = 0;
+    std::size_t RankedAnchoredSkeletons = 0;
+    std::size_t RankedMovingSkeletons = 0;
+    std::size_t SkeletonBuildFailures = 0;
+    std::size_t EmptyFillerSets = 0;
+    std::size_t BeamExpansionFailures = 0;
+    std::size_t PlacementFailures = 0;
+    long long ExactPlacementChecks = 0;
 };
 
 struct TetLastBinEvacuationStats

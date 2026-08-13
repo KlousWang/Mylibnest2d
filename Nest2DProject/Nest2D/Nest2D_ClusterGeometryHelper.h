@@ -29,6 +29,8 @@ namespace ET {
             CetNestItem MakeNestItemFromProxyContour(const CetPath& AProxyContour) const;
             bool IsContourFullyContained(const CetPath& AChildContour, const CetPath& AProxyContour, double AAreaTolerance) const;
             bool ExtractCandidateFreeRegions(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const TetClusterCandidate& ACandidate, std::vector<TetClusterFreeRegion>& AOutRegions) const;
+            bool IntersectFreeRegionsWithRectangle(const std::vector<TetClusterFreeRegion>& ARegions,
+                double AWidth, double AHeight, std::vector<TetClusterFreeRegion>& AOutRegions) const;
             bool IsContourInsideFreeRegion(const CetPath& AContour, const TetClusterFreeRegion& AFreeRegion, double AAreaTolerance) const;
             bool FinalizeCandidate(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetClusterCandidate& ACandidate) const;
             bool FinalizeCandidate(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetClusterCandidate& ACandidate, bool AForceRectangleProxy) const;

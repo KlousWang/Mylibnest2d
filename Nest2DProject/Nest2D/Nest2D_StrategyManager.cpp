@@ -159,6 +159,7 @@ bool ET::NEST2DMANAGERLIB::CetStrategyManager::IsBetterNestResult(const TetTNest
 	if (A.FirstBinCount != AB.FirstBinCount){
 		return A.FirstBinCount > AB.FirstBinCount;
 	}
+
 	return false;
 }
 

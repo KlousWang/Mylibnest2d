@@ -61,7 +61,7 @@ namespace ET {
 				CetNestItem FirstItem = SourceItem;
 				FirstItem.inflation(0);
 				if (SpacingCoord > 0){
-					FirstItem.inflation(static_cast<decltype(FirstItem.inflation())>(SpacingCoord));
+					FirstItem.inflation(static_cast<decltype(FirstItem.inflation())>(std::ceil(static_cast<double>(SpacingCoord) * 0.5)));
 				}
 				for (std::size_t SecondIndex = FirstIndex + 1; SecondIndex < AItems.size(); ++SecondIndex){
 					if (AItems[SecondIndex].binId() != SourceItem.binId()){
@@ -69,7 +69,13 @@ namespace ET {
 					}
 					CetNestItem SecondItem = AItems[SecondIndex];
 					SecondItem.inflation(0);
-					if (CetNestItem::intersects(FirstItem, SecondItem)){
+					if (SpacingCoord > 0){
+						SecondItem.inflation(static_cast<decltype(SecondItem.inflation())>(std::ceil(static_cast<double>(SpacingCoord) * 0.5)));
+					}
+					// libnest2d packs every item with half of the requested spacing.
+					// At exactly the requested clearance those expanded outlines touch;
+					// touching is legal, while an interior intersection is not.
+					if (CetNestItem::intersects(FirstItem, SecondItem) && !CetNestItem::touches(FirstItem, SecondItem)){
 						std::cout << "[NEST][SPACING][REJECT] "
 							<< (SpacingCoord > 0 ? "Spacing violation" : "Overlap")
 							<< " between items " << FirstIndex << " and " << SecondIndex
@@ -110,6 +116,14 @@ namespace ET {
 		static std::size_t BackfillClusterSheets(CetTNestItemVector& AItems, const TetNestOptions& AOptions, std::size_t ALayers)
 		{
 			if (ALayers <= 1 || AItems.empty()) return ALayers;
+			if (AItems.size() > CET_NEST_FULL_STRATEGY_ITEM_LIMIT) {
+				// This optional repack repeatedly invokes the bottom-left placer. Once
+				// local spacing fallback has expanded a large proxy set, doing it here
+				// can cost minutes while not affecting the already valid main nest.
+				std::cout << "[NEST][CLUSTER BACKFILL][SKIP] PackedItems=" << AItems.size()
+					<< ", Limit=" << CET_NEST_FULL_STRATEGY_ITEM_LIMIT << std::endl;
+				return ALayers;
+			}
 			const auto Width = NestUtils::ToNestCoord(AOptions.BinWidth);
 			const auto Height = NestUtils::ToNestCoord(AOptions.BinHeight);
 			Box Bin(Width, Height, { Width / 2, Height / 2 });
@@ -202,6 +216,38 @@ namespace ET {
 			return { MetClusterStrategy::None, MetClusterStrategy::TemplateCluster };
 		}
 
+		static TetClusterBuildResult DissolvePackedClusters(const CetTNestItemVector& AOriginalItems, const TetClusterBuildResult& ASource, const std::set<int>& APackedIndices)
+		{
+			TetClusterBuildResult Result;
+			Result.NestItems.reserve(ASource.NestItems.size() + APackedIndices.size() * 4);
+			Result.MetaItems.reserve(ASource.MetaItems.size() + APackedIndices.size() * 4);
+			for (std::size_t PackedIndex = 0; PackedIndex < ASource.NestItems.size() && PackedIndex < ASource.MetaItems.size(); ++PackedIndex) {
+				const TetMetaItem& SourceMeta = ASource.MetaItems[PackedIndex];
+				const bool Dissolve = APackedIndices.find(static_cast<int>(PackedIndex)) != APackedIndices.end() && SourceMeta.IsCluster;
+				if (!Dissolve) {
+					Result.NestItems.push_back(ASource.NestItems[PackedIndex]);
+					TetMetaItem Meta = SourceMeta;
+					Meta.PackedItemIndex = static_cast<int>(Result.MetaItems.size());
+					Result.MetaItems.push_back(std::move(Meta));
+					continue;
+				}
+
+				for (const TetItemTransform& Transform : SourceMeta.TransformData) {
+					if (Transform.OriginalId < 0 || Transform.OriginalId >= static_cast<int>(AOriginalItems.size())) {
+						continue;
+					}
+					Result.NestItems.push_back(AOriginalItems[Transform.OriginalId]);
+					TetMetaItem Meta;
+					Meta.PackedItemIndex = static_cast<int>(Result.MetaItems.size());
+					Meta.IsCluster = false;
+					Meta.ClusterType = "SpacingFallbackSingle";
+					Meta.TransformData.push_back({ Transform.OriginalId, 0.0, 0.0, 0.0 });
+					Result.MetaItems.push_back(std::move(Meta));
+				}
+			}
+			return Result;
+		}
+
 		bool CetNest2DEngine::_RunLastBinEvacuation(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, std::size_t& ALayers)
 		{
 			if (!AOptions.EnableLastBinEvacuation || ANestItems.empty() || ALayers <= 1) {
@@ -211,9 +257,9 @@ namespace ET {
 			double BoardBinWidth = AOptions.BinWidth;
 			double BoardBinHeight = AOptions.BinHeight;
 			CetPolygonImpl BinPoly = Nest2DUtils->Nest2DBord->BuildBinPolygonFromOptions(AOptions, BoardBinWidth, BoardBinHeight);
-			Nest2DUtils->Nest2DPolygonBord->SetContext(ANestItems, AOptions, BinPoly, BoardBinWidth, BoardBinHeight);
+			CetPolygonBoardRepairer Repairer(ANestItems, AOptions, BinPoly, BoardBinWidth, BoardBinHeight);
 			TetLastBinEvacuationStats Stats;
-			const bool Success = Nest2DUtils->Nest2DPolygonBord->EvacuateLastBin(ALayers, Stats);
+			const bool Success = Repairer.EvacuateLastBin(ALayers, Stats);
 			if (!Success) {
 				ANestItems = OriginalSolution;
 			}
@@ -239,21 +285,77 @@ namespace ET {
 			return Success;
 		}
 
-		void CetNest2DEngine::_RepairAndEvacuate(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, const CetPolygonImpl& ABinPoly, double ABinWidth, double ABinHeight, std::size_t& ALayers)
+		bool CetNest2DEngine::_RepairAndEvacuate(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, const CetPolygonImpl& ABinPoly, double ABinWidth, double ABinHeight, std::size_t& ALayers)
 		{
 			const CetTNestItemVector OriginalSolution = ANestItems;
 			const std::size_t OriginalLayers = ALayers;
-			Nest2DUtils->Nest2DPolygonBord->SetContext(ANestItems, AOptions, ABinPoly, ABinWidth, ABinHeight);
+			CetPolygonBoardRepairer Repairer(ANestItems, AOptions, ABinPoly, ABinWidth, ABinHeight);
 			const auto RepairStart = std::chrono::steady_clock::now();
-			Nest2DUtils->Nest2DPolygonBord->Repair(ALayers);
+			Repairer.Repair(ALayers);
 			const double BeforeLastBinMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - RepairStart).count();
 			std::cout << "[NEST][TIMING] BeforeLastBinMs=" << BeforeLastBinMs << std::endl;
-			_RunLastBinEvacuation(ANestItems, AOptions, ALayers);
+			const bool BoardFillImproved = Repairer.HadBoardFillChanges();
+			const bool LastBinImproved = _RunLastBinEvacuation(ANestItems, AOptions, ALayers);
 			if (!ValidatePlacedItemsSpacing(ANestItems, AOptions)){
 				std::cout << "[NEST][REPAIR][ROLLBACK] Repair produced an invalid spacing result." << std::endl;
 				ANestItems = OriginalSolution;
 				ALayers = OriginalLayers;
+				return false;
 			}
+			return BoardFillImproved || LastBinImproved;
+		}
+
+		bool CetNest2DEngine::_TryBoardFeedbackNest(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker, std::size_t& ALayers)
+		{
+			if (ANestItems.empty() || ALayers <= 1 || ANestItems.size() > CET_BOARD_FEEDBACK_NEST_MAX_ITEM_COUNT) {
+				std::cout << "[BOARD FEEDBACK][SKIP] Items=" << ANestItems.size()
+					<< " Layers=" << ALayers
+					<< " Limit=" << CET_BOARD_FEEDBACK_NEST_MAX_ITEM_COUNT << std::endl;
+				return false;
+			}
+			const CetTNestItemVector OriginalSolution = ANestItems;
+			const std::size_t OriginalLayers = ALayers;
+			const TetTNestEvalResult OriginalEval = Nest2DUtils->Nest2DStrategy->EvaluateNestResult(OriginalSolution, OriginalLayers);
+			std::vector<std::size_t> Order(ANestItems.size());
+			std::iota(Order.begin(), Order.end(), 0);
+			std::stable_sort(Order.begin(), Order.end(), [&](std::size_t A, std::size_t B) {
+				const CetNestItem& First = OriginalSolution[A];
+				const CetNestItem& Second = OriginalSolution[B];
+				if (First.binId() != Second.binId()) return First.binId() < Second.binId();
+				const Point FirstTranslation = First.translation();
+				const Point SecondTranslation = Second.translation();
+				if (FirstTranslation.Y != SecondTranslation.Y) return FirstTranslation.Y < SecondTranslation.Y;
+				if (FirstTranslation.X != SecondTranslation.X) return FirstTranslation.X < SecondTranslation.X;
+				return A < B;
+				});
+			CetTNestItemVector FeedbackItems;
+			FeedbackItems.reserve(Order.size());
+			for (std::size_t Index : Order) {
+				CetNestItem Item = OriginalSolution[Index];
+				Item.binId(-1);
+				Item.translation(Point(0, 0));
+				Item.rotation(Radians(0.0));
+				Item.inflation(0);
+				FeedbackItems.push_back(std::move(Item));
+			}
+			const bool UsePolygonBoard = AOptions.Board.Enabled && AOptions.Board.Vertices.size() >= 3;
+			std::size_t FeedbackLayers = UsePolygonBoard
+				? RunPolygonNestOnce(FeedbackItems, AOptions, ATracker)
+				: RunRectangleNestOnce(FeedbackItems, AOptions, ATracker);
+			CetTNestItemVector FeedbackSolution = OriginalSolution;
+			for (std::size_t Position = 0; Position < Order.size(); ++Position) FeedbackSolution[Order[Position]] = std::move(FeedbackItems[Position]);
+			const TetTNestEvalResult FeedbackEval = Nest2DUtils->Nest2DStrategy->EvaluateNestResult(FeedbackSolution, FeedbackLayers);
+			const bool Valid = FeedbackLayers > 0 && ValidatePlacedItemsSpacing(FeedbackSolution, AOptions);
+			const bool Improved = Valid && Nest2DUtils->Nest2DStrategy->IsBetterNestResult(FeedbackEval, OriginalEval);
+			std::cout << "[BOARD FEEDBACK][RESULT] BeforeLayers=" << OriginalLayers
+				<< " AfterLayers=" << FeedbackLayers
+				<< " BeforeFirstArea=" << OriginalEval.FirstBinArea
+				<< " AfterFirstArea=" << FeedbackEval.FirstBinArea
+				<< " Valid=" << Valid << " Improved=" << Improved << std::endl;
+			if (!Improved) return false;
+			ANestItems = std::move(FeedbackSolution);
+			ALayers = FeedbackLayers;
+			return true;
 		}
 		
 		int CetNest2DEngine::RunNesting_Impl(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, std::size_t* AUsedBins)
@@ -330,7 +432,11 @@ namespace ET {
 					<< ", ClusterCount = " << ClusterCount
 					<< std::endl;
 
-				TetLocalBestResult LocalResult =EvaluateSortingStrategies(ClusterResult,OriginalItems,AOptions,ATracker);
+				TetExpandedSpacingFailure SpacingFailure;
+				TetLocalBestResult LocalResult = EvaluateSortingStrategies(ClusterResult, OriginalItems, AOptions, ATracker, &SpacingFailure);
+				if (!LocalResult.HasBest && SpacingFailure.Valid) {
+					LocalResult = _TryLocalClusterSpacingFallback(ClusterResult, OriginalItems, AOptions, ATracker, SpacingFailure);
+				}
 
 				bool Better = ShoouldUpdateGlobalBest(LocalResult,HasBest,BestEval,BestLayers,BestHasCluster);
 
@@ -353,8 +459,22 @@ namespace ET {
 			}
 
 			if (!HasBest){
-				std::cout << "[POLYGON][FINAL] no valid best result." << std::endl;
-				return 0;
+				std::cout << "[NEST][SPACING FALLBACK][FULL SINGLE] Trigger=all clustered candidates rejected." << std::endl;
+				TetClusterBuildResult SingleItems = Nest2DUtils->Nest2DCluster->BuildClusterItems(OriginalItems, AOptions, MetClusterStrategy::None);
+				TetLocalBestResult FallbackResult = _EvaluateSingleSortingStrategy(SingleItems, OriginalItems, AOptions, ATracker, MetENestOrderStrategy::LargeFirst);
+				if (FallbackResult.HasBest) {
+					HasBest = true;
+					BestEval = FallbackResult.Eval;
+					BestLayers = FallbackResult.Layers;
+					BestItems = std::move(FallbackResult.Items);
+					BestMetaItems = std::move(FallbackResult.MetaItems);
+					BestHasCluster = false;
+					std::cout << "[NEST][SPACING FALLBACK][FULL SINGLE][VALID] Layers=" << BestLayers << std::endl;
+				}
+				else {
+					std::cout << "[POLYGON][FINAL] no valid best result." << std::endl;
+					return 0;
+				}
 			}
 
 			if (!BestHasCluster){
@@ -377,7 +497,9 @@ namespace ET {
 			double BoardBinHeight = AOptions.BinHeight;
 			CetPolygonImpl BinPoly = Nest2DUtils->Nest2DBord->BuildBinPolygonFromOptions(AOptions,BoardBinWidth,BoardBinHeight);
 
-			_RepairAndEvacuate(ANestItems, AOptions, BinPoly, BoardBinWidth, BoardBinHeight, BestLayers);
+			if (_RepairAndEvacuate(ANestItems, AOptions, BinPoly, BoardBinWidth, BoardBinHeight, BestLayers)) {
+				_TryBoardFeedbackNest(ANestItems, AOptions, ATracker, BestLayers);
+			}
 			BestEval = Nest2DUtils->Nest2DStrategy->EvaluateNestResult(ANestItems, BestLayers);
 			std::cout << "================ POLYGON BEST NEST RESULT ================" << std::endl;
 			std::cout << "[POLYGON BEST] bin0 count = " << BestEval.FirstBinCount << ", bin0 area = " << BestEval.FirstBinArea << ", layers = " << BestLayers << std::endl;
@@ -467,7 +589,11 @@ namespace ET {
 					<< ", ClusterCount = " << ClusterCount << std::endl;  
 
 				
-				TetLocalBestResult LocalResult = EvaluateSortingStrategies(ClusterResult, OriginalItems, AOptions, ATracker);
+				TetExpandedSpacingFailure SpacingFailure;
+				TetLocalBestResult LocalResult = EvaluateSortingStrategies(ClusterResult, OriginalItems, AOptions, ATracker, &SpacingFailure);
+				if (!LocalResult.HasBest && SpacingFailure.Valid) {
+					LocalResult = _TryLocalClusterSpacingFallback(ClusterResult, OriginalItems, AOptions, ATracker, SpacingFailure);
+				}
 				bool Better = ShoouldUpdateGlobalBest(LocalResult, HasBest, BestEval, BestLayers, BestHasCluster);
 				
 				if (Better){
@@ -486,6 +612,21 @@ namespace ET {
 				}
 			}
 			
+			if (!HasBest) {
+				std::cout << "[NEST][SPACING FALLBACK][FULL SINGLE] Trigger=all clustered candidates rejected." << std::endl;
+				TetClusterBuildResult SingleItems = Nest2DUtils->Nest2DCluster->BuildClusterItems(OriginalItems, AOptions, MetClusterStrategy::None);
+				TetLocalBestResult FallbackResult = _EvaluateSingleSortingStrategy(SingleItems, OriginalItems, AOptions, ATracker, MetENestOrderStrategy::LargeFirst);
+				if (FallbackResult.HasBest) {
+					HasBest = true;
+					BestEval = FallbackResult.Eval;
+					BestLayers = FallbackResult.Layers;
+					BestItems = std::move(FallbackResult.Items);
+					BestMetaItems = std::move(FallbackResult.MetaItems);
+					BestHasCluster = false;
+					std::cout << "[NEST][SPACING FALLBACK][FULL SINGLE][VALID] Layers=" << BestLayers << std::endl;
+				}
+			}
+
 			if (HasBest){
 				std::cout << "[NEST][FINAL BEST] BestHasCluster = " << BestHasCluster << ", BestItems.size = " << BestItems.size() << ", BestMetaItems.size = " << BestMetaItems.size() << std::endl;
 
@@ -518,12 +659,16 @@ namespace ET {
 						<< ", Layers=" << BestEval.Layers << std::endl;
 				}
 				Nest2DUtils->Nest2DCluster->ExpandClusterResultToOriginalItems(OriginalItems, BestItems, BestMetaItems, ANestItems);
+				std::cout << "[NEST][REPAIR PREP] ExpandedItems=" << ANestItems.size() << " Layers=" << BestLayers << std::endl;
 				CetPolygonImpl RectBinPoly = Nest2DUtils->Nest2DBord->BuildRectangleBinPolygon(AOptions.BinWidth, AOptions.BinHeight);
-				_RepairAndEvacuate(ANestItems, AOptions, RectBinPoly, AOptions.BinWidth, AOptions.BinHeight, BestLayers);
+				std::cout << "[NEST][REPAIR PREP] RectangleBinReady Contour=" << RectBinPoly.Contour.size() << std::endl;
+				if (_RepairAndEvacuate(ANestItems, AOptions, RectBinPoly, AOptions.BinWidth, AOptions.BinHeight, BestLayers)) {
+					_TryBoardFeedbackNest(ANestItems, AOptions, ATracker, BestLayers);
+				}
 				BestEval = Nest2DUtils->Nest2DStrategy->EvaluateNestResult(ANestItems, BestLayers);
 			}
 			std::cout << "================ BEST NEST RESULT ================" << std::endl;
-			std::cout << "[NEST BEST] bin0 count = " << BestEval.FirstBinCount << ", bin0 area = " << BestEval.FirstBinArea << ", layers = " << BestEval.Layers << std::endl;
+				std::cout << "[NEST BEST] bin0 count = " << BestEval.FirstBinCount << ", bin0 area = " << BestEval.FirstBinArea << ", layers = " << BestEval.Layers << std::endl;
 			Nest2DUtils->Nest2DStrategy->PrintBinCount(ANestItems);
 			std::cout << "==================================================" << std::endl;
 
@@ -643,9 +788,95 @@ namespace ET {
 			std::cout << "[NEST][LOCAL BEST UPDATE] HasCluster = " << ALocalBest.HasCluster << ", count = " << ALocalBest.Eval.FirstBinCount << ", area = " << ALocalBest.Eval.FirstBinArea << ", layers = " << ALocalBest.Eval.Layers << ", packedItems = " << ALocalBest.Items.size() << std::endl;
 		}
 
-		TetLocalBestResult CetNest2DEngine::EvaluateSortingStrategies(const TetClusterBuildResult& AClusterResult, const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker)
+		TetLocalBestResult CetNest2DEngine::_EvaluateSingleSortingStrategy(const TetClusterBuildResult& AClusterResult, const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker, MetENestOrderStrategy AStrategy, TetExpandedSpacingFailure* AOutSpacingFailure)
 		{
 			TetLocalBestResult LocalBest;
+			if (AOutSpacingFailure != nullptr) {
+				*AOutSpacingFailure = TetExpandedSpacingFailure{};
+			}
+			if (AClusterResult.NestItems.size() != AClusterResult.MetaItems.size()) {
+				return LocalBest;
+			}
+
+			const bool UsePolygonBoard = AOptions.Board.Enabled && AOptions.Board.Vertices.size() >= 3;
+			const bool HasCluster = _HasClusterItems(AClusterResult.MetaItems);
+			CetTNestItemVector PriorityItems = AClusterResult.NestItems;
+			const std::vector<std::size_t> SortedIndices = _BuildPriorityOrder(PriorityItems, AOptions, AStrategy);
+			CetTNestItemVector TestItems;
+			std::vector<TetMetaItem> TestMetaItems;
+			_BuildSortedTestData(PriorityItems, AClusterResult.MetaItems, SortedIndices, TestItems, TestMetaItems);
+			const std::size_t Layers = UsePolygonBoard ? RunPolygonNestOnce(TestItems, AOptions, ATracker) : RunRectangleNestOnce(TestItems, AOptions, ATracker);
+			if (Layers == 0) {
+				std::cout << "[NEST][SPACING FALLBACK][SKIP] Strategy=" << static_cast<int>(AStrategy) << ", reason=no packed layers" << std::endl;
+				return LocalBest;
+			}
+			if (HasCluster && !Nest2DUtils->Nest2DCluster->ValidatePackedResultSpacing(AOriginalItems, TestItems, TestMetaItems, AOptions, AOutSpacingFailure)) {
+				std::cout << "[NEST][SPACING FALLBACK][SKIP] Strategy=" << static_cast<int>(AStrategy) << ", reason=expanded cluster spacing violation" << std::endl;
+				return LocalBest;
+			}
+
+			TetTNestEvalResult Eval = Nest2DUtils->Nest2DStrategy->EvaluatePackedResultWithMeta(TestItems, TestMetaItems, AOriginalItems, AOptions, Layers);
+			_UpdateLocalBest(LocalBest, Eval, Layers, TestItems, TestMetaItems, HasCluster);
+			return LocalBest;
+		}
+
+		TetLocalBestResult CetNest2DEngine::_TryLocalClusterSpacingFallback(const TetClusterBuildResult& AClusterResult, const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker, const TetExpandedSpacingFailure& AInitialFailure)
+		{
+			TetLocalBestResult NoResult;
+			if (!AInitialFailure.Valid || AClusterResult.NestItems.size() != AClusterResult.MetaItems.size()) {
+				return NoResult;
+			}
+
+			std::set<int> PackedIndices;
+			TetExpandedSpacingFailure Failure = AInitialFailure;
+			constexpr int MaxLocalRetries = 2;
+			for (int Attempt = 0; Attempt < MaxLocalRetries && Failure.Valid; ++Attempt) {
+				const std::size_t ClusterCountBefore = PackedIndices.size();
+				for (std::size_t PackedIndex = 0; PackedIndex < AClusterResult.MetaItems.size(); ++PackedIndex) {
+					const TetMetaItem& Meta = AClusterResult.MetaItems[PackedIndex];
+					if (!Meta.IsCluster) {
+						continue;
+					}
+					for (const TetItemTransform& Transform : Meta.TransformData) {
+						if (Transform.OriginalId == Failure.FirstOriginalIndex || Transform.OriginalId == Failure.SecondOriginalIndex) {
+							PackedIndices.insert(static_cast<int>(PackedIndex));
+							break;
+						}
+					}
+				}
+				if (PackedIndices.size() == ClusterCountBefore) {
+					std::cout << "[NEST][SPACING FALLBACK][LOCAL][STOP] Attempt=" << Attempt + 1
+						<< ", reason=no additional conflicting cluster." << std::endl;
+					break;
+				}
+
+				std::cout << "[NEST][SPACING FALLBACK][LOCAL] Attempt=" << Attempt + 1
+					<< ", OriginalPair=" << Failure.FirstOriginalIndex << "," << Failure.SecondOriginalIndex
+					<< ", DissolvedClusters=";
+				for (int PackedIndex : PackedIndices) std::cout << PackedIndex << " ";
+				std::cout << ", RawOverlap=" << (Failure.RawContoursIntersect ? 1 : 0) << std::endl;
+
+				const TetClusterBuildResult DissolvedResult = DissolvePackedClusters(AOriginalItems, AClusterResult, PackedIndices);
+				TetExpandedSpacingFailure RetryFailure;
+				TetLocalBestResult LocalResult = _EvaluateSingleSortingStrategy(DissolvedResult, AOriginalItems, AOptions, ATracker, MetENestOrderStrategy::LargeFirst, &RetryFailure);
+				if (LocalResult.HasBest) {
+					std::cout << "[NEST][SPACING FALLBACK][LOCAL][VALID] Attempt=" << Attempt + 1
+						<< ", Layers=" << LocalResult.Layers << ", PackedItems=" << LocalResult.Items.size() << std::endl;
+					return LocalResult;
+				}
+				Failure = RetryFailure;
+			}
+
+			std::cout << "[NEST][SPACING FALLBACK][LOCAL][FAILED] Attempts=" << MaxLocalRetries << std::endl;
+			return NoResult;
+		}
+
+		TetLocalBestResult CetNest2DEngine::EvaluateSortingStrategies(const TetClusterBuildResult& AClusterResult, const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker, TetExpandedSpacingFailure* AOutSpacingFailure)
+		{
+			TetLocalBestResult LocalBest;
+			if (AOutSpacingFailure != nullptr) {
+				*AOutSpacingFailure = TetExpandedSpacingFailure{};
+			}
 			if (AClusterResult.NestItems.size() != AClusterResult.MetaItems.size()){
 				std::cout << "[NEST][EVAL][ERROR] Cluster NestItems size != MetaItems size. NestItems = " << AClusterResult.NestItems.size() << ", MetaItems = " << AClusterResult.MetaItems.size() << std::endl;
 				return LocalBest;
@@ -674,7 +905,15 @@ namespace ET {
 				std::vector<TetMetaItem> TestMetaItems;
 				_BuildSortedTestData(PriorityItems, AClusterResult.MetaItems, SortedIndices, TestItems, TestMetaItems);
 				const std::size_t Layers = UsePolygonBoard ? RunPolygonNestOnce(TestItems, AOptions, ATracker) : RunRectangleNestOnce(TestItems, AOptions, ATracker);
-				if (CurrentHasCluster && !Nest2DUtils->Nest2DCluster->ValidatePackedResultSpacing(AOriginalItems, TestItems, TestMetaItems, AOptions)){
+				if (Layers == 0) {
+					std::cout << "[NEST][EVAL][SKIP] Strategy = " << static_cast<int>(Strategy) << ", reason = no packed layers" << std::endl;
+					continue;
+				}
+				TetExpandedSpacingFailure SpacingFailure;
+				if (CurrentHasCluster && !Nest2DUtils->Nest2DCluster->ValidatePackedResultSpacing(AOriginalItems, TestItems, TestMetaItems, AOptions, &SpacingFailure)){
+					if (AOutSpacingFailure != nullptr && !AOutSpacingFailure->Valid) {
+						*AOutSpacingFailure = SpacingFailure;
+					}
 					std::cout << "[NEST][EVAL][SKIP] Strategy = " << static_cast<int>(Strategy) << ", reason = expanded cluster spacing violation" << std::endl;
 					continue;
 				}

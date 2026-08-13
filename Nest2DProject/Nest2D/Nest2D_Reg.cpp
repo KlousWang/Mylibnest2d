@@ -31,6 +31,7 @@ namespace ET {
 		Reg_EtCore_Obj_Str(Nest2D_BoardUtils, CetNest2DBoardUtils)
 		Reg_EtCore_Obj_Str(Nest2D_GeometryUtils, CetGeometryUtils)
 		Reg_EtCore_Obj_Str(Nest2D_SvgUtils, CetSvgUtils)
+		// Keep factory allocation synchronized with the repairer's private layout.
 		Reg_EtCore_Obj_Str(Nest2D_PolygonBoardRepairer, CetPolygonBoardRepairer)
 		Reg_EtCore_Obj_Str(Nest2D_ClusterManager, CetClusterManager)
 		Reg_EtCore_Obj_Str(Nest2D_StrategyManager, CetStrategyManager)

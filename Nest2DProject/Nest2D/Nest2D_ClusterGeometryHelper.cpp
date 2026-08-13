@@ -147,6 +147,31 @@ namespace ET {
             return true;
         }
 
+		bool CetClusterGeometryHelper::IntersectFreeRegionsWithRectangle(const std::vector<TetClusterFreeRegion>& ARegions,
+			double AWidth, double AHeight, std::vector<TetClusterFreeRegion>& AOutRegions) const
+		{
+			AOutRegions.clear();
+			const CetPath Rectangle = MakeRectangleContour(AWidth, AHeight);
+			if (Rectangle.size() < 3) return false;
+			for (const TetClusterFreeRegion& Region : ARegions) {
+				if (!Region.IsClosed || Region.Contour.size() < 3) continue;
+				ClipperLib::Clipper Clipper;
+				if (!Clipper.AddPath(Region.Contour, ClipperLib::ptSubject, true)) continue;
+				if (!Region.Holes.empty() && !Clipper.AddPaths(Region.Holes, ClipperLib::ptSubject, true)) continue;
+				if (!Clipper.AddPath(Rectangle, ClipperLib::ptClip, true)) continue;
+				ClipperLib::PolyTree Tree;
+				if (!Clipper.Execute(ClipperLib::ctIntersection, Tree, ClipperLib::pftNonZero, ClipperLib::pftNonZero)) continue;
+				for (const ClipperLib::PolyNode* Node : Tree.Childs) {
+					if (Node != nullptr && !_AppendFreeRegion(*Node, AOutRegions)) return false;
+				}
+			}
+			std::stable_sort(AOutRegions.begin(), AOutRegions.end(), [](const TetClusterFreeRegion& A, const TetClusterFreeRegion& B) {
+				return std::abs(A.Area - B.Area) > CET_CLUSTER_GEOMETRY_AREA_TOLERANCE ? A.Area > B.Area : A.MinY < B.MinY;
+			});
+			if (AOutRegions.size() > CET_CLUSTER_FILL_MAX_FREE_REGIONS) AOutRegions.resize(CET_CLUSTER_FILL_MAX_FREE_REGIONS);
+			return !AOutRegions.empty();
+		}
+
         bool CetClusterGeometryHelper::IsContourInsideFreeRegion(const CetPath& AContour, const TetClusterFreeRegion& AFreeRegion, double AAreaTolerance) const
         {
             if (!AFreeRegion.IsClosed || !IsContourFullyContained(AContour, AFreeRegion.Contour, AAreaTolerance)) return false;
@@ -424,13 +449,20 @@ namespace ET {
             SecondItem.inflation(0);
 
             if (SpacingCoord > 0.0){
+                // Match libnest2d::nest: both items are expanded by half of
+                // min_obj_distance before placement, so their combined
+                // clearance equals the requested spacing.
                 CetNestItem InflatedFirstItem = FirstItem;
-                const auto OriginalInflation = InflatedFirstItem.inflation();
-                InflatedFirstItem.inflation(static_cast<decltype(OriginalInflation)>(SpacingCoord));
-                return !CetNestItem::intersects(InflatedFirstItem,SecondItem);
+                CetNestItem InflatedSecondItem = SecondItem;
+                const auto HalfSpacing = static_cast<decltype(InflatedFirstItem.inflation())>(std::ceil(SpacingCoord * 0.5));
+                InflatedFirstItem.inflation(HalfSpacing);
+                InflatedSecondItem.inflation(HalfSpacing);
+                return !CetNestItem::intersects(InflatedFirstItem,InflatedSecondItem)
+                    || CetNestItem::touches(InflatedFirstItem,InflatedSecondItem);
             }
 
-            return !CetNestItem::intersects(FirstItem,SecondItem);
+            return !CetNestItem::intersects(FirstItem,SecondItem)
+                || CetNestItem::touches(FirstItem,SecondItem);
         }
 
         bool CetClusterGeometryHelper::_ValidateChildSpacing(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const TetClusterCandidate& ACandidate, bool ALogRejection) const

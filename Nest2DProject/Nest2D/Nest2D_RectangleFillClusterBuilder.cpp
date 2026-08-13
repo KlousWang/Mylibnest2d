@@ -167,6 +167,44 @@ namespace ET {
             return true;
         }
 
+        bool CetRectangleFillClusterBuilder::TryAppendFillerInRectangleEnvelope(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetClusterCandidate& ABaseCandidate, const TetClusterCandidate& AEnvelopeCandidate, const TetClusterCandidate& ACurrentCandidate, const std::vector<TetClusterFreeRegion>& AFreeRegions, int AFillerIndex, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate)
+        {
+            AOutCandidate = TetClusterCandidate{};
+            if (!ABaseCandidate.Valid || !AEnvelopeCandidate.Valid || !ACurrentCandidate.Valid
+                || AEnvelopeCandidate.ProxyContour.size() < 4 || AEnvelopeCandidate.ClusterWidth <= 0.0
+                || AEnvelopeCandidate.ClusterHeight <= 0.0 || AFreeRegions.empty()) {
+                return false;
+            }
+
+            TetItemTransform FillerTransform;
+            if (!_TryFindFillerTransform(AOriginalItems, AFeatures, ACurrentCandidate, AFreeRegions, AFillerIndex, AOptions,
+                AEnvelopeCandidate.ClusterWidth, AEnvelopeCandidate.ClusterHeight, FillerTransform)) {
+                return false;
+            }
+
+            CetClusterGeometryHelper Geometry;
+            const CetPath FillerContour = Geometry.TransformContour(Geometry.GetIdentityContour(AOriginalItems[AFillerIndex]),
+                FillerTransform.RelativeRotation, FillerTransform.RelativeX, FillerTransform.RelativeY);
+            const double AreaTolerance = std::max(1.0, AEnvelopeCandidate.ProxyArea * CET_CLUSTER_GEOMETRY_RELATIVE_AREA_TOLERANCE);
+            if (!_IsTransformInsideFreeRegions(AOriginalItems, FillerTransform, AFreeRegions)
+                || !Geometry.IsContourFullyContained(FillerContour, AEnvelopeCandidate.ProxyContour, AreaTolerance)) {
+                return false;
+            }
+
+            TetClusterCandidate Candidate = ACurrentCandidate;
+            Candidate.OriginalIndices.push_back(AFillerIndex);
+            Candidate.Transforms.push_back(FillerTransform);
+            if (!Geometry.FinalizeCandidateInRectangle(AOriginalItems, AOptions, Candidate,
+                AEnvelopeCandidate.ClusterWidth, AEnvelopeCandidate.ClusterHeight)) {
+                return false;
+            }
+
+            Candidate.BuilderName = "EnvelopeFillSearch";
+            Candidate.ClusterType = ABaseCandidate.ClusterType + "_EnvelopeFill";
+            AOutCandidate = std::move(Candidate);
+            return true;
+        }
+
         bool CetRectangleFillClusterBuilder::_TryFindFillerTransform(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetClusterCandidate& ACurrentCandidate, const std::vector<TetClusterFreeRegion>& AFreeRegions, int AFillerIndex, const TetNestOptions& AOptions, double AEnvelopeWidth, double AEnvelopeHeight, TetItemTransform& AOutTransform) const
         {
             if (AFillerIndex < 0 || AFillerIndex >= static_cast<int>(AOriginalItems.size()) || AFillerIndex >= static_cast<int>(AFeatures.size()) || _ContainsOriginalIndex(ACurrentCandidate, AFillerIndex)) {
@@ -280,6 +318,11 @@ namespace ET {
             AddPosition(ACtx.MaxX, ACtx.MaxY);
             AddPosition(ACtx.MaxX * 0.5, ACtx.MaxY * 0.5);
 
+			// Geometry-driven contact probes must precede the uniform grid. Large
+			// orders intentionally truncate the probe list, and putting the grid
+			// first starved left/right/bottom ellipse-corner positions.
+			_BuildChildContourProbePositions(ACtx, AOutPositions);
+
             for (int Row = 0; Row < CET_RECTANGLE_FILL_GRID_PROBE_COUNT; ++Row) {
                 const double YRatio = static_cast<double>(Row) / static_cast<double>(CET_RECTANGLE_FILL_GRID_PROBE_COUNT - 1);
                 for (int Column = 0; Column < CET_RECTANGLE_FILL_GRID_PROBE_COUNT; ++Column) {
@@ -290,8 +333,6 @@ namespace ET {
                     }
                 }
             }
-
-            _BuildChildContourProbePositions(ACtx, AOutPositions);
         }
         void CetRectangleFillClusterBuilder::_BuildCircleProbePositions(const TetProbeContext& ACtx, std::vector<std::pair<double, double>>& AOutPositions) const
         {

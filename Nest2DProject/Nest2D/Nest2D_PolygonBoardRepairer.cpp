@@ -2,7 +2,12 @@
 #include "Nest2D_PolygonBoardRepairer.h"
 
 #include "Nest2D_ClusterGeometryHelper.h"
+#include "Nest2D_ClusterManager.h"
+#include "Nest2D_RectangleFillClusterBuilder.h"
 #include "Nest2D_RotationUtils.h"
+#include "Nest2D_ShapeAnalyzer.h"
+#include "Nest2D_StrategyManager.h"
+#include "Nest2D_SelfFunction.h"
 
 #include "NestUtils.h"
 
@@ -18,6 +23,8 @@ using namespace libnest2d;
 
 namespace ET {
     namespace NEST2DMANAGERLIB {
+
+        thread_local bool CetPolygonBoardRepairer::_HadBoardFillChanges = false;
 
       /*  struct TetPlacementCandidate
         {
@@ -60,6 +67,7 @@ namespace ET {
             m_PlacementChecks = 0;
             m_SearchDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(CET_REPAIR_MAX_SEARCH_TIME_MS);
             m_SearchBudgetReached = false;
+			_HadBoardFillChanges = false;
 
             _BuildRotations();
         }
@@ -643,9 +651,11 @@ namespace ET {
                     CetNestItem Other = (*_Items)[OtherIndex];
                     Other.inflation(0);
                     if (m_SpacingCoord > 0) {
-                        Item.inflation(static_cast<decltype(Item.inflation())>(m_SpacingCoord));
+                        const auto HalfSpacing = static_cast<decltype(Item.inflation())>(std::ceil(static_cast<double>(m_SpacingCoord) * 0.5));
+                        Item.inflation(HalfSpacing);
+                        Other.inflation(HalfSpacing);
                     }
-                    if (CetNestItem::intersects(Item, Other)) {
+                    if (CetNestItem::intersects(Item, Other) && !CetNestItem::touches(Item, Other)) {
                         return false;
                     }
                 }
@@ -774,7 +784,7 @@ namespace ET {
 
             
             if (CanPlace && m_SpacingCoord > 0){
-                Candidate.inflation(static_cast<decltype(OldInflation)>(m_SpacingCoord));
+                Candidate.inflation(static_cast<decltype(OldInflation)>(std::ceil(static_cast<double>(m_SpacingCoord) * 0.5)));
             }
 
             const auto InflatedBounds = Candidate.boundingBox();
@@ -785,7 +795,7 @@ namespace ET {
                         continue;
                     }
 
-                    const auto& Other = Items[i];
+                    CetNestItem Other = Items[i];
                     int OtherBin = static_cast<int>(Other.binId());
 
                     if (OtherBin != APlacement.TargetBin || OtherBin < 0){
@@ -800,7 +810,11 @@ namespace ET {
                         continue;
                     }
 
-                    if (NestItemType::intersects(Candidate, Other)){
+                    Other.inflation(0);
+                    if (m_SpacingCoord > 0) {
+                        Other.inflation(static_cast<decltype(Other.inflation())>(std::ceil(static_cast<double>(m_SpacingCoord) * 0.5)));
+                    }
+                    if (NestItemType::intersects(Candidate, Other) && !NestItemType::touches(Candidate, Other)){
                         CanPlace = false;
                         break;
                     }
@@ -949,15 +963,27 @@ namespace ET {
             }
         }
 
-        void CetPolygonBoardRepairer::_FillHoles(std::size_t& ALayers)
-        {
+		void CetPolygonBoardRepairer::_FillHoles(std::size_t& ALayers)
+		{
             if (_Items == nullptr || ALayers <= 1){
                 return;
             }
 			auto& Items = *_Items;
+			const bool LargeOrder = Items.size() > CET_NEST_FULL_STRATEGY_ITEM_LIMIT;
+			const long long CompositeTimeMs = LargeOrder ? CET_BOARD_COMPOSITE_LARGE_ORDER_MAX_SEARCH_TIME_MS
+				: CET_BOARD_COMPOSITE_MAX_SEARCH_TIME_MS;
+			const long long CompositeTimePerBinMs = LargeOrder ? CET_BOARD_COMPOSITE_LARGE_ORDER_MAX_SEARCH_TIME_PER_BIN_MS
+				: CET_BOARD_COMPOSITE_MAX_SEARCH_TIME_PER_BIN_MS;
+			const auto CompositeDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(CompositeTimeMs);
+			m_SearchDeadline = CompositeDeadline;
+			m_SearchBudgetReached = false;
 			const int BeforeUsedBins = _CountUsedBins();
 			const double BeforeFirstBinArea = _CalculateBinOccupiedArea(0);
 			const long long BeforePlacementChecks = m_PlacementChecks;
+			TetBoardCompositeSearchStats CompositeStats;
+			std::vector<long long> CompositeExactChecksByBin(ALayers, 0);
+			std::vector<std::size_t> CompositeRollbackBins;
+			std::vector<std::size_t> CompositeMovedItems;
 			std::size_t AcceptedMoves = 0;
 			bool Changed = true;
 			int Iteration = 0;
@@ -969,29 +995,9 @@ namespace ET {
 				}
                 Changed = false;
                 ++Iteration;
-
-                for(int TargetBin = 0; TargetBin < static_cast<int>(ALayers); ++TargetBin){
-					if (!_CanContinueSearch()) {
-						break;
-					}
-					std::vector<TetClusterFreeRegion> FreeRegions;
-					const bool ExtractedFreeRegions = _ExtractBoardFreeRegions(TargetBin, FreeRegions);
-					std::cout << "[BOARD FILL][SEARCH] Bin=" << TargetBin
-						<< " FreeRegionCount=" << FreeRegions.size()
-						<< " Extracted=" << ExtractedFreeRegions << std::endl;
-					TetHoleFillCandidate BestCandidate;
-                    if (!_FindBestCandidateForTargetBin(TargetBin, FreeRegions, BestCandidate)){
-                        continue;
-                    }
-					if (!_ApplyHoleFillCandidate(BestCandidate)) {
-						continue;
-					}
-                    Changed = true;
-					++AcceptedMoves;
-					std::cout << "[BOARD FILL][MOVE] Item=" << BestCandidate.ItemIndex
-						<< " From=" << BestCandidate.OldBin << " To=" << BestCandidate.TargetBin
-						<< " Score=" << BestCandidate.Score << std::endl;
-                }
+				Changed = _RunBoardCompositePass(ALayers, CompositeDeadline, CompositeTimePerBinMs,
+					CompositeExactChecksByBin, CompositeRollbackBins, CompositeMovedItems, CompositeStats, AcceptedMoves);
+				if (!Changed) Changed = _RunLegacyBoardFillPass(ALayers, AcceptedMoves);
                 ALayers = _CompactItemBins();
             }
 			std::cout << "[BOARD FILL][SUMMARY] MoveAttempts=" << (m_PlacementChecks - BeforePlacementChecks)
@@ -999,7 +1005,74 @@ namespace ET {
 				<< " AfterFirstBinArea=" << _CalculateBinOccupiedArea(0)
 				<< " BeforeUsedBins=" << BeforeUsedBins << " AfterUsedBins=" << _CountUsedBins()
 				<< " Iterations=" << Iteration << std::endl;
+			std::cout << "[BOARD COMPOSITE][SUMMARY] Candidates=" << CompositeStats.CandidateCount
+				<< " Accepted=" << CompositeStats.AcceptedCount << " Rollbacks=" << CompositeStats.RollbackCount
+				<< " Fillers=" << CompositeStats.FillerCount << " ExactChecks=" << CompositeStats.ExactPlacementChecks
+				<< " AnchoredRanked=" << CompositeStats.RankedAnchoredSkeletons
+				<< " MovingRanked=" << CompositeStats.RankedMovingSkeletons
+				<< " BuildFail=" << CompositeStats.SkeletonBuildFailures
+				<< " EmptyFillers=" << CompositeStats.EmptyFillerSets
+				<< " BeamFail=" << CompositeStats.BeamExpansionFailures
+				<< " PlacementFail=" << CompositeStats.PlacementFailures << std::endl;
         }
+
+		bool CetPolygonBoardRepairer::_RunBoardCompositePass(std::size_t& ALayers, const std::chrono::steady_clock::time_point& ADeadline,
+			long long ATimePerBinMs, std::vector<long long>& AExactChecksByBin, std::vector<std::size_t>& ARollbackBins,
+			std::vector<std::size_t>& AMovedItems,
+			TetBoardCompositeSearchStats& AStats, std::size_t& AAcceptedMoves)
+		{
+			bool Changed = false;
+			for (int TargetBin = 0; TargetBin < static_cast<int>(ALayers); ++TargetBin) {
+				if (std::chrono::steady_clock::now() >= ADeadline) break;
+				std::vector<TetClusterFreeRegion> FreeRegions;
+				const bool Extracted = _ExtractBoardFreeRegions(TargetBin, FreeRegions);
+				std::cout << "[BOARD FILL][SEARCH] Bin=" << TargetBin << " FreeRegionCount=" << FreeRegions.size()
+					<< " Extracted=" << Extracted << std::endl;
+				if (TargetBin >= static_cast<int>(AExactChecksByBin.size())) AExactChecksByBin.resize(TargetBin + 1, 0);
+				m_SearchDeadline = std::min(ADeadline, std::chrono::steady_clock::now() + std::chrono::milliseconds(ATimePerBinMs));
+				m_SearchBudgetReached = false;
+				TetBoardCompositeCandidate Candidate;
+				const bool CanRollback = std::count(ARollbackBins.begin(), ARollbackBins.end(), static_cast<std::size_t>(TargetBin))
+					< CET_BOARD_COMPOSITE_MAX_ROLLBACKS_PER_BIN;
+				if (CanRollback && _FindBestBoardCompositeForBin(TargetBin, FreeRegions, AExactChecksByBin[TargetBin], Candidate, AStats)) {
+					const bool ReusesMovedItem = std::any_of(Candidate.Placements.begin(), Candidate.Placements.end(), [&](const TetHoleFillCandidate& APlacement) {
+						return std::find(AMovedItems.begin(), AMovedItems.end(), APlacement.ItemIndex) != AMovedItems.end();
+					});
+					if (ReusesMovedItem) continue;
+					if (_ApplyBoardCompositeCandidate(Candidate, ALayers, AStats)) {
+						Changed = true; _HadBoardFillChanges = true; AAcceptedMoves += Candidate.Placements.size();
+						for (const TetHoleFillCandidate& Placement : Candidate.Placements) AMovedItems.push_back(Placement.ItemIndex);
+					}
+					else ARollbackBins.push_back(static_cast<std::size_t>(TargetBin));
+				}
+			}
+			m_SearchDeadline = ADeadline;
+			m_SearchBudgetReached = false;
+			return Changed;
+		}
+
+		bool CetPolygonBoardRepairer::_RunLegacyBoardFillPass(std::size_t ALayers, std::size_t& AAcceptedMoves)
+		{
+			for (int TargetBin = 0; TargetBin < static_cast<int>(ALayers) && _CanContinueSearch(); ++TargetBin) {
+				std::vector<TetClusterFreeRegion> FreeRegions;
+				_ExtractBoardFreeRegions(TargetBin, FreeRegions);
+				TetBoardLocalFillCandidate LocalCandidate;
+				if (_FindBestLocalCandidateForTargetBin(TargetBin, FreeRegions, LocalCandidate) && _ApplyLocalFillCandidate(LocalCandidate)) {
+					_HadBoardFillChanges = true; AAcceptedMoves += LocalCandidate.Placements.size();
+					std::cout << "[BOARD LOCAL FILL][ACCEPT] Bin=" << TargetBin << " Parts=" << LocalCandidate.Placements.size()
+						<< " AreaGain=" << LocalCandidate.OccupiedAreaGain << " EnvelopeFill=" << LocalCandidate.EnvelopeFillRatio << std::endl;
+					return true;
+				}
+				TetHoleFillCandidate Candidate;
+				if (_FindBestCandidateForTargetBin(TargetBin, FreeRegions, Candidate) && _ApplyHoleFillCandidate(Candidate)) {
+					_HadBoardFillChanges = true; ++AAcceptedMoves;
+					std::cout << "[BOARD FILL][MOVE] Item=" << Candidate.ItemIndex << " From=" << Candidate.OldBin
+						<< " To=" << Candidate.TargetBin << " Score=" << Candidate.Score << std::endl;
+					return true;
+				}
+			}
+			return false;
+		}
 
         bool CetPolygonBoardRepairer::_ExtractBoardFreeRegions(int ATargetBin, std::vector<TetClusterFreeRegion>& AOutRegions) const
         {
@@ -1086,6 +1159,680 @@ namespace ET {
             return true;
         }
 
+        bool CetPolygonBoardRepairer::_BuildCompositeSkeleton(int ASkeletonIndex, const TetShapeFeature& AFeature, TetClusterCandidate& AOutCluster) const
+        {
+            AOutCluster = TetClusterCandidate{};
+            if (_Items == nullptr || _Options == nullptr || ASkeletonIndex < 0 || ASkeletonIndex >= static_cast<int>(_Items->size())) return false;
+            const bool IsSupported = AFeature.ShapeType == MetShapeType::CircleLike || AFeature.ShapeType == MetShapeType::EllipseLike
+                || AFeature.ShapeType == MetShapeType::TriangleLike || AFeature.ShapeType == MetShapeType::RectangleLike
+                || AFeature.ShapeType == MetShapeType::ArcLike || AFeature.ShapeType == MetShapeType::QuadrilateralLike
+                || AFeature.ShapeType == MetShapeType::ConvexPolygon || AFeature.ShapeType == MetShapeType::ConcavePolygon;
+            if (!IsSupported) return false;
+            CetClusterGeometryHelper Geometry;
+            const CetPath Contour = Geometry.GetIdentityContour((*_Items)[ASkeletonIndex]);
+            double MinX = 0.0, MinY = 0.0, MaxX = 0.0, MaxY = 0.0;
+            if (!Geometry.GetBounds(Contour, MinX, MinY, MaxX, MaxY)) return false;
+            AOutCluster.OriginalIndices = { ASkeletonIndex };
+            AOutCluster.Transforms = { { ASkeletonIndex, 0.0, 0.0, 0.0 } };
+            AOutCluster.BuilderName = "BoardCompositeSkeleton";
+            AOutCluster.ClusterType = "BoardComposite";
+            return Geometry.FinalizeCandidateInRectangle(*_Items, *_Options, AOutCluster, MaxX - MinX, MaxY - MinY);
+        }
+
+        bool CetPolygonBoardRepairer::_BuildAnchoredCompositeSkeleton(int ASkeletonIndex, const TetShapeFeature& AFeature, TetClusterCandidate& AOutCluster) const
+        {
+            AOutCluster = TetClusterCandidate{};
+            if (_Items == nullptr || _Options == nullptr || ASkeletonIndex < 0 || ASkeletonIndex >= static_cast<int>(_Items->size())) return false;
+            const bool IsSupported = AFeature.ShapeType == MetShapeType::CircleLike || AFeature.ShapeType == MetShapeType::EllipseLike
+                || AFeature.ShapeType == MetShapeType::TriangleLike || AFeature.ShapeType == MetShapeType::RectangleLike
+                || AFeature.ShapeType == MetShapeType::ArcLike || AFeature.ShapeType == MetShapeType::QuadrilateralLike
+                || AFeature.ShapeType == MetShapeType::ConvexPolygon || AFeature.ShapeType == MetShapeType::ConcavePolygon;
+            if (!IsSupported) return false;
+            const CetNestItem& Item = (*_Items)[ASkeletonIndex];
+            const auto Bounds = Item.boundingBox();
+            const double Width = static_cast<double>(Bounds.width());
+            const double Height = static_cast<double>(Bounds.height());
+            if (Width <= 0.0 || Height <= 0.0) return false;
+            AOutCluster = TetClusterCandidate{};
+            AOutCluster.OriginalIndices = { ASkeletonIndex };
+            AOutCluster.Transforms = { { ASkeletonIndex, static_cast<double>(Item.translation().X),
+                static_cast<double>(Item.translation().Y), static_cast<double>(Item.rotation()) } };
+            AOutCluster.BuilderName = "BoardCompositeAnchoredSkeleton";
+            AOutCluster.ClusterType = "BoardCompositeAnchored";
+            CetClusterGeometryHelper Geometry;
+            return Geometry.FinalizeCandidateInRectangle(*_Items, *_Options, AOutCluster, Width, Height);
+        }
+
+        std::vector<int> CetPolygonBoardRepairer::_CollectCompositeFillers(int ATargetBin, const TetClusterCandidate& ACluster, const TetClusterFreeRegion& AFreeRegion, const std::vector<TetShapeFeature>& AFeatures, bool AAllowTargetBin) const
+        {
+            if (_Items == nullptr) return {};
+            const bool Large = _Items->size() > CET_NEST_FULL_STRATEGY_ITEM_LIMIT;
+            const std::size_t Limit = Large ? CET_BOARD_COMPOSITE_LARGE_ORDER_MAX_FILLERS_PER_STATE : CET_BOARD_COMPOSITE_MAX_FILLERS_PER_STATE;
+            std::vector<int> Result;
+            for (std::size_t Index = 0; Index < _Items->size(); ++Index) {
+                const int SourceBin = static_cast<int>((*_Items)[Index].binId());
+				if (SourceBin < 0 || SourceBin < ATargetBin || (!AAllowTargetBin && SourceBin == ATargetBin)) continue;
+                if (std::find(ACluster.OriginalIndices.begin(), ACluster.OriginalIndices.end(), static_cast<int>(Index)) != ACluster.OriginalIndices.end()) continue;
+                if (Index >= AFeatures.size() || AFeatures[Index].BoxArea > AFreeRegion.Area) continue;
+                const bool FitsEnvelope = (AFeatures[Index].Width <= ACluster.ClusterWidth && AFeatures[Index].Height <= ACluster.ClusterHeight)
+                    || (AFeatures[Index].Height <= ACluster.ClusterWidth && AFeatures[Index].Width <= ACluster.ClusterHeight);
+                if (!FitsEnvelope) continue;
+                Result.push_back(static_cast<int>(Index));
+            }
+            std::stable_sort(Result.begin(), Result.end(), [&](int A, int B) {
+				const double FreeArea = std::max(1.0, ACluster.ProxyArea - ACluster.ReservedArea);
+				const double TargetArea = FreeArea / static_cast<double>(std::max<std::size_t>(1, Limit));
+				auto Score = [&](int Index) {
+					const TetShapeFeature& Feature = AFeatures[Index];
+					const double AreaMatch = std::min(Feature.Area, TargetArea) / std::max(Feature.Area, TargetArea);
+					const double FillerShort = std::min(Feature.Width, Feature.Height);
+					const double FillerLong = std::max(Feature.Width, Feature.Height);
+					const double EnvelopeShort = std::max(1.0, std::min(ACluster.ClusterWidth, ACluster.ClusterHeight));
+					const double EnvelopeLong = std::max(1.0, std::max(ACluster.ClusterWidth, ACluster.ClusterHeight));
+					const double ShortSideFit = 1.0 - std::clamp(FillerShort / EnvelopeShort, 0.0, 1.0);
+					const double LongSideFit = 1.0 - std::clamp(FillerLong / EnvelopeLong, 0.0, 1.0);
+					return ShortSideFit * 3.0 + LongSideFit + AreaMatch * 0.5;
+				};
+				const double ScoreA = Score(A), ScoreB = Score(B);
+				if (std::abs(ScoreA - ScoreB) > 1e-9) return ScoreA > ScoreB;
+				if (std::abs(AFeatures[A].Area - AFeatures[B].Area) > CET_BOARD_COMPOSITE_SCORE_COMPARISON_TOLERANCE) return AFeatures[A].Area < AFeatures[B].Area;
+				return A < B;
+            });
+            if (Result.size() > Limit) Result.resize(Limit);
+            return Result;
+        }
+
+        bool CetPolygonBoardRepairer::_ExpandCompositeBeam(const TetClusterCandidate& ASkeleton, const std::vector<int>& AFillers, const std::vector<TetShapeFeature>& AFeatures, TetClusterCandidate& AOutCluster) const
+        {
+            if (_Items == nullptr || _Options == nullptr || AFillers.empty()) return false;
+            CetRectangleFillClusterBuilder Builder;
+            CetClusterGeometryHelper Geometry;
+            std::vector<TetClusterCandidate> Beam{ ASkeleton };
+            std::vector<TetClusterCandidate> Best;
+            const bool Large = _Items->size() > CET_NEST_FULL_STRATEGY_ITEM_LIMIT;
+            const std::size_t DepthLimit = Large ? CET_BOARD_COMPOSITE_LARGE_ORDER_MAX_DEPTH : CET_BOARD_COMPOSITE_MAX_DEPTH;
+            const std::size_t BeamLimit = Large ? CET_BOARD_COMPOSITE_LARGE_ORDER_BEAM_WIDTH : CET_BOARD_COMPOSITE_BEAM_WIDTH;
+            for (std::size_t Depth = 0; Depth < DepthLimit && !Beam.empty(); ++Depth) {
+                std::vector<TetClusterCandidate> Next;
+                for (const TetClusterCandidate& State : Beam) for (int Filler : AFillers) {
+                    std::vector<TetClusterFreeRegion> InnerRegions;
+                    TetClusterCandidate Candidate;
+                    if (Geometry.ExtractCandidateFreeRegions(*_Items, *_Options, State, InnerRegions)
+                        && Builder.TryAppendFillerInRectangleEnvelope(*_Items, AFeatures, ASkeleton, ASkeleton, State, InnerRegions, Filler, *_Options, Candidate)) Next.push_back(std::move(Candidate));
+                }
+                if (Next.empty()) break;
+                std::stable_sort(Next.begin(), Next.end(), [](const TetClusterCandidate& A, const TetClusterCandidate& B) { return A.FillRatio > B.FillRatio; });
+                if (Next.size() > BeamLimit) Next.resize(BeamLimit);
+                Best.insert(Best.end(), Next.begin(), Next.end());
+                Beam = std::move(Next);
+            }
+            if (Best.empty()) return false;
+            std::stable_sort(Best.begin(), Best.end(), [](const TetClusterCandidate& A, const TetClusterCandidate& B) { return A.FillRatio > B.FillRatio; });
+            AOutCluster = Best.front();
+            return AOutCluster.OriginalIndices.size() >= 2;
+        }
+
+        bool CetPolygonBoardRepairer::_BuildBoardCompositeForSkeleton(int ATargetBin, const TetClusterFreeRegion& AFreeRegion, int ASkeletonIndex, const std::vector<TetShapeFeature>& AFeatures, long long& AInOutExactChecks, TetBoardCompositeCandidate& AOutCandidate, TetBoardCompositeSearchStats& AInOutStats)
+        {
+            AOutCandidate = TetBoardCompositeCandidate{};
+            if (_Items == nullptr || _Options == nullptr || ASkeletonIndex < 0 || ASkeletonIndex >= static_cast<int>(AFeatures.size())) return false;
+            TetClusterCandidate Skeleton;
+            if (!_BuildCompositeSkeleton(ASkeletonIndex, AFeatures[ASkeletonIndex], Skeleton)) { ++AInOutStats.SkeletonBuildFailures; return false; }
+            const std::vector<int> Fillers = _CollectCompositeFillers(ATargetBin, Skeleton, AFreeRegion, AFeatures, false);
+            if (Fillers.empty()) { ++AInOutStats.EmptyFillerSets; return false; }
+            AOutCandidate.TargetBin = ATargetBin;
+            AOutCandidate.FreeRegion = AFreeRegion;
+            AOutCandidate.SkeletonIndex = ASkeletonIndex;
+            if (!_ExpandCompositeBeam(Skeleton, Fillers, AFeatures, AOutCandidate.Cluster)) { ++AInOutStats.BeamExpansionFailures; return false; }
+            ++AInOutStats.CandidateCount;
+            if (_PlaceBoardCompositeInFreeRegion(AOutCandidate, AInOutExactChecks, AInOutStats)) return true;
+			++AInOutStats.PlacementFailures;
+			return false;
+        }
+
+        bool CetPolygonBoardRepairer::_BuildAnchoredBoardComposite(int ATargetBin, const TetClusterFreeRegion& AFreeRegion, int ASkeletonIndex, const std::vector<TetShapeFeature>& AFeatures, long long& AInOutExactChecks, TetBoardCompositeCandidate& AOutCandidate, TetBoardCompositeSearchStats& AInOutStats)
+        {
+            AOutCandidate = TetBoardCompositeCandidate{};
+            if (_Items == nullptr || ASkeletonIndex < 0 || ASkeletonIndex >= static_cast<int>(AFeatures.size())) return false;
+            TetClusterCandidate Skeleton;
+            if (!_BuildAnchoredCompositeSkeleton(ASkeletonIndex, AFeatures[ASkeletonIndex], Skeleton)) { ++AInOutStats.SkeletonBuildFailures; return false; }
+            const std::vector<int> Fillers = _CollectCompositeFillers(ATargetBin, Skeleton, AFreeRegion, AFeatures, true);
+            if (Fillers.empty()) { ++AInOutStats.EmptyFillerSets; return false; }
+			for (int Filler : Fillers) {
+				TetBoardCompositeCandidate Candidate;
+				Candidate.FreeRegion = AFreeRegion;
+				if (_BuildAnchoredCandidateForFiller(ATargetBin, ASkeletonIndex, Filler, Skeleton, AFeatures,
+					AInOutExactChecks, Candidate, AInOutStats)) { AOutCandidate = std::move(Candidate); return true; }
+				if (!_CanContinueSearch()) break;
+			}
+			++AInOutStats.BeamExpansionFailures;
+			return false;
+        }
+
+		bool CetPolygonBoardRepairer::_BuildAnchoredCandidateForFiller(int ATargetBin, int ASkeletonIndex, int AFillerIndex,
+			const TetClusterCandidate& ASkeleton, const std::vector<TetShapeFeature>& AFeatures,
+			long long& AInOutExactChecks, TetBoardCompositeCandidate& AOutCandidate, TetBoardCompositeSearchStats& AInOutStats)
+		{
+			if (_Items == nullptr || _Options == nullptr || AFillerIndex < 0 || AFillerIndex >= static_cast<int>(_Items->size())) return false;
+			const int OldBin = static_cast<int>((*_Items)[AFillerIndex].binId());
+			if (OldBin == ATargetBin) (*_Items)[AFillerIndex].binId(-1);
+			std::vector<TetClusterFreeRegion> BoardRegions;
+			const bool Extracted = _ExtractBoardFreeRegions(ATargetBin, BoardRegions);
+			if (OldBin == ATargetBin) (*_Items)[AFillerIndex].binId(OldBin);
+			if (!Extracted || BoardRegions.empty()) return false;
+			const auto Bounds = (*_Items)[ASkeletonIndex].boundingBox();
+			_TranslateFreeRegions(BoardRegions, -static_cast<double>(getX(Bounds.minCorner())),
+				-static_cast<double>(getY(Bounds.minCorner())));
+			CetClusterGeometryHelper Geometry;
+			std::vector<TetClusterFreeRegion> EnvelopeRegions;
+			if (!Geometry.IntersectFreeRegionsWithRectangle(BoardRegions, ASkeleton.ClusterWidth,
+				ASkeleton.ClusterHeight, EnvelopeRegions)) return false;
+			_TranslateFreeRegions(EnvelopeRegions, static_cast<double>(getX(Bounds.minCorner())),
+				static_cast<double>(getY(Bounds.minCorner())));
+			const bool Large = _Items->size() > CET_NEST_FULL_STRATEGY_ITEM_LIMIT;
+			const long long GridLimit = Large ? CET_BOARD_COMPOSITE_LARGE_ORDER_MAX_GRID_PLACEMENT_CHECKS_PER_FILLER
+				: CET_BOARD_COMPOSITE_MAX_GRID_PLACEMENT_CHECKS_PER_FILLER;
+			TetHoleFillCandidate GridPlacement;
+			const bool GridFound = _TryFindBestPlacementInBin(static_cast<std::size_t>(AFillerIndex), ATargetBin, EnvelopeRegions,
+				GridPlacement, GridLimit);
+			if (GridFound) {
+				TetClusterCandidate Cluster = ASkeleton;
+				Cluster.OriginalIndices.push_back(AFillerIndex);
+				Cluster.Transforms.push_back({ AFillerIndex,
+					static_cast<double>(GridPlacement.Translation.X - getX(Bounds.minCorner())),
+					static_cast<double>(GridPlacement.Translation.Y - getY(Bounds.minCorner())),
+					static_cast<double>(GridPlacement.Rotation) });
+				if (Geometry.FinalizeCandidateInRectangle(*_Items, *_Options, Cluster,
+					ASkeleton.ClusterWidth, ASkeleton.ClusterHeight)) {
+					AOutCandidate.AnchoredSkeleton = true; AOutCandidate.SkeletonIndex = ASkeletonIndex;
+					AOutCandidate.TargetBin = ATargetBin; AOutCandidate.Cluster = std::move(Cluster);
+					++AInOutStats.CandidateCount;
+					if (_PlaceAnchoredBoardComposite(AOutCandidate, AInOutExactChecks, AInOutStats)) return true;
+					++AInOutStats.PlacementFailures;
+				}
+			}
+			_TranslateFreeRegions(EnvelopeRegions, -static_cast<double>(getX(Bounds.minCorner())),
+				-static_cast<double>(getY(Bounds.minCorner())));
+			CetRectangleFillClusterBuilder Builder;
+			TetClusterCandidate Cluster;
+			if (!Builder.TryAppendFillerInRectangleEnvelope(*_Items, AFeatures, ASkeleton, ASkeleton,
+				ASkeleton, EnvelopeRegions, AFillerIndex, *_Options, Cluster)) {
+				std::cout << "[BOARD COMPOSITE][CANDIDATE] Bin=" << ATargetBin << " Skeleton=" << ASkeletonIndex
+					<< " Filler=" << AFillerIndex << " Stage=" << (GridFound ? "GridFinalizeMiss" : "GridAndEnvelopeMiss")
+					<< " Regions=" << EnvelopeRegions.size() << std::endl;
+				return false;
+			}
+			AOutCandidate.AnchoredSkeleton = true;
+			AOutCandidate.SkeletonIndex = ASkeletonIndex;
+			AOutCandidate.TargetBin = ATargetBin;
+			AOutCandidate.Cluster = std::move(Cluster);
+			++AInOutStats.CandidateCount;
+			if (_PlaceAnchoredBoardComposite(AOutCandidate, AInOutExactChecks, AInOutStats)) return true;
+			++AInOutStats.PlacementFailures;
+			return false;
+		}
+
+		void CetPolygonBoardRepairer::_TranslateFreeRegions(std::vector<TetClusterFreeRegion>& ARegions, double AOffsetX, double AOffsetY) const
+		{
+			const auto DX = static_cast<ClipperLib::cInt>(std::llround(AOffsetX));
+			const auto DY = static_cast<ClipperLib::cInt>(std::llround(AOffsetY));
+			for (TetClusterFreeRegion& Region : ARegions) {
+				for (ClipperLib::IntPoint& Point : Region.Contour) { Point.X += DX; Point.Y += DY; }
+				for (CetPath& Hole : Region.Holes) for (ClipperLib::IntPoint& Point : Hole) { Point.X += DX; Point.Y += DY; }
+				Region.MinX += AOffsetX; Region.MaxX += AOffsetX;
+				Region.MinY += AOffsetY; Region.MaxY += AOffsetY;
+			}
+		}
+
+        bool CetPolygonBoardRepairer::_BuildCompositePlacements(const TetBoardCompositeCandidate& ACandidate, double ARotation, double ATranslationX, double ATranslationY, std::vector<TetHoleFillCandidate>& AOutPlacements) const
+        {
+            AOutPlacements.clear();
+            const double Cosine = std::cos(ARotation), Sine = std::sin(ARotation);
+            for (const TetItemTransform& Transform : ACandidate.Cluster.Transforms) {
+                if (Transform.OriginalId < 0) return false;
+                const double X = ATranslationX + Transform.RelativeX * Cosine - Transform.RelativeY * Sine;
+                const double Y = ATranslationY + Transform.RelativeX * Sine + Transform.RelativeY * Cosine;
+                AOutPlacements.push_back({ true, static_cast<std::size_t>(Transform.OriginalId), -1, ACandidate.TargetBin,
+                    Point(static_cast<ClipperLib::cInt>(std::llround(X)), static_cast<ClipperLib::cInt>(std::llround(Y))), Radians(ARotation + Transform.RelativeRotation), 0.0 });
+            }
+            return !AOutPlacements.empty();
+        }
+
+        bool CetPolygonBoardRepairer::_ValidateBoardCompositePlacements(const TetBoardCompositeCandidate& ACandidate, const std::vector<TetHoleFillCandidate>& APlacements) const
+        {
+            const std::size_t ExpectedCount = ACandidate.Cluster.Transforms.size() - (ACandidate.AnchoredSkeleton ? 1 : 0);
+            if (_Items == nullptr || APlacements.size() != ExpectedCount) return false;
+            CetTNestItemVector Snapshot = *_Items;
+            auto* Mutable = const_cast<CetPolygonBoardRepairer*>(this);
+			for (const TetHoleFillCandidate& Placement : APlacements) {
+				if (Placement.ItemIndex >= _Items->size()) { *_Items = Snapshot; return false; }
+				const int OldBin = static_cast<int>((*_Items)[Placement.ItemIndex].binId());
+				const bool InvalidSource = OldBin < ACandidate.TargetBin || (!ACandidate.AnchoredSkeleton && OldBin == ACandidate.TargetBin);
+				if (!Placement.Valid || InvalidSource) { *_Items = Snapshot; return false; }
+				(*_Items)[Placement.ItemIndex].binId(-1);
+			}
+			std::vector<TetClusterFreeRegion> CurrentFreeRegions;
+			if (!Mutable->_ExtractBoardFreeRegions(ACandidate.TargetBin, CurrentFreeRegions)) { *_Items = Snapshot; return false; }
+            for (const TetHoleFillCandidate& Placement : APlacements) {
+                CetNestItem& Item = (*_Items)[Placement.ItemIndex];
+                Item.translation(Placement.Translation); Item.rotation(Placement.Rotation); Item.binId(Placement.TargetBin);
+                TetPlacementCandidate Check;
+                Check.ItemIndex = Placement.ItemIndex;
+                Check.TargetBin = Placement.TargetBin;
+                Check.Translation = Placement.Translation;
+                Check.Rotation = Placement.Rotation;
+				const bool InsideFreeRegion = std::any_of(CurrentFreeRegions.begin(), CurrentFreeRegions.end(),
+					[&](const TetClusterFreeRegion& ARegion) { return Mutable->_IsPlacementInsideFreeRegion(Check, ARegion); });
+				if (!InsideFreeRegion) {
+					std::cout << "[BOARD COMPOSITE][ROLLBACK] Bin=" << ACandidate.TargetBin
+						<< " Item=" << Placement.ItemIndex << " Reason=outside-recomputed-free-region" << std::endl;
+					*_Items = Snapshot; return false;
+				}
+				if (!Mutable->_CanPlaceAt(Check)) {
+					std::cout << "[BOARD COMPOSITE][ROLLBACK] Bin=" << ACandidate.TargetBin
+						<< " Item=" << Placement.ItemIndex << " Reason=exact-collision-or-spacing" << std::endl;
+					*_Items = Snapshot; return false;
+				}
+            }
+            *_Items = Snapshot;
+            return true;
+        }
+
+        bool CetPolygonBoardRepairer::_PlaceBoardCompositeInFreeRegion(TetBoardCompositeCandidate& AInOutCandidate, long long& AInOutExactChecks, TetBoardCompositeSearchStats& AInOutStats)
+        {
+            if (_Items == nullptr || _Options == nullptr) return false;
+            const bool Large = _Items->size() > CET_NEST_FULL_STRATEGY_ITEM_LIMIT;
+			const long long Limit = Large ? CET_BOARD_COMPOSITE_LARGE_ORDER_MAX_EXACT_PLACEMENT_CHECKS : CET_BOARD_COMPOSITE_MAX_EXACT_PLACEMENT_CHECKS;
+            CetClusterGeometryHelper Geometry;
+            const std::vector<double> Rotations = CetRotationUtils::BuildAllowedRotations(_Options->Rotations);
+            long long Checks = 0;
+            for (double Rotation : Rotations) {
+                const CetPath Proxy = Geometry.TransformContour(AInOutCandidate.Cluster.ProxyContour, Rotation, 0.0, 0.0);
+                double MinX = 0.0, MinY = 0.0, MaxX = 0.0, MaxY = 0.0;
+                if (!Geometry.GetBounds(Proxy, MinX, MinY, MaxX, MaxY)) continue;
+                const std::array<std::pair<double, double>, 4> Anchors{ { { AInOutCandidate.FreeRegion.MinX - MinX, AInOutCandidate.FreeRegion.MinY - MinY }, { AInOutCandidate.FreeRegion.MaxX - MaxX, AInOutCandidate.FreeRegion.MinY - MinY }, { AInOutCandidate.FreeRegion.MinX - MinX, AInOutCandidate.FreeRegion.MaxY - MaxY }, { AInOutCandidate.FreeRegion.MaxX - MaxX, AInOutCandidate.FreeRegion.MaxY - MaxY } } };
+                for (const auto& Anchor : Anchors) {
+					if (AInOutExactChecks >= Limit || !_CanContinueSearch()) return false;
+					++Checks;
+					++AInOutExactChecks;
+                    std::vector<TetHoleFillCandidate> Placements;
+                    if (!_BuildCompositePlacements(AInOutCandidate, Rotation, Anchor.first, Anchor.second, Placements)) continue;
+                    if (!_ValidateBoardCompositePlacements(AInOutCandidate, Placements)) continue;
+                    AInOutCandidate.Placements = std::move(Placements);
+                    _ScoreBoardComposite(AInOutCandidate);
+                    AInOutCandidate.Valid = true;
+					AInOutStats.ExactPlacementChecks += Checks;
+                    return true;
+                }
+            }
+            AInOutStats.ExactPlacementChecks += Checks;
+            return false;
+        }
+
+        bool CetPolygonBoardRepairer::_PlaceAnchoredBoardComposite(TetBoardCompositeCandidate& AInOutCandidate, long long& AInOutExactChecks, TetBoardCompositeSearchStats& AInOutStats)
+        {
+            if (_Items == nullptr || AInOutCandidate.SkeletonIndex < 0 || AInOutCandidate.SkeletonIndex >= static_cast<int>(_Items->size())) return false;
+            const bool Large = _Items->size() > CET_NEST_FULL_STRATEGY_ITEM_LIMIT;
+            const long long Limit = Large ? CET_BOARD_COMPOSITE_LARGE_ORDER_MAX_EXACT_PLACEMENT_CHECKS : CET_BOARD_COMPOSITE_MAX_EXACT_PLACEMENT_CHECKS;
+            if (AInOutExactChecks >= Limit) return false;
+            const auto Bounds = (*_Items)[AInOutCandidate.SkeletonIndex].boundingBox();
+            std::vector<TetHoleFillCandidate> Placements;
+            if (!_BuildCompositePlacements(AInOutCandidate, 0.0, static_cast<double>(getX(Bounds.minCorner())),
+                static_cast<double>(getY(Bounds.minCorner())), Placements)) return false;
+            Placements.erase(std::remove_if(Placements.begin(), Placements.end(), [&](const TetHoleFillCandidate& APlacement) {
+                return static_cast<int>(APlacement.ItemIndex) == AInOutCandidate.SkeletonIndex;
+            }), Placements.end());
+            ++AInOutExactChecks;
+            ++AInOutStats.ExactPlacementChecks;
+            if (Placements.empty() || !_ValidateBoardCompositePlacements(AInOutCandidate, Placements)) return false;
+            AInOutCandidate.Placements = std::move(Placements);
+            _ScoreBoardComposite(AInOutCandidate);
+            AInOutCandidate.Valid = true;
+            return true;
+        }
+
+        void CetPolygonBoardRepairer::_ScoreBoardComposite(TetBoardCompositeCandidate& AInOutCandidate) const
+        {
+            const TetClusterCandidate& Cluster = AInOutCandidate.Cluster;
+            TetBoardCompositeScore& Score = AInOutCandidate.Score;
+            Score.InternalFillRatio = Cluster.FillRatio;
+            Score.OccupiedAreaGain = 0.0;
+            if (_Items != nullptr) for (const TetHoleFillCandidate& Placement : AInOutCandidate.Placements) {
+                if (Placement.ItemIndex < _Items->size()) Score.OccupiedAreaGain += std::abs(static_cast<double>((*_Items)[Placement.ItemIndex].area()));
+            }
+            const double RegionAspect = AInOutCandidate.FreeRegion.Height > 0.0 ? AInOutCandidate.FreeRegion.Width / AInOutCandidate.FreeRegion.Height : 0.0;
+            const double ClusterAspect = Cluster.ClusterHeight > 0.0 ? Cluster.ClusterWidth / Cluster.ClusterHeight : 0.0;
+            Score.AspectMatch = RegionAspect > 0.0 && ClusterAspect > 0.0 ? std::min(RegionAspect, ClusterAspect) / std::max(RegionAspect, ClusterAspect) : 0.0;
+            Score.RemainingShortSide = std::max(0.0, std::min(AInOutCandidate.FreeRegion.Width - Cluster.ClusterWidth, AInOutCandidate.FreeRegion.Height - Cluster.ClusterHeight));
+            Score.Continuity = AInOutCandidate.FreeRegion.Area > 0.0 ? std::clamp(Cluster.ProxyArea / AInOutCandidate.FreeRegion.Area, 0.0, 1.0) : 0.0;
+            Score.FragmentationPenalty = Cluster.FragmentationRisk;
+            Score.ReusableRemnantValue = Score.RemainingShortSide * Score.Continuity;
+            Score.SourceBinReduction = 0.0;
+            if (_Items != nullptr) for (const TetHoleFillCandidate& Placement : AInOutCandidate.Placements) {
+                if (Placement.ItemIndex < _Items->size() && (*_Items)[Placement.ItemIndex].binId() > AInOutCandidate.TargetBin) Score.SourceBinReduction += 1.0;
+            }
+            Score.Total = Score.OccupiedAreaGain + Score.InternalFillRatio * CET_BOARD_COMPOSITE_SCORE_FILL_WEIGHT
+                + Score.AspectMatch * CET_BOARD_COMPOSITE_SCORE_ASPECT_WEIGHT + Score.Continuity * CET_BOARD_COMPOSITE_SCORE_CONTINUITY_WEIGHT
+                + Score.ReusableRemnantValue * CET_BOARD_COMPOSITE_SCORE_REMNANT_WEIGHT + Score.SourceBinReduction * CET_BOARD_COMPOSITE_SCORE_SOURCE_BIN_WEIGHT
+                - Score.FragmentationPenalty * CET_BOARD_COMPOSITE_SCORE_FRAGMENTATION_WEIGHT;
+        }
+
+		bool CetPolygonBoardRepairer::_IsBoardCompositeBetter(const TetBoardCompositeCandidate& AFirst, const TetBoardCompositeCandidate& ASecond) const
+		{
+            if (std::abs(AFirst.Score.Total - ASecond.Score.Total) > CET_BOARD_COMPOSITE_SCORE_COMPARISON_TOLERANCE) return AFirst.Score.Total > ASecond.Score.Total;
+            if (std::abs(AFirst.Score.OccupiedAreaGain - ASecond.Score.OccupiedAreaGain) > CET_BOARD_COMPOSITE_SCORE_COMPARISON_TOLERANCE) return AFirst.Score.OccupiedAreaGain > ASecond.Score.OccupiedAreaGain;
+            if (std::abs(AFirst.Score.FragmentationPenalty - ASecond.Score.FragmentationPenalty) > 1e-9) return AFirst.Score.FragmentationPenalty < ASecond.Score.FragmentationPenalty;
+			return AFirst.Cluster.OriginalIndices < ASecond.Cluster.OriginalIndices;
+		}
+
+		bool CetPolygonBoardRepairer::_HasBoardCompositeGlobalGain(const CetTNestItemVector& ABeforeItems, std::size_t ABeforeLayers, const TetBoardCompositeCandidate& ACandidate, std::size_t AAfterLayers) const
+		{
+			if (_Items == nullptr || AAfterLayers > ABeforeLayers || ACandidate.TargetBin < 0) return false;
+			double TargetBefore = 0.0;
+			double TargetAfter = 0.0;
+			double SourceBefore = 0.0;
+			double SourceAfter = 0.0;
+			for (const CetNestItem& Item : ABeforeItems) {
+				const double Area = std::abs(static_cast<double>(Item.area()));
+				if (Item.binId() == ACandidate.TargetBin) TargetBefore += Area;
+				if (Item.binId() > ACandidate.TargetBin) SourceBefore += Area;
+			}
+			for (const CetNestItem& Item : *_Items) {
+				const double Area = std::abs(static_cast<double>(Item.area()));
+				if (Item.binId() == ACandidate.TargetBin) TargetAfter += Area;
+				if (Item.binId() > ACandidate.TargetBin) SourceAfter += Area;
+			}
+			const bool TargetImproved = TargetAfter > TargetBefore + CET_BOARD_COMPOSITE_SCORE_COMPARISON_TOLERANCE;
+			const bool LaterLoadReduced = SourceAfter < SourceBefore - CET_BOARD_COMPOSITE_SCORE_COMPARISON_TOLERANCE;
+			if (TargetImproved && LaterLoadReduced && ACandidate.Score.FragmentationPenalty >= 0.0) return true;
+			return ACandidate.AnchoredSkeleton && AAfterLayers == ABeforeLayers
+				&& _HasAnchoredRelocationGain(ABeforeItems, ACandidate);
+		}
+
+		bool CetPolygonBoardRepairer::_HasAnchoredRelocationGain(const CetTNestItemVector& ABeforeItems, const TetBoardCompositeCandidate& ACandidate) const
+		{
+			if (_Items == nullptr || ACandidate.TargetBin < 0 || ACandidate.SkeletonIndex < 0
+				|| ACandidate.SkeletonIndex >= static_cast<int>(ABeforeItems.size())) return false;
+			auto Measure = [&](const CetTNestItemVector& AItems) {
+				double MaxX = 0.0, MaxY = 0.0;
+				for (const CetNestItem& Item : AItems) {
+					if (Item.binId() != ACandidate.TargetBin) continue;
+					const auto Bounds = Item.boundingBox();
+					MaxX = std::max(MaxX, static_cast<double>(getX(Bounds.maxCorner())));
+					MaxY = std::max(MaxY, static_cast<double>(getY(Bounds.maxCorner())));
+				}
+				return std::pair<double, double>{ MaxX, MaxY };
+			};
+			const auto Before = Measure(ABeforeItems);
+			const auto After = Measure(*_Items);
+			const double Tolerance = CET_BOARD_COMPOSITE_SCORE_COMPARISON_TOLERANCE;
+			const bool WidthImproved = After.first < Before.first - Tolerance && After.second <= Before.second + Tolerance;
+			const bool DepthImproved = After.second < Before.second - Tolerance && After.first <= Before.first + Tolerance;
+			if (WidthImproved || DepthImproved) return true;
+			if (After.first > Before.first + Tolerance || After.second > Before.second + Tolerance) return false;
+			const auto SkeletonBounds = ABeforeItems[ACandidate.SkeletonIndex].boundingBox();
+			const double SkeletonBoxArea = std::max(1.0, static_cast<double>(SkeletonBounds.width())
+				* static_cast<double>(SkeletonBounds.height()));
+			const double SkeletonFillRatio = std::abs(static_cast<double>(ABeforeItems[ACandidate.SkeletonIndex].area())) / SkeletonBoxArea;
+			const bool FillImproved = ACandidate.Cluster.FillRatio
+				> SkeletonFillRatio + CET_CLUSTER_ENVELOPE_FILL_MIN_FILL_RATIO_GAIN * 0.1;
+			auto OverlapWithSkeleton = [&](const auto& ABounds) {
+				const double Width = std::max(0.0, static_cast<double>(std::min(getX(SkeletonBounds.maxCorner()), getX(ABounds.maxCorner()))
+					- std::max(getX(SkeletonBounds.minCorner()), getX(ABounds.minCorner()))));
+				const double Height = std::max(0.0, static_cast<double>(std::min(getY(SkeletonBounds.maxCorner()), getY(ABounds.maxCorner()))
+					- std::max(getY(SkeletonBounds.minCorner()), getY(ABounds.minCorner()))));
+				return Width * Height;
+			};
+			auto GapToSkeleton = [&](const auto& ABounds) {
+				const double GapX = std::max({ 0.0,
+					static_cast<double>(getX(SkeletonBounds.minCorner()) - getX(ABounds.maxCorner())),
+					static_cast<double>(getX(ABounds.minCorner()) - getX(SkeletonBounds.maxCorner())) });
+				const double GapY = std::max({ 0.0,
+					static_cast<double>(getY(SkeletonBounds.minCorner()) - getY(ABounds.maxCorner())),
+					static_cast<double>(getY(ABounds.minCorner()) - getY(SkeletonBounds.maxCorner())) });
+				return std::hypot(GapX, GapY);
+			};
+			bool Consolidated = false;
+			for (const TetHoleFillCandidate& Placement : ACandidate.Placements) {
+				if (Placement.ItemIndex >= ABeforeItems.size() || ABeforeItems[Placement.ItemIndex].binId() != ACandidate.TargetBin) continue;
+				const auto OldBounds = ABeforeItems[Placement.ItemIndex].boundingBox();
+				const auto NewBounds = (*_Items)[Placement.ItemIndex].boundingBox();
+				const bool MoreOverlap = OverlapWithSkeleton(NewBounds) > OverlapWithSkeleton(OldBounds) + Tolerance;
+				const bool LessGap = GapToSkeleton(NewBounds) + Tolerance < GapToSkeleton(OldBounds);
+				auto CenterDistance = [&](const auto& ABounds) {
+					const double DX = static_cast<double>(getX(ABounds.minCorner()) + getX(ABounds.maxCorner())
+						- getX(SkeletonBounds.minCorner()) - getX(SkeletonBounds.maxCorner())) * 0.5;
+					const double DY = static_cast<double>(getY(ABounds.minCorner()) + getY(ABounds.maxCorner())
+						- getY(SkeletonBounds.minCorner()) - getY(SkeletonBounds.maxCorner())) * 0.5;
+					return std::hypot(DX, DY);
+				};
+				const bool CloserCenter = CenterDistance(NewBounds) + Tolerance < CenterDistance(OldBounds);
+				Consolidated = Consolidated || MoreOverlap || LessGap || CloserCenter;
+			}
+			return FillImproved && Consolidated;
+		}
+
+		bool CetPolygonBoardRepairer::_FindBestBoardCompositeForBin(int ATargetBin, const std::vector<TetClusterFreeRegion>& AFreeRegions, long long& AInOutExactChecks, TetBoardCompositeCandidate& AOutCandidate, TetBoardCompositeSearchStats& AInOutStats)
+        {
+            AOutCandidate = TetBoardCompositeCandidate{};
+            if (_Items == nullptr || _Options == nullptr || AFreeRegions.empty()) return false;
+            const bool Large = _Items->size() > CET_NEST_FULL_STRATEGY_ITEM_LIMIT;
+            const std::size_t RegionLimit = std::min(AFreeRegions.size(), CET_BOARD_COMPOSITE_MAX_FREE_REGIONS_PER_BIN);
+            const std::size_t SkeletonLimit = Large ? CET_BOARD_COMPOSITE_LARGE_ORDER_MAX_SKELETONS_PER_REGION : CET_BOARD_COMPOSITE_MAX_SKELETONS_PER_REGION;
+			const std::size_t CandidateLimit = Large ? CET_BOARD_COMPOSITE_LARGE_ORDER_MAX_CANDIDATES_PER_BIN : CET_BOARD_COMPOSITE_MAX_CANDIDATES_PER_BIN;
+			const std::size_t AttemptLimit = Large ? CET_BOARD_COMPOSITE_LARGE_ORDER_MAX_SKELETON_ATTEMPTS_PER_BIN
+				: CET_BOARD_COMPOSITE_MAX_SKELETON_ATTEMPTS_PER_BIN;
+			if (ATargetBin < 0) return false;
+			long long& ExactChecks = AInOutExactChecks;
+            CetShapeAnalyzer Analyzer;
+            const std::vector<TetShapeFeature> Features = Analyzer.AnalyzeALL(*_Items);
+            CetClusterManager Manager;
+            bool Found = false;
+            const std::size_t CandidateStart = AInOutStats.CandidateCount;
+			std::size_t Attempts = 0;
+            for (std::size_t RegionIndex = 0; RegionIndex < RegionLimit && AInOutStats.CandidateCount - CandidateStart < CandidateLimit && Attempts < AttemptLimit; ++RegionIndex) {
+                const TetClusterFreeRegion& Region = AFreeRegions[RegionIndex];
+                const std::vector<int> AnchoredSkeletons = Manager.RankExistingBoardCompositeSkeletons(*_Items, Features, ATargetBin, Region, SkeletonLimit);
+                AInOutStats.RankedAnchoredSkeletons += AnchoredSkeletons.size();
+                for (int Skeleton : AnchoredSkeletons) {
+					++Attempts;
+                    TetBoardCompositeCandidate Candidate;
+                    if (_BuildAnchoredBoardComposite(ATargetBin, Region, Skeleton, Features, ExactChecks, Candidate, AInOutStats)) {
+                        std::cout << "[BOARD COMPOSITE][CANDIDATE] Bin=" << ATargetBin << " Skeleton=" << Skeleton
+                            << " Mode=Anchored Parts=" << Candidate.Placements.size() << " Fill=" << Candidate.Score.InternalFillRatio
+                            << " Score=" << Candidate.Score.Total << std::endl;
+                        if (!Found || _IsBoardCompositeBetter(Candidate, AOutCandidate)) { AOutCandidate = std::move(Candidate); Found = true; }
+                    }
+                    if (Attempts >= AttemptLimit || AInOutStats.CandidateCount - CandidateStart >= CandidateLimit
+						|| ExactChecks >= (Large ? CET_BOARD_COMPOSITE_LARGE_ORDER_MAX_EXACT_PLACEMENT_CHECKS : CET_BOARD_COMPOSITE_MAX_EXACT_PLACEMENT_CHECKS)
+						|| !_CanContinueSearch()) break;
+                }
+				if (Attempts >= AttemptLimit || !_CanContinueSearch()) break;
+                const std::vector<int> Skeletons = Manager.RankBoardCompositeSkeletons(*_Items, Features, ATargetBin, Region, SkeletonLimit);
+                AInOutStats.RankedMovingSkeletons += Skeletons.size();
+                for (int Skeleton : Skeletons) {
+					++Attempts;
+                    TetBoardCompositeCandidate Candidate;
+					if (_BuildBoardCompositeForSkeleton(ATargetBin, Region, Skeleton, Features, ExactChecks, Candidate, AInOutStats)) {
+                        std::cout << "[BOARD COMPOSITE][CANDIDATE] Bin=" << ATargetBin << " Skeleton=" << Skeleton
+                            << " Parts=" << Candidate.Placements.size() << " Fill=" << Candidate.Score.InternalFillRatio
+                            << " Score=" << Candidate.Score.Total << std::endl;
+                        if (!Found || _IsBoardCompositeBetter(Candidate, AOutCandidate)) { AOutCandidate = std::move(Candidate); Found = true; }
+                    }
+					const long long ExactLimit = Large ? CET_BOARD_COMPOSITE_LARGE_ORDER_MAX_EXACT_PLACEMENT_CHECKS : CET_BOARD_COMPOSITE_MAX_EXACT_PLACEMENT_CHECKS;
+                    if (Attempts >= AttemptLimit || AInOutStats.CandidateCount - CandidateStart >= CandidateLimit || ExactChecks >= ExactLimit || !_CanContinueSearch()) break;
+                }
+            }
+			std::cout << "[BOARD COMPOSITE][SEARCH] Bin=" << ATargetBin
+				<< " Regions=" << RegionLimit
+				<< " Candidates=" << (AInOutStats.CandidateCount - CandidateStart)
+				<< " Attempts=" << Attempts << " ExactChecks=" << ExactChecks << " Found=" << Found << std::endl;
+            return Found;
+        }
+
+        bool CetPolygonBoardRepairer::_ApplyBoardCompositeCandidate(const TetBoardCompositeCandidate& ACandidate, std::size_t& AInOutLayers, TetBoardCompositeSearchStats& AInOutStats)
+        {
+            const std::size_t MinimumPlacements = ACandidate.AnchoredSkeleton ? 1 : 2;
+            if (_Items == nullptr || !ACandidate.Valid || ACandidate.Placements.size() < MinimumPlacements) return false;
+            const CetTNestItemVector Snapshot = *_Items;
+            const std::size_t BeforeLayers = AInOutLayers;
+            const TetTNestEvalResult BeforeEval = Nest2DUtils->Nest2DStrategy->EvaluateNestResult(Snapshot, BeforeLayers);
+            for (const TetHoleFillCandidate& Placement : ACandidate.Placements) {
+                if (Placement.ItemIndex >= _Items->size()) { *_Items = Snapshot; return false; }
+                const int OldBin = static_cast<int>((*_Items)[Placement.ItemIndex].binId());
+                const bool InvalidSource = OldBin < ACandidate.TargetBin || (!ACandidate.AnchoredSkeleton && OldBin == ACandidate.TargetBin);
+				if (InvalidSource) { *_Items = Snapshot; return false; }
+                CetNestItem& Item = (*_Items)[Placement.ItemIndex];
+                Item.translation(Placement.Translation); Item.rotation(Placement.Rotation); Item.binId(Placement.TargetBin);
+            }
+            for (const TetHoleFillCandidate& Placement : ACandidate.Placements) if (!_IsCurrentPlacementValid(Placement.ItemIndex)) { *_Items = Snapshot; ++AInOutStats.RollbackCount; return false; }
+            AInOutLayers = _CompactItemBins();
+            const TetTNestEvalResult AfterEval = Nest2DUtils->Nest2DStrategy->EvaluateNestResult(*_Items, AInOutLayers);
+			const bool StrategyGain = Nest2DUtils->Nest2DStrategy->IsBetterNestResult(AfterEval, BeforeEval);
+			const bool BoardGain = _HasBoardCompositeGlobalGain(Snapshot, BeforeLayers, ACandidate, AInOutLayers);
+			if (!StrategyGain && !BoardGain) {
+				*_Items = Snapshot; AInOutLayers = BeforeLayers; ++AInOutStats.RollbackCount;
+				std::cout << "[BOARD COMPOSITE][ROLLBACK] Bin=" << ACandidate.TargetBin << " Reason=no-global-or-board-gain" << std::endl;
+                return false;
+            }
+            ++AInOutStats.AcceptedCount;
+            AInOutStats.FillerCount += ACandidate.Placements.size() - (ACandidate.AnchoredSkeleton ? 0 : 1);
+			std::cout << "[BOARD COMPOSITE][ACCEPT] Bin=" << ACandidate.TargetBin << " Parts=" << ACandidate.Placements.size()
+				<< " BeforeLayers=" << BeforeLayers << " AfterLayers=" << AInOutLayers
+				<< " StrategyGain=" << StrategyGain << " BoardGain=" << BoardGain << std::endl;
+            return true;
+        }
+
+        std::vector<std::size_t> CetPolygonBoardRepairer::_CollectLocalFillCandidates(int ATargetBin, const TetClusterFreeRegion& AFreeRegion) const
+        {
+            std::vector<std::size_t> Result;
+            if (_Items == nullptr || ATargetBin < 0 || AFreeRegion.Area <= 0.0) return Result;
+            const double AreaTolerance = std::max(1.0, AFreeRegion.Area * CET_CLUSTER_GEOMETRY_RELATIVE_AREA_TOLERANCE);
+            for (std::size_t Index = 0; Index < _Items->size(); ++Index) {
+                const CetNestItem& Item = (*_Items)[Index];
+                if (Item.binId() >= 0 && Item.binId() <= ATargetBin) continue;
+                const double Area = std::abs(static_cast<double>(Item.area()));
+                if (std::isfinite(Area) && Area > 0.0 && Area <= AFreeRegion.Area + AreaTolerance) Result.push_back(Index);
+            }
+            std::stable_sort(Result.begin(), Result.end(), [&](std::size_t A, std::size_t B) {
+                const double AreaA = std::abs(static_cast<double>((*_Items)[A].area()));
+                const double AreaB = std::abs(static_cast<double>((*_Items)[B].area()));
+                return std::abs(AreaA - AreaB) > 1.0 ? AreaA > AreaB : A < B;
+                });
+            const std::size_t Limit = _Items->size() > CET_NEST_FULL_STRATEGY_ITEM_LIMIT
+                ? CET_BOARD_LOCAL_FILL_LARGE_ORDER_MAX_CANDIDATE_ITEMS : CET_BOARD_LOCAL_FILL_MAX_CANDIDATE_ITEMS;
+            if (Result.size() > Limit) Result.resize(Limit);
+            return Result;
+        }
+
+        void CetPolygonBoardRepairer::_UpdateBoardLocalEnvelope(const std::vector<TetHoleFillCandidate>& APlacements, double& AOutArea, double& AOutFillRatio) const
+        {
+            AOutArea = 0.0;
+            AOutFillRatio = 0.0;
+            if (_Items == nullptr || APlacements.empty()) return;
+            double MinX = std::numeric_limits<double>::max(), MinY = MinX;
+            double MaxX = -MinX, MaxY = -MinX, PartArea = 0.0;
+            for (const TetHoleFillCandidate& Placement : APlacements) {
+                if (Placement.ItemIndex >= _Items->size()) return;
+                CetNestItem Item = (*_Items)[Placement.ItemIndex];
+                Item.translation(Placement.Translation);
+                Item.rotation(Placement.Rotation);
+                Item.inflation(0);
+                const auto Bounds = Item.boundingBox();
+                MinX = std::min(MinX, static_cast<double>(getX(Bounds.minCorner())));
+                MinY = std::min(MinY, static_cast<double>(getY(Bounds.minCorner())));
+                MaxX = std::max(MaxX, static_cast<double>(getX(Bounds.maxCorner())));
+                MaxY = std::max(MaxY, static_cast<double>(getY(Bounds.maxCorner())));
+                PartArea += std::abs(static_cast<double>(Item.area()));
+            }
+            AOutArea = std::max(0.0, MaxX - MinX) * std::max(0.0, MaxY - MinY);
+            AOutFillRatio = AOutArea > 0.0 ? std::clamp(PartArea / AOutArea, 0.0, 1.0) : 0.0;
+        }
+
+        bool CetPolygonBoardRepairer::_IsBoardLocalCandidateBetter(const TetBoardLocalFillCandidate& AFirst, const TetBoardLocalFillCandidate& ASecond) const
+        {
+            if (std::abs(AFirst.OccupiedAreaGain - ASecond.OccupiedAreaGain) > 1.0) return AFirst.OccupiedAreaGain > ASecond.OccupiedAreaGain;
+            if (std::abs(AFirst.EnvelopeFillRatio - ASecond.EnvelopeFillRatio) > 1e-9) return AFirst.EnvelopeFillRatio > ASecond.EnvelopeFillRatio;
+            if (AFirst.Placements.size() != ASecond.Placements.size()) return AFirst.Placements.size() > ASecond.Placements.size();
+            if (AFirst.FreeRegion.MinY != ASecond.FreeRegion.MinY) return AFirst.FreeRegion.MinY < ASecond.FreeRegion.MinY;
+            return AFirst.FreeRegion.MinX < ASecond.FreeRegion.MinX;
+        }
+
+        bool CetPolygonBoardRepairer::_BuildLocalCandidateForFreeRegion(int ATargetBin, const TetClusterFreeRegion& AFreeRegion, TetBoardLocalFillCandidate& AOutCandidate)
+        {
+            AOutCandidate = TetBoardLocalFillCandidate{};
+            if (_Items == nullptr || !_CanContinueSearch()) return false;
+            const std::vector<std::size_t> ItemIndices = _CollectLocalFillCandidates(ATargetBin, AFreeRegion);
+            if (ItemIndices.size() < 2) return false;
+            const long long RegionStartChecks = m_RemainingPlacementChecks;
+            std::vector<TetBoardLocalFillCandidate> Beam(1);
+            Beam.front().TargetBin = ATargetBin;
+            Beam.front().FreeRegion = AFreeRegion;
+            bool Found = false;
+            for (std::size_t Depth = 0; Depth < CET_BOARD_LOCAL_FILL_MAX_DEPTH && !Beam.empty(); ++Depth) {
+                std::vector<TetBoardLocalFillCandidate> NextBeam;
+                for (const TetBoardLocalFillCandidate& State : Beam) {
+                    for (std::size_t ItemIndex : ItemIndices) {
+                        if (RegionStartChecks - m_RemainingPlacementChecks >= CET_BOARD_LOCAL_FILL_MAX_PLACEMENT_CHECKS_PER_REGION || !_CanContinueSearch()) break;
+                        if (std::any_of(State.Placements.begin(), State.Placements.end(), [&](const TetHoleFillCandidate& P) { return P.ItemIndex == ItemIndex; })) continue;
+                        const CetTNestItemVector OriginalItems = *_Items;
+                        for (const TetHoleFillCandidate& P : State.Placements) {
+                            CetNestItem& Item = (*_Items)[P.ItemIndex];
+                            Item.translation(P.Translation); Item.rotation(P.Rotation); Item.binId(P.TargetBin);
+                        }
+                        TetHoleFillCandidate Placement;
+                        const bool Placed = _TryFindBestPlacementInBin(ItemIndex, ATargetBin, { AFreeRegion }, Placement, CET_BOARD_LOCAL_FILL_MAX_PLACEMENT_CHECKS_PER_ITEM);
+                        *_Items = OriginalItems;
+                        if (!Placed) continue;
+                        TetBoardLocalFillCandidate Next = State;
+                        Next.Placements.push_back(Placement);
+                        Next.OccupiedAreaGain += std::abs(static_cast<double>(OriginalItems[ItemIndex].area()));
+                        _UpdateBoardLocalEnvelope(Next.Placements, Next.EnvelopeArea, Next.EnvelopeFillRatio);
+                        Next.Score = Next.OccupiedAreaGain + Next.EnvelopeFillRatio;
+                        Next.Valid = Next.Placements.size() >= 2;
+                        NextBeam.push_back(Next);
+                        if (Next.Valid && (!Found || _IsBoardLocalCandidateBetter(Next, AOutCandidate))) { AOutCandidate = Next; Found = true; }
+                    }
+                }
+                std::stable_sort(NextBeam.begin(), NextBeam.end(), [&](const TetBoardLocalFillCandidate& A, const TetBoardLocalFillCandidate& B) { return _IsBoardLocalCandidateBetter(A, B); });
+                if (NextBeam.size() > CET_BOARD_LOCAL_FILL_MAX_VARIANTS_PER_REGION) NextBeam.resize(CET_BOARD_LOCAL_FILL_MAX_VARIANTS_PER_REGION);
+                if (NextBeam.size() > CET_BOARD_LOCAL_FILL_BEAM_WIDTH) NextBeam.resize(CET_BOARD_LOCAL_FILL_BEAM_WIDTH);
+                Beam = std::move(NextBeam);
+            }
+            return Found;
+        }
+
+        bool CetPolygonBoardRepairer::_FindBestLocalCandidateForTargetBin(int ATargetBin, const std::vector<TetClusterFreeRegion>& AFreeRegions, TetBoardLocalFillCandidate& ABestCandidate)
+        {
+            ABestCandidate = TetBoardLocalFillCandidate{};
+            bool Found = false;
+            for (const TetClusterFreeRegion& FreeRegion : AFreeRegions) {
+                if (!_CanContinueSearch()) break;
+                TetBoardLocalFillCandidate Candidate;
+                if (_BuildLocalCandidateForFreeRegion(ATargetBin, FreeRegion, Candidate) && (!Found || _IsBoardLocalCandidateBetter(Candidate, ABestCandidate))) {
+                    ABestCandidate = std::move(Candidate);
+                    Found = true;
+                }
+            }
+            if (Found) std::cout << "[BOARD LOCAL FILL][SEARCH] Bin=" << ATargetBin << " Parts=" << ABestCandidate.Placements.size() << " Gain=" << ABestCandidate.OccupiedAreaGain << std::endl;
+            return Found;
+        }
+
+        bool CetPolygonBoardRepairer::_ApplyLocalFillCandidate(const TetBoardLocalFillCandidate& ACandidate)
+        {
+            if (_Items == nullptr || !ACandidate.Valid || ACandidate.Placements.size() < 2) return false;
+            const CetTNestItemVector OriginalItems = *_Items;
+            const double BeforeArea = _CalculateBinOccupiedArea(ACandidate.TargetBin);
+            for (const TetHoleFillCandidate& Placement : ACandidate.Placements) {
+                if (!Placement.Valid || Placement.ItemIndex >= _Items->size() || ((*_Items)[Placement.ItemIndex].binId() >= 0 && (*_Items)[Placement.ItemIndex].binId() <= ACandidate.TargetBin)) { *_Items = OriginalItems; return false; }
+                CetNestItem& Item = (*_Items)[Placement.ItemIndex];
+                Item.translation(Placement.Translation); Item.rotation(Placement.Rotation); Item.binId(Placement.TargetBin);
+            }
+            for (const TetHoleFillCandidate& Placement : ACandidate.Placements) if (!_IsCurrentPlacementValid(Placement.ItemIndex)) { *_Items = OriginalItems; return false; }
+            if (_CalculateBinOccupiedArea(ACandidate.TargetBin) <= BeforeArea + 1.0) { *_Items = OriginalItems; return false; }
+            return true;
+        }
+
         bool CetPolygonBoardRepairer::_FindBestCandidateForTargetBin(int ATargetBin, const std::vector<TetClusterFreeRegion>& AFreeRegions, TetHoleFillCandidate& ABestCandidate)
         {
             if (_Items == nullptr) return false;
@@ -1102,46 +1849,134 @@ namespace ET {
             return Found;
         }
 
-        bool CetPolygonBoardRepairer::_TryFindBestPlacementInBin(std::size_t AItemIndex, int ATargetBin, const std::vector<TetClusterFreeRegion>& AFreeRegions, TetHoleFillCandidate& ABestCandidate)
+        bool CetPolygonBoardRepairer::_EvaluateBoardFillPlacement(std::size_t AItemIndex, int ATargetBin, int AOldBin,
+            const TetClusterFreeRegion& AFreeRegion, const Radians& ARotation, const Point& ATranslation,
+            long long ACheckLimit, long long& ACheckedCount, TetHoleFillCandidate& ABestCandidate)
         {
-            if (_Items == nullptr || _Options == nullptr || _BinPoly == nullptr || AItemIndex >= _Items->size() || !_CanContinueSearch()) return false;
+            if (ACheckedCount >= ACheckLimit || !_CanContinueSearch()) return false;
+            ++ACheckedCount; ++m_PlacementChecks; --m_RemainingPlacementChecks;
+            TetPlacementCandidate Placement;
+            Placement.ItemIndex = AItemIndex; Placement.TargetBin = ATargetBin;
+            Placement.Rotation = ARotation; Placement.Translation = ATranslation;
+            if (!_IsPlacementInsideFreeRegion(Placement, AFreeRegion) || !_CanPlaceAt(Placement)) return false;
+            const double Score = _CalcHoleFillScore(AItemIndex, AOldBin, ATargetBin, ATranslation);
+            if (!ABestCandidate.Valid || Score > ABestCandidate.Score) {
+                ABestCandidate = { true, AItemIndex, AOldBin, ATargetBin, ATranslation, ARotation, Score };
+            }
+            return true;
+        }
+
+        std::vector<std::size_t> CetPolygonBoardRepairer::_SelectContactVertexIndices(const CetPath& AContour) const
+        {
+            std::vector<std::size_t> Result;
+            if (AContour.empty()) return Result;
+            std::array<std::size_t, 4> Extremes{ 0, 0, 0, 0 };
+            for (std::size_t Index = 1; Index < AContour.size(); ++Index) {
+                if (AContour[Index].X < AContour[Extremes[0]].X) Extremes[0] = Index;
+                if (AContour[Index].X > AContour[Extremes[1]].X) Extremes[1] = Index;
+                if (AContour[Index].Y < AContour[Extremes[2]].Y) Extremes[2] = Index;
+                if (AContour[Index].Y > AContour[Extremes[3]].Y) Extremes[3] = Index;
+            }
+            for (std::size_t Index : Extremes) {
+                if (std::find(Result.begin(), Result.end(), Index) == Result.end()) Result.push_back(Index);
+            }
+            for (std::size_t Slot = 0; Result.size() < CET_BOARD_COMPOSITE_MAX_CONTACT_VERTICES_PER_CONTOUR
+                && Slot < AContour.size(); ++Slot) {
+                const std::size_t Index = Slot * AContour.size()
+                    / CET_BOARD_COMPOSITE_MAX_CONTACT_VERTICES_PER_CONTOUR;
+                if (std::find(Result.begin(), Result.end(), Index) == Result.end()) Result.push_back(Index);
+            }
+            return Result;
+        }
+
+        void CetPolygonBoardRepairer::_ProbeContourContactPlacements(std::size_t AItemIndex, int ATargetBin, int AOldBin,
+            const TetClusterFreeRegion& AFreeRegion, const Radians& ARotation, const CetPath& ARotatedContour,
+            long long AProbeLimit, long long ACheckLimit, long long& ACheckedCount, TetHoleFillCandidate& ABestCandidate)
+        {
+            if (ARotatedContour.empty() || AFreeRegion.Contour.empty() || AProbeLimit <= 0) return;
+            const std::vector<std::size_t> ItemVertices = _SelectContactVertexIndices(ARotatedContour);
+            const std::vector<std::size_t> RegionVertices = _SelectContactVertexIndices(AFreeRegion.Contour);
+            if (ItemVertices.empty() || RegionVertices.empty()) return;
+            double ItemMinX = static_cast<double>(ARotatedContour.front().X);
+            double ItemMaxX = ItemMinX, ItemMinY = static_cast<double>(ARotatedContour.front().Y), ItemMaxY = ItemMinY;
+            for (const ClipperLib::IntPoint& Point : ARotatedContour) {
+                ItemMinX = std::min(ItemMinX, static_cast<double>(Point.X));
+                ItemMaxX = std::max(ItemMaxX, static_cast<double>(Point.X));
+                ItemMinY = std::min(ItemMinY, static_cast<double>(Point.Y));
+                ItemMaxY = std::max(ItemMaxY, static_cast<double>(Point.Y));
+            }
+            const double InsetStep = std::min(ItemMaxX - ItemMinX, ItemMaxY - ItemMinY)
+                * CET_BOARD_COMPOSITE_CONTACT_INSET_STEP_RATIO;
+            const double RegionCenterX = (AFreeRegion.MinX + AFreeRegion.MaxX) * 0.5;
+            const double RegionCenterY = (AFreeRegion.MinY + AFreeRegion.MaxY) * 0.5;
+            const long long StartChecks = ACheckedCount;
+            const std::size_t PairCount = ItemVertices.size() * RegionVertices.size();
+            for (std::size_t Pair = 0; Pair < PairCount && ACheckedCount - StartChecks < AProbeLimit; ++Pair) {
+                const std::size_t ItemSlot = Pair % ItemVertices.size();
+                const std::size_t RegionSlot = Pair / ItemVertices.size();
+                const ClipperLib::IntPoint& ItemPoint = ARotatedContour[ItemVertices[ItemSlot]];
+                const ClipperLib::IntPoint& RegionPoint = AFreeRegion.Contour[RegionVertices[RegionSlot]];
+                const double DirectionX = RegionCenterX - static_cast<double>(RegionPoint.X);
+                const double DirectionY = RegionCenterY - static_cast<double>(RegionPoint.Y);
+                const double DirectionLength = std::hypot(DirectionX, DirectionY);
+                for (std::size_t Level = 0; Level < CET_BOARD_COMPOSITE_CONTACT_INSET_LEVELS
+                    && ACheckedCount - StartChecks < AProbeLimit; ++Level) {
+                    const double Inset = InsetStep * static_cast<double>(Level);
+                    const double UnitX = DirectionLength > 0.0 ? DirectionX / DirectionLength : 0.0;
+                    const double UnitY = DirectionLength > 0.0 ? DirectionY / DirectionLength : 0.0;
+                    const Point Translation(
+                        static_cast<ClipperLib::cInt>(std::llround(RegionPoint.X - ItemPoint.X + UnitX * Inset)),
+                        static_cast<ClipperLib::cInt>(std::llround(RegionPoint.Y - ItemPoint.Y + UnitY * Inset)));
+                    _EvaluateBoardFillPlacement(AItemIndex, ATargetBin, AOldBin, AFreeRegion, ARotation,
+                        Translation, ACheckLimit, ACheckedCount, ABestCandidate);
+                }
+            }
+        }
+
+        bool CetPolygonBoardRepairer::_TryFindBestPlacementInBin(std::size_t AItemIndex, int ATargetBin,
+            const std::vector<TetClusterFreeRegion>& AFreeRegions, TetHoleFillCandidate& ABestCandidate, long long ACheckLimit)
+        {
+            if (_Items == nullptr || _Options == nullptr || _BinPoly == nullptr || AItemIndex >= _Items->size()
+                || AFreeRegions.empty() || !_CanContinueSearch()) return false;
             const int OldBin = static_cast<int>((*_Items)[AItemIndex].binId());
-            const long long CheckLimit = std::min(m_PerItemPlacementCheckLimit, m_RemainingPlacementChecks);
-            const double GridStep = _GetEffectiveGridStep(CheckLimit);
+            const long long CheckLimit = ACheckLimit > 0
+                ? std::min({ ACheckLimit, m_PerItemPlacementCheckLimit, m_RemainingPlacementChecks })
+                : std::min(m_PerItemPlacementCheckLimit, m_RemainingPlacementChecks);
+            const std::size_t PairCount = std::max<std::size_t>(1, m_Rotations.size() * AFreeRegions.size());
+            const long long ContactLimit = static_cast<long long>(std::floor(
+                static_cast<double>(CheckLimit) * CET_BOARD_COMPOSITE_CONTACT_PROBE_BUDGET_RATIO));
+            const long long ContactPerPair = std::max<long long>(1, ContactLimit / static_cast<long long>(PairCount));
             long long CheckedCount = 0;
-            bool Found = false;
             for (const Radians Angle : m_Rotations) {
                 CetNestItem RotatedItem = (*_Items)[AItemIndex];
-                RotatedItem.translation(Point(0, 0));
-                RotatedItem.rotation(Angle);
-                RotatedItem.inflation(0);
-                const auto RotatedBounds = RotatedItem.boundingBox();
-                const double ItemWidth = static_cast<double>(RotatedBounds.width());
-                const double ItemHeight = static_cast<double>(RotatedBounds.height());
-                for (const TetClusterFreeRegion& FreeRegion : AFreeRegions) {
-                    if (ItemWidth > FreeRegion.Width || ItemHeight > FreeRegion.Height) continue;
-                    for (double Y = NestUtils::FromNestCoord(static_cast<decltype(NestUtils::ToNestCoord(0.0))>(std::llround(FreeRegion.MinY))); Y <= NestUtils::FromNestCoord(static_cast<decltype(NestUtils::ToNestCoord(0.0))>(std::llround(FreeRegion.MaxY))); Y += GridStep) {
-                        for (double X = NestUtils::FromNestCoord(static_cast<decltype(NestUtils::ToNestCoord(0.0))>(std::llround(FreeRegion.MinX))); X <= NestUtils::FromNestCoord(static_cast<decltype(NestUtils::ToNestCoord(0.0))>(std::llround(FreeRegion.MaxX))); X += GridStep) {
-                            if (CheckedCount >= CheckLimit || !_CanContinueSearch()) return Found;
-                            ++CheckedCount;
-                            ++m_PlacementChecks;
-                            --m_RemainingPlacementChecks;
-                            TetPlacementCandidate Placement;
-                            Placement.ItemIndex = AItemIndex;
-                            Placement.TargetBin = ATargetBin;
-                            Placement.Rotation = Angle;
-                            _FillTranslationForBBoxMin(Placement, X, Y);
-                            if (!_IsPlacementInsideFreeRegion(Placement, FreeRegion) || !_CanPlaceAt(Placement)) continue;
-                            const double Score = _CalcHoleFillScore(AItemIndex, OldBin, ATargetBin, Placement.Translation);
-                            if (!Found || Score > ABestCandidate.Score) {
-                                ABestCandidate = { true, AItemIndex, OldBin, ATargetBin, Placement.Translation, Placement.Rotation, Score };
-                                Found = true;
-                            }
-                        }
+                RotatedItem.translation(Point(0, 0)); RotatedItem.rotation(Angle); RotatedItem.inflation(0);
+                const auto Bounds = RotatedItem.boundingBox();
+                const CetPath RotatedContour = RotatedItem.transformedShape().Contour;
+                for (const TetClusterFreeRegion& Region : AFreeRegions) {
+                    if (Bounds.width() > Region.Width || Bounds.height() > Region.Height) continue;
+                    _ProbeContourContactPlacements(AItemIndex, ATargetBin, OldBin, Region, Angle, RotatedContour,
+                        ContactPerPair, ContactLimit, CheckedCount, ABestCandidate);
+                    if (CheckedCount >= ContactLimit || !_CanContinueSearch()) break;
+                }
+                if (CheckedCount >= ContactLimit || !_CanContinueSearch()) break;
+            }
+            const double GridStep = _GetEffectiveGridStep(std::max<long long>(1, CheckLimit - CheckedCount));
+            for (const Radians Angle : m_Rotations) for (const TetClusterFreeRegion& Region : AFreeRegions) {
+                for (double Y = NestUtils::FromNestCoord(static_cast<ClipperLib::cInt>(std::llround(Region.MinY)));
+                    Y <= NestUtils::FromNestCoord(static_cast<ClipperLib::cInt>(std::llround(Region.MaxY))); Y += GridStep) {
+                    for (double X = NestUtils::FromNestCoord(static_cast<ClipperLib::cInt>(std::llround(Region.MinX)));
+                        X <= NestUtils::FromNestCoord(static_cast<ClipperLib::cInt>(std::llround(Region.MaxX))); X += GridStep) {
+                        if (CheckedCount >= CheckLimit || !_CanContinueSearch()) return ABestCandidate.Valid;
+                        TetPlacementCandidate Placement;
+                        Placement.ItemIndex = AItemIndex; Placement.TargetBin = ATargetBin;
+                        Placement.Translation = Point(0, 0); Placement.Rotation = Angle;
+                        _FillTranslationForBBoxMin(Placement, X, Y);
+                        _EvaluateBoardFillPlacement(AItemIndex, ATargetBin, OldBin, Region, Angle,
+                            Placement.Translation, CheckLimit, CheckedCount, ABestCandidate);
                     }
                 }
             }
-            return Found;
+            return ABestCandidate.Valid;
         }
 
         bool CetPolygonBoardRepairer::_IsPlacementInsideFreeRegion(const TetPlacementCandidate& APlacement, const TetClusterFreeRegion& AFreeRegion) const
