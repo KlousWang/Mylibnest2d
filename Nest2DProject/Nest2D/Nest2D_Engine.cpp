@@ -87,20 +87,59 @@ namespace ET {
 			return true;
 		}
 
+		static bool HasLockedCircleEnvelopeCluster(const std::vector<TetMetaItem>& AMetaItems)
+		{
+			for (const TetMetaItem& Meta : AMetaItems){
+				const bool IsCircleSkeleton = Meta.IsCluster
+					&& Meta.ClusterType.find("Circle") == 0;
+				if (IsCircleSkeleton) return true;
+			}
+			return false;
+		}
+
+		static std::vector<std::size_t> CollectLockedCircleEnvelopeChildren(const std::vector<TetMetaItem>& AMetaItems)
+		{
+			std::vector<std::size_t> Indices;
+			for (const TetMetaItem& Meta : AMetaItems) {
+				if (!Meta.IsCluster || Meta.ClusterType.find("Circle") != 0) continue;
+				for (const TetItemTransform& Transform : Meta.TransformData) if (Transform.OriginalId >= 0) Indices.push_back(static_cast<std::size_t>(Transform.OriginalId));
+			}
+			std::sort(Indices.begin(), Indices.end());
+			Indices.erase(std::unique(Indices.begin(), Indices.end()), Indices.end());
+			return Indices;
+		}
+
+		static bool PreservesLockedChildren(const CetTNestItemVector& ABefore, const CetTNestItemVector& AAfter, const std::vector<std::size_t>& AIndices)
+		{
+			if (ABefore.size() != AAfter.size()) return false;
+			for (std::size_t Index : AIndices) {
+				if (Index >= ABefore.size() || Index >= AAfter.size()) return false;
+				const Point BeforePoint = ABefore[Index].translation();
+				const Point AfterPoint = AAfter[Index].translation();
+				if (BeforePoint.X != AfterPoint.X || BeforePoint.Y != AfterPoint.Y
+					|| std::abs(static_cast<double>(ABefore[Index].rotation()) - static_cast<double>(AAfter[Index].rotation())) > CET_CLUSTER_FILL_VARIANT_ROTATION_TOLERANCE) return false;
+			}
+			return true;
+		}
+
 		// Refill sheets with complete cluster proxies. Children stay glued through
 		// their metadata and are expanded only after this multi-sheet pass.
 		using ClusterBackfillPlacer = placers::_BottomLeftPlacer<CetPolygonImpl>;
 		using ClusterBackfillConfig = placers::BLConfig<CetPolygonImpl>;
 
-		bool RepackClusterItems(CetTNestItemVector& AItems, const std::vector<std::size_t>& AIndices, const Box& ABin, const ClusterBackfillConfig& AConfig, int ABinId)
+		bool RepackClusterItems(CetTNestItemVector& AItems, const std::vector<std::size_t>& AIndices, const Box& ABin, const ClusterBackfillConfig& AConfig, int ABinId, long long AInflation)
 		{
+			std::vector<std::size_t> OrderedIndices = AIndices;
+			std::stable_sort(OrderedIndices.begin(), OrderedIndices.end(), [&](std::size_t A, std::size_t B) {
+				return std::abs(static_cast<double>(AItems[A].area())) > std::abs(static_cast<double>(AItems[B].area()));
+				});
 			CetTNestItemVector Repacked;
-			Repacked.reserve(AIndices.size());
-			for (std::size_t Index : AIndices){
+			Repacked.reserve(OrderedIndices.size());
+			for (std::size_t Index : OrderedIndices){
 				CetNestItem Copy = AItems[Index];
 				Copy.translation(ClipperLib::IntPoint(0,0));
 				Copy.rotation(0.0);
-				Copy.inflation(0);
+				Copy.inflation(static_cast<decltype(Copy.inflation())>(AInflation));
 				Repacked.push_back(std::move(Copy));
 			}
 			ClusterBackfillPlacer Repacker(ABin);
@@ -108,8 +147,9 @@ namespace ET {
 			for (CetNestItem& Item : Repacked){
 				if (!Repacker.pack(Item)) return false;
 				Item.binId(ABinId);
+				Item.inflation(0);
 			}
-			for (std::size_t Position = 0; Position < AIndices.size(); ++Position) AItems[AIndices[Position]] = std::move(Repacked[Position]);
+			for (std::size_t Position = 0; Position < OrderedIndices.size(); ++Position) AItems[OrderedIndices[Position]] = std::move(Repacked[Position]);
 			return true;
 		}
 
@@ -128,9 +168,19 @@ namespace ET {
 			const auto Height = NestUtils::ToNestCoord(AOptions.BinHeight);
 			Box Bin(Width, Height, { Width / 2, Height / 2 });
 			placers::BLConfig<CetPolygonImpl> Config;
-			Config.min_obj_distance = NestUtils::ToNestCoord(AOptions.Spacing);
+			// A proxy only approximates its expanded children. Reserve one spacing
+			// margin on each side while repacking so the later child validation does
+			// not reopen a sheet because a proxy boundary merely touched a single.
+			Config.min_obj_distance = 0;
 			Config.epsilon = 1;
 			Config.allow_rotations = CetRotationUtils::IsAllowedRotation(CET_CLUSTER_HALF_PI, AOptions.Rotations, 1e-9);
+			const long long BackfillInflation = static_cast<long long>(std::ceil(static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)) * 0.5));
+			std::vector<std::size_t> AllIndices(AItems.size());
+			std::iota(AllIndices.begin(), AllIndices.end(), 0);
+			if (RepackClusterItems(AItems, AllIndices, Bin, Config, 0, BackfillInflation)) {
+				std::cout << "[NEST][CLUSTER BACKFILL][FULL] All packed proxies fit on bin 0." << std::endl;
+				return 1;
+			}
 			std::set<int> AffectedBins;
 			std::size_t Moved = 0;
 
@@ -155,7 +205,7 @@ namespace ET {
 					std::vector<std::size_t> TrialIndices = TargetIndices;
 					TrialIndices.push_back(Index);
 					// Repack the target and candidate together while preserving glued proxies.
-					if (!RepackClusterItems(AItems, TrialIndices, Bin, Config, static_cast<int>(Target))) continue;
+					if (!RepackClusterItems(AItems, TrialIndices, Bin, Config, static_cast<int>(Target), BackfillInflation)) continue;
 					TargetIndices.push_back(Index);
 					AffectedBins.insert(Source);
 					++Moved;
@@ -171,7 +221,7 @@ namespace ET {
 				for (std::size_t Index = 0; Index < AItems.size(); ++Index){
 					if (AItems[Index].binId() == SourceBin) Indices.push_back(Index);
 				}
-				const bool Success = RepackClusterItems(AItems, Indices, Bin, Config, SourceBin);
+				const bool Success = RepackClusterItems(AItems, Indices, Bin, Config, SourceBin, BackfillInflation);
 				if (Success){
 					// RepackClusterItems has already written the packed items back.
 				}
@@ -412,6 +462,7 @@ namespace ET {
 			std::size_t BestLayers = 0;
 			std::vector<TetMetaItem> BestMetaItems;
 			bool BestHasCluster = false;
+			bool BestHasLockedCircleEnvelope = false;
 
 			const std::vector<MetClusterStrategy> ClusterStrategies = BuildClusterStrategies(Features);
 
@@ -438,7 +489,11 @@ namespace ET {
 					LocalResult = _TryLocalClusterSpacingFallback(ClusterResult, OriginalItems, AOptions, ATracker, SpacingFailure);
 				}
 
-				bool Better = ShoouldUpdateGlobalBest(LocalResult,HasBest,BestEval,BestLayers,BestHasCluster);
+				const bool LocalHasLockedCircleEnvelope = HasLockedCircleEnvelopeCluster(LocalResult.MetaItems);
+				const bool Better = !HasBest
+					|| (LocalHasLockedCircleEnvelope != BestHasLockedCircleEnvelope
+						? LocalHasLockedCircleEnvelope
+						: ShoouldUpdateGlobalBest(LocalResult, HasBest, BestEval, BestLayers, BestHasCluster));
 
 				if (Better){
 					HasBest = true;
@@ -447,6 +502,7 @@ namespace ET {
 					BestItems = std::move(LocalResult.Items);
 					BestMetaItems = std::move(LocalResult.MetaItems);
 					BestHasCluster = LocalResult.HasCluster;
+					BestHasLockedCircleEnvelope = LocalHasLockedCircleEnvelope;
 
 					std::cout << "[POLYGON][GLOBAL BEST UPDATE] HasCluster = "
 						<< BestHasCluster
@@ -497,8 +553,11 @@ namespace ET {
 			double BoardBinHeight = AOptions.BinHeight;
 			CetPolygonImpl BinPoly = Nest2DUtils->Nest2DBord->BuildBinPolygonFromOptions(AOptions,BoardBinWidth,BoardBinHeight);
 
-			if (_RepairAndEvacuate(ANestItems, AOptions, BinPoly, BoardBinWidth, BoardBinHeight, BestLayers)) {
+			if (!BestHasLockedCircleEnvelope && _RepairAndEvacuate(ANestItems, AOptions, BinPoly, BoardBinWidth, BoardBinHeight, BestLayers)) {
 				_TryBoardFeedbackNest(ANestItems, AOptions, ATracker, BestLayers);
+			}
+			else if (BestHasLockedCircleEnvelope) {
+				std::cout << "[POLYGON][LOCKED CIRCLE ENVELOPE] Skip expanded-item repair." << std::endl;
 			}
 			BestEval = Nest2DUtils->Nest2DStrategy->EvaluateNestResult(ANestItems, BestLayers);
 			std::cout << "================ POLYGON BEST NEST RESULT ================" << std::endl;
@@ -571,6 +630,7 @@ namespace ET {
 			std::size_t BestLayers = 0;
 			std::vector<TetMetaItem> BestMetaItems;
 			bool BestHasCluster = false;
+			bool BestHasLockedCircleEnvelope = false;
 			
 			const std::vector<MetClusterStrategy> ClusterStrategies = BuildClusterStrategies(Features);
 			for (auto ClusterStrategy : ClusterStrategies){
@@ -594,7 +654,11 @@ namespace ET {
 				if (!LocalResult.HasBest && SpacingFailure.Valid) {
 					LocalResult = _TryLocalClusterSpacingFallback(ClusterResult, OriginalItems, AOptions, ATracker, SpacingFailure);
 				}
-				bool Better = ShoouldUpdateGlobalBest(LocalResult, HasBest, BestEval, BestLayers, BestHasCluster);
+				const bool LocalHasLockedCircleEnvelope = HasLockedCircleEnvelopeCluster(LocalResult.MetaItems);
+				const bool Better = !HasBest
+					|| (LocalHasLockedCircleEnvelope != BestHasLockedCircleEnvelope
+						? LocalHasLockedCircleEnvelope
+						: ShoouldUpdateGlobalBest(LocalResult, HasBest, BestEval, BestLayers, BestHasCluster));
 				
 				if (Better){
 					HasBest = true;
@@ -604,6 +668,10 @@ namespace ET {
 					BestItems = std::move(LocalResult.Items);
 					BestMetaItems = std::move(LocalResult.MetaItems);
 					BestHasCluster = LocalResult.HasCluster;
+					BestHasLockedCircleEnvelope = LocalHasLockedCircleEnvelope;
+					if (BestHasLockedCircleEnvelope) {
+						std::cout << "[NEST][LOCKED CIRCLE ENVELOPE] Preserve fixed circle composite." << std::endl;
+					}
 					std::cout << "[NEST][GLOBAL BEST UPDATE] HasCluster = " << BestHasCluster
 						<< ", count = " << BestEval.FirstBinCount
 						<< ", area = " << BestEval.FirstBinArea
@@ -662,8 +730,24 @@ namespace ET {
 				std::cout << "[NEST][REPAIR PREP] ExpandedItems=" << ANestItems.size() << " Layers=" << BestLayers << std::endl;
 				CetPolygonImpl RectBinPoly = Nest2DUtils->Nest2DBord->BuildRectangleBinPolygon(AOptions.BinWidth, AOptions.BinHeight);
 				std::cout << "[NEST][REPAIR PREP] RectangleBinReady Contour=" << RectBinPoly.Contour.size() << std::endl;
-				if (_RepairAndEvacuate(ANestItems, AOptions, RectBinPoly, AOptions.BinWidth, AOptions.BinHeight, BestLayers)) {
+				if (!BestHasLockedCircleEnvelope && _RepairAndEvacuate(ANestItems, AOptions, RectBinPoly, AOptions.BinWidth, AOptions.BinHeight, BestLayers)) {
 					_TryBoardFeedbackNest(ANestItems, AOptions, ATracker, BestLayers);
+				}
+				else if (BestHasLockedCircleEnvelope) {
+					const CetTNestItemVector BeforeEvacuation = ANestItems;
+					const std::size_t LayersBeforeEvacuation = BestLayers;
+					const std::vector<std::size_t> LockedChildren = CollectLockedCircleEnvelopeChildren(BestMetaItems);
+					TetNestOptions EvacuationOptions = AOptions;
+					EvacuationOptions.EnableLastBinEvacuation = true;
+					if (_RunLastBinEvacuation(ANestItems, EvacuationOptions, BestLayers)
+						&& PreservesLockedChildren(BeforeEvacuation, ANestItems, LockedChildren)) {
+						std::cout << "[NEST][LOCKED CIRCLE ENVELOPE] Last-bin direct backfill accepted." << std::endl;
+					}
+					else {
+						ANestItems = BeforeEvacuation;
+						BestLayers = LayersBeforeEvacuation;
+						std::cout << "[NEST][LOCKED CIRCLE ENVELOPE] Skip expanded-item repair." << std::endl;
+					}
 				}
 				BestEval = Nest2DUtils->Nest2DStrategy->EvaluateNestResult(ANestItems, BestLayers);
 			}

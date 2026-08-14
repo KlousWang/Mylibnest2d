@@ -50,12 +50,12 @@ namespace ET {
             const std::size_t InitialChildCount = CurrentCandidate.OriginalIndices.size();
             std::unordered_set<std::uint64_t> FailedFillerShapes;
 
-            std::size_t MaxAcceptedFillerCount = InitialChildCount >= 16 ? CET_RECTANGLE_FILL_LARGE_BASE_MAX_ACCEPTED_ITEMS
-                : (InitialChildCount >= 8 ? CET_RECTANGLE_FILL_MEDIUM_BASE_MAX_ACCEPTED_ITEMS : CET_RECTANGLE_FILL_MAX_ACCEPTED_ITEMS_PER_BASE);
-
-            const bool IsCircleOnlyBase = std::all_of(CurrentCandidate.OriginalIndices.begin(), CurrentCandidate.OriginalIndices.end(), [&](int AOriginalIndex) {
-                return AOriginalIndex >= 0 && AOriginalIndex < static_cast<int>(AFeatures.size()) && AFeatures[AOriginalIndex].ShapeType == MetShapeType::CircleLike;
-                });
+			const bool IsCircleOnlyBase = std::all_of(CurrentCandidate.OriginalIndices.begin(), CurrentCandidate.OriginalIndices.end(), [&](int AOriginalIndex) {
+				return AOriginalIndex >= 0 && AOriginalIndex < static_cast<int>(AFeatures.size()) && AFeatures[AOriginalIndex].ShapeType == MetShapeType::CircleLike;
+				});
+			std::size_t MaxAcceptedFillerCount = IsCircleOnlyBase ? AOriginalItems.size()
+				: (InitialChildCount >= 16 ? CET_RECTANGLE_FILL_LARGE_BASE_MAX_ACCEPTED_ITEMS
+					: (InitialChildCount >= 8 ? CET_RECTANGLE_FILL_MEDIUM_BASE_MAX_ACCEPTED_ITEMS : CET_RECTANGLE_FILL_MAX_ACCEPTED_ITEMS_PER_BASE));
 
             for (int FillerIndex : FillerIndices) {
                 if (CurrentCandidate.OriginalIndices.size() - InitialChildCount >= MaxAcceptedFillerCount) {
@@ -65,10 +65,6 @@ namespace ET {
                     continue;
                 }
                 const double FillerArea = _GetFeatureArea(AOriginalItems[FillerIndex], AFeatures[FillerIndex]);
-                if (IsCircleOnlyBase && AFeatures[FillerIndex].ShapeType == MetShapeType::CircleLike) {
-                    MaxAcceptedFillerCount = std::max(MaxAcceptedFillerCount, CET_CIRCLE_GAP_FILL_MAX_ACCEPTED_ITEMS);
-                }
-
                 const double AvailableArea = std::max(0.0, EnvelopeArea - CurrentCandidate.ReservedArea);
                 const double AreaTolerance = std::max(1.0, EnvelopeArea * 1e-9);
                 if (FillerArea > AvailableArea + AreaTolerance) {
@@ -147,7 +143,7 @@ namespace ET {
             CetClusterGeometryHelper Geometry;
             const CetPath FillerContour = Geometry.TransformContour(Geometry.GetIdentityContour(AOriginalItems[AFillerIndex]), FillerTransform.RelativeRotation, FillerTransform.RelativeX, FillerTransform.RelativeY);
             const double AreaTolerance = std::max(1.0, ABaseCandidate.ProxyArea * CET_CLUSTER_GEOMETRY_RELATIVE_AREA_TOLERANCE);
-            if (!_IsTransformInsideFreeRegions(AOriginalItems, FillerTransform, AFreeRegions) || !Geometry.IsContourFullyContained(FillerContour, ACurrentCandidate.ProxyContour, AreaTolerance)) {
+            if (!Geometry.IsContourFullyContained(FillerContour, ACurrentCandidate.ProxyContour, AreaTolerance)) {
                 return false;
             }
 
@@ -175,6 +171,7 @@ namespace ET {
                 || AEnvelopeCandidate.ClusterHeight <= 0.0 || AFreeRegions.empty()) {
                 return false;
             }
+            const double RequiredGap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
 
             TetItemTransform FillerTransform;
             if (!_TryFindFillerTransform(AOriginalItems, AFeatures, ACurrentCandidate, AFreeRegions, AFillerIndex, AOptions,
@@ -186,19 +183,72 @@ namespace ET {
             const CetPath FillerContour = Geometry.TransformContour(Geometry.GetIdentityContour(AOriginalItems[AFillerIndex]),
                 FillerTransform.RelativeRotation, FillerTransform.RelativeX, FillerTransform.RelativeY);
             const double AreaTolerance = std::max(1.0, AEnvelopeCandidate.ProxyArea * CET_CLUSTER_GEOMETRY_RELATIVE_AREA_TOLERANCE);
-            if (!_IsTransformInsideFreeRegions(AOriginalItems, FillerTransform, AFreeRegions)
-                || !Geometry.IsContourFullyContained(FillerContour, AEnvelopeCandidate.ProxyContour, AreaTolerance)) {
+            if (!Geometry.IsContourFullyContained(FillerContour, AEnvelopeCandidate.ProxyContour, AreaTolerance)) {
                 return false;
             }
 
             TetClusterCandidate Candidate = ACurrentCandidate;
             Candidate.OriginalIndices.push_back(AFillerIndex);
             Candidate.Transforms.push_back(FillerTransform);
-            if (!Geometry.FinalizeCandidateInRectangle(AOriginalItems, AOptions, Candidate,
-                AEnvelopeCandidate.ClusterWidth, AEnvelopeCandidate.ClusterHeight)) {
-                return false;
-            }
 
+            // The probe already passed exact free-region containment and pairwise
+            // spacing. Keep the fixed rectangle state lightweight during beam
+            // search; the selected completion receives full union/offset and true
+            // contour validation once in RebuildEnvelopeFillWithTrueContour.
+            const double FillerArea = std::abs(static_cast<double>(AOriginalItems[AFillerIndex].area()));
+            if (!std::isfinite(FillerArea) || FillerArea <= 0.0) return false;
+            Candidate.RealArea += FillerArea;
+            Candidate.BaselineArea += std::max(FillerArea, AFeatures[AFillerIndex].BoxArea);
+            Candidate.OccupiedArea += FillerArea;
+            Candidate.ReservedArea = std::min(Candidate.ProxyArea, Candidate.ReservedArea + FillerArea);
+            Candidate.ProxyWasteArea = std::max(0.0, Candidate.ProxyArea - Candidate.ReservedArea);
+            Candidate.ProxyWasteRatio = Candidate.ProxyArea > 0.0 ? Candidate.ProxyWasteArea / Candidate.ProxyArea : 1.0;
+            Candidate.FillRatio = Candidate.ProxyArea > 0.0 ? std::clamp(Candidate.RealArea / Candidate.ProxyArea, 0.0, 1.0) : 0.0;
+            double FillerMinX = 0.0;
+            double FillerMinY = 0.0;
+            double FillerMaxX = 0.0;
+            double FillerMaxY = 0.0;
+            if (!Geometry.GetBounds(FillerContour, FillerMinX, FillerMinY, FillerMaxX, FillerMaxY)) return false;
+            Candidate.Score += _CalculatePlacementScore(AOriginalItems, ACurrentCandidate,
+                FillerMinX, FillerMinY, FillerMaxX, FillerMaxY, RequiredGap);
+            Candidate.BoundingFillRatio = Candidate.FillRatio;
+            Candidate.AreaSavingRatio = Candidate.BaselineArea > 0.0 ? 1.0 - Candidate.ProxyArea / Candidate.BaselineArea : 0.0;
+
+            Candidate.BuilderName = "EnvelopeFillSearch";
+            Candidate.ClusterType = ABaseCandidate.ClusterType + "_EnvelopeFill";
+            AOutCandidate = std::move(Candidate);
+            return true;
+        }
+
+        bool CetRectangleFillClusterBuilder::TryAppendFillerTemplateInRectangleEnvelope(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetClusterCandidate& ABaseCandidate, const TetClusterCandidate& AEnvelopeCandidate, const TetClusterCandidate& ACurrentCandidate, const TetItemTransform& ATemplateTransform, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate)
+        {
+            AOutCandidate = TetClusterCandidate{};
+            if (!ABaseCandidate.Valid || !AEnvelopeCandidate.Valid || !ACurrentCandidate.Valid
+                || ATemplateTransform.OriginalId < 0 || ATemplateTransform.OriginalId >= static_cast<int>(AOriginalItems.size())
+                || _ContainsOriginalIndex(ACurrentCandidate, ATemplateTransform.OriginalId)) return false;
+            CetClusterGeometryHelper Geometry;
+            std::vector<TetClusterFreeRegion> FreeRegions;
+            if (!Geometry.ExtractCandidateFreeRegions(AOriginalItems, AOptions, ACurrentCandidate, FreeRegions)) return false;
+            const CetPath Contour = Geometry.TransformContour(Geometry.GetIdentityContour(AOriginalItems[ATemplateTransform.OriginalId]),
+                ATemplateTransform.RelativeRotation, ATemplateTransform.RelativeX, ATemplateTransform.RelativeY);
+            const double Tolerance = std::max(1.0, AEnvelopeCandidate.ProxyArea * CET_CLUSTER_GEOMETRY_RELATIVE_AREA_TOLERANCE);
+            if (!Geometry.IsContourFullyContained(Contour, AEnvelopeCandidate.ProxyContour, Tolerance)
+                || !_IsContourInsideFreeRegions(Contour, FreeRegions)
+                || !Geometry.CanAppendTransformWithSpacing(AOriginalItems, AOptions, ACurrentCandidate.Transforms, ATemplateTransform)) return false;
+            TetClusterCandidate Candidate = ACurrentCandidate;
+            Candidate.OriginalIndices.push_back(ATemplateTransform.OriginalId);
+            Candidate.Transforms.push_back(ATemplateTransform);
+            const double Area = std::abs(static_cast<double>(AOriginalItems[ATemplateTransform.OriginalId].area()));
+            if (!std::isfinite(Area) || Area <= 0.0) return false;
+            Candidate.RealArea += Area;
+            Candidate.BaselineArea += std::max(Area, AFeatures[ATemplateTransform.OriginalId].BoxArea);
+            Candidate.OccupiedArea += Area;
+            Candidate.ReservedArea = std::min(Candidate.ProxyArea, Candidate.ReservedArea + Area);
+            Candidate.ProxyWasteArea = std::max(0.0, Candidate.ProxyArea - Candidate.ReservedArea);
+            Candidate.ProxyWasteRatio = Candidate.ProxyArea > 0.0 ? Candidate.ProxyWasteArea / Candidate.ProxyArea : 1.0;
+            Candidate.FillRatio = Candidate.ProxyArea > 0.0 ? std::clamp(Candidate.RealArea / Candidate.ProxyArea, 0.0, 1.0) : 0.0;
+            Candidate.BoundingFillRatio = Candidate.FillRatio;
+            Candidate.AreaSavingRatio = Candidate.BaselineArea > 0.0 ? 1.0 - Candidate.ProxyArea / Candidate.BaselineArea : 0.0;
             Candidate.BuilderName = "EnvelopeFillSearch";
             Candidate.ClusterType = ABaseCandidate.ClusterType + "_EnvelopeFill";
             AOutCandidate = std::move(Candidate);
@@ -264,8 +314,10 @@ namespace ET {
                     FillerTransform.RelativeX = PositionX - FillerMinX;
                     FillerTransform.RelativeY = PositionY - FillerMinY;
 
-                    if (!Geometry.CanAppendTransformWithSpacing(AOriginalItems, AOptions, ACurrentCandidate.Transforms, FillerTransform)
-                        || !_IsTransformInsideFreeRegions(AOriginalItems, FillerTransform, AFreeRegions)) {
+                    const CetPath FillerContour = Geometry.TransformContour(RotatedFiller, 0.0,
+                        FillerTransform.RelativeX, FillerTransform.RelativeY);
+                    if (!_IsContourInsideFreeRegions(FillerContour, AFreeRegions)
+                        || !Geometry.CanAppendTransformWithSpacing(AOriginalItems, AOptions, ACurrentCandidate.Transforms, FillerTransform)) {
                         continue;
                     }
 
@@ -285,14 +337,12 @@ namespace ET {
             return true;
         }
 
-        bool CetRectangleFillClusterBuilder::_IsTransformInsideFreeRegions(const CetTNestItemVector& AOriginalItems, const TetItemTransform& ATransform, const std::vector<TetClusterFreeRegion>& AFreeRegions) const
+        bool CetRectangleFillClusterBuilder::_IsContourInsideFreeRegions(const CetPath& AContour, const std::vector<TetClusterFreeRegion>& AFreeRegions) const
         {
-            if (ATransform.OriginalId < 0 || ATransform.OriginalId >= static_cast<int>(AOriginalItems.size())) return false;
             CetClusterGeometryHelper Geometry;
-            const CetPath Contour = Geometry.TransformContour(Geometry.GetIdentityContour(AOriginalItems[ATransform.OriginalId]), ATransform.RelativeRotation, ATransform.RelativeX, ATransform.RelativeY);
             for (const TetClusterFreeRegion& FreeRegion : AFreeRegions) {
                 const double Tolerance = std::max(1.0, FreeRegion.Area * CET_CLUSTER_GEOMETRY_RELATIVE_AREA_TOLERANCE);
-                if (Geometry.IsContourInsideFreeRegion(Contour, FreeRegion, Tolerance)) return true;
+                if (Geometry.IsContourInsideFreeRegion(AContour, FreeRegion, Tolerance)) return true;
             }
             return false;
         }
@@ -303,8 +353,11 @@ namespace ET {
                 return;
             }
 
-            const bool IsCircleFiller = ACtx.FillerIndex >= 0 && ACtx.FillerIndex < static_cast<int>(ACtx.Features.size()) && ACtx.Features[ACtx.FillerIndex].ShapeType == MetShapeType::CircleLike;
-            if (IsCircleFiller) {
+            const bool HasCircleSkeleton = std::any_of(ACtx.Candidate.Transforms.begin(), ACtx.Candidate.Transforms.end(), [&](const TetItemTransform& Transform) {
+                return Transform.OriginalId >= 0 && Transform.OriginalId < static_cast<int>(ACtx.Features.size())
+                    && ACtx.Features[Transform.OriginalId].ShapeType == MetShapeType::CircleLike;
+                });
+            if (HasCircleSkeleton) {
                 _BuildCircleProbePositions(ACtx, AOutPositions);
             }
 
@@ -363,11 +416,17 @@ namespace ET {
                 CircleCenters.push_back({ (MinX + ChildMaxX) * 0.5, (MinY + ChildMaxY) * 0.5, std::min(Width, Height) * 0.5 });
             }
 
+            // Probe the midpoint as well as both sides of every pair.  The
+            // midpoint is important for the triangular void between three
+            // circles; the side probes cover exterior/corner voids.  Exact
+            // contour and spacing checks below reject false positives.
             const double FillerRadius = std::min(ACtx.FillerWidth, ACtx.FillerHeight) * 0.5;
             std::size_t PairProbeCount = 0;
+            const std::size_t MaxPairProbes = std::max<std::size_t>(1, std::min(
+                CET_CIRCLE_FILL_MAX_PAIR_PROBES, CET_RECTANGLE_FILL_MAX_PROBE_COUNT / 6));
 
-            for (std::size_t First = 0; First < CircleCenters.size() && PairProbeCount < CET_CIRCLE_FILL_MAX_PAIR_PROBES; ++First) {
-                for (std::size_t Second = First + 1; Second < CircleCenters.size() && PairProbeCount < CET_CIRCLE_FILL_MAX_PAIR_PROBES; ++Second) {
+            for (std::size_t First = 0; First < CircleCenters.size() && PairProbeCount < MaxPairProbes; ++First) {
+                for (std::size_t Second = First + 1; Second < CircleCenters.size() && PairProbeCount < MaxPairProbes; ++Second) {
                     const TetCircleCenter& A = CircleCenters[First];
                     const TetCircleCenter& B = CircleCenters[Second];
                     const double DeltaX = B.X - A.X;
@@ -388,10 +447,35 @@ namespace ET {
                     const double MidX = (A.X + B.X) * 0.5;
                     const double MidY = (A.Y + B.Y) * 0.5;
 
-                    _AppendProbePosition(AOutPositions, MidX + PerpendicularX * Offset - ACtx.FillerWidth * 0.5, MidY + PerpendicularY * Offset - ACtx.FillerHeight * 0.5, ACtx.MaxX, ACtx.MaxY);
-                    _AppendProbePosition(AOutPositions, MidX - PerpendicularX * Offset - ACtx.FillerWidth * 0.5, MidY - PerpendicularY * Offset - ACtx.FillerHeight * 0.5, ACtx.MaxX, ACtx.MaxY);
+                    for (double Scale : { 0.0, 0.5, 1.0, 1.5, 2.0, 2.5 }) {
+                        const double SideOffset = Offset * Scale;
+                        _AppendProbePosition(AOutPositions, MidX + PerpendicularX * SideOffset - ACtx.FillerWidth * 0.5,
+                            MidY + PerpendicularY * SideOffset - ACtx.FillerHeight * 0.5, ACtx.MaxX, ACtx.MaxY);
+                        if (Scale > 0.0) _AppendProbePosition(AOutPositions, MidX - PerpendicularX * SideOffset - ACtx.FillerWidth * 0.5,
+                            MidY - PerpendicularY * SideOffset - ACtx.FillerHeight * 0.5, ACtx.MaxX, ACtx.MaxY);
+                    }
                     ++PairProbeCount;
                 }
+            }
+
+            // A three-circle void has a different optimum from any pair
+            // midpoint.  Its circumcenter is the only useful seed when the
+            // spacing leaves a very narrow triangular pocket.
+            std::size_t TripleProbeCount = 0;
+            for (std::size_t First = 0; First < CircleCenters.size() && TripleProbeCount < MaxPairProbes; ++First) for (std::size_t Second = First + 1; Second < CircleCenters.size() && TripleProbeCount < MaxPairProbes; ++Second) for (std::size_t Third = Second + 1; Third < CircleCenters.size() && TripleProbeCount < MaxPairProbes; ++Third) {
+                const double AB = std::hypot(CircleCenters[Second].X - CircleCenters[First].X, CircleCenters[Second].Y - CircleCenters[First].Y);
+                const double AC = std::hypot(CircleCenters[Third].X - CircleCenters[First].X, CircleCenters[Third].Y - CircleCenters[First].Y);
+                const double BC = std::hypot(CircleCenters[Third].X - CircleCenters[Second].X, CircleCenters[Third].Y - CircleCenters[Second].Y);
+                const double MinSide = std::min({ AB, AC, BC }), MaxSide = std::max({ AB, AC, BC });
+                const double Cross = (CircleCenters[Second].X - CircleCenters[First].X) * (CircleCenters[Third].Y - CircleCenters[First].Y) - (CircleCenters[Second].Y - CircleCenters[First].Y) * (CircleCenters[Third].X - CircleCenters[First].X);
+                if (MinSide <= CET_RECTANGLE_FILL_POSITION_TOLERANCE || MaxSide > MinSide * 1.15 || std::abs(Cross) <= CET_RECTANGLE_FILL_POSITION_TOLERANCE) continue;
+                const double FirstSq = CircleCenters[First].X * CircleCenters[First].X + CircleCenters[First].Y * CircleCenters[First].Y;
+                const double SecondSq = CircleCenters[Second].X * CircleCenters[Second].X + CircleCenters[Second].Y * CircleCenters[Second].Y;
+                const double ThirdSq = CircleCenters[Third].X * CircleCenters[Third].X + CircleCenters[Third].Y * CircleCenters[Third].Y;
+                const double CenterX = (FirstSq * (CircleCenters[Second].Y - CircleCenters[Third].Y) + SecondSq * (CircleCenters[Third].Y - CircleCenters[First].Y) + ThirdSq * (CircleCenters[First].Y - CircleCenters[Second].Y)) / (2.0 * Cross);
+                const double CenterY = (FirstSq * (CircleCenters[Third].X - CircleCenters[Second].X) + SecondSq * (CircleCenters[First].X - CircleCenters[Third].X) + ThirdSq * (CircleCenters[Second].X - CircleCenters[First].X)) / (2.0 * Cross);
+                _AppendProbePosition(AOutPositions, CenterX - ACtx.FillerWidth * 0.5, CenterY - ACtx.FillerHeight * 0.5, ACtx.MaxX, ACtx.MaxY);
+                ++TripleProbeCount;
             }
         }
         void CetRectangleFillClusterBuilder::_BuildChildContourProbePositions(const TetProbeContext& ACtx, std::vector<std::pair<double, double>>& AOutPositions) const
@@ -462,6 +546,11 @@ namespace ET {
         {
             const double ContactTolerance = ARequiredGap + CET_RECTANGLE_FILL_POSITION_TOLERANCE;
             double Score = -(AFillerTop + AFillerLeft) / std::max(1.0, ACandidate.ClusterWidth + ACandidate.ClusterHeight);
+            const double FillerCenterX = (AFillerLeft + AFillerRight) * 0.5;
+            const double FillerCenterY = (AFillerTop + AFillerBottom) * 0.5;
+            const double FillerSize = std::max(AFillerRight - AFillerLeft, AFillerBottom - AFillerTop);
+            std::size_t NearbyCircleCount = 0;
+            bool HasNonCircleFiller = false;
             CetClusterGeometryHelper Geometry;
             for (const TetItemTransform& Transform : ACandidate.Transforms){
                 if (Transform.OriginalId < 0 || Transform.OriginalId >= static_cast<int>(AOriginalItems.size())){
@@ -475,6 +564,13 @@ namespace ET {
                 if (!Geometry.GetBounds(Child, MinX, MinY, MaxX, MaxY)){
                     continue;
                 }
+                const double ChildWidth = MaxX - MinX;
+                const double ChildHeight = MaxY - MinY;
+                const bool IsCircleLike = Child.size() >= 12 && ChildWidth > 0.0 && ChildHeight > 0.0
+                    && std::abs(ChildWidth - ChildHeight) <= std::max(1.0, std::max(ChildWidth, ChildHeight) * 0.02);
+                if (!IsCircleLike) HasNonCircleFiller = true;
+                const double CircleReach = std::min(ChildWidth, ChildHeight) * 0.5 + FillerSize + ARequiredGap;
+                if (IsCircleLike && std::hypot(FillerCenterX - (MinX + MaxX) * 0.5, FillerCenterY - (MinY + MaxY) * 0.5) <= CircleReach) ++NearbyCircleCount;
                 const bool VerticalOverlap = AFillerTop <= MaxY + CET_RECTANGLE_FILL_POSITION_TOLERANCE && AFillerBottom >= MinY - CET_RECTANGLE_FILL_POSITION_TOLERANCE;
                 const bool HorizontalOverlap = AFillerLeft <= MaxX + CET_RECTANGLE_FILL_POSITION_TOLERANCE && AFillerRight >= MinX - CET_RECTANGLE_FILL_POSITION_TOLERANCE;
                 const double HorizontalGap = std::max({ MinX - AFillerRight, AFillerLeft - MaxX, 0.0 });
@@ -486,6 +582,7 @@ namespace ET {
                     Score += 3.0;
                 }
             }
+            if (NearbyCircleCount >= 3 && !HasNonCircleFiller) Score += 20.0;
             return Score;
         }
 

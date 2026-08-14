@@ -30,6 +30,7 @@ constexpr double CET_CIRCLE_FILLER_MIN_SIZE_RATIO = 2.0;
 constexpr std::size_t CET_CIRCLE_FILLER_SINGLE_RESERVE_MIN = 8;
 constexpr std::size_t CET_CIRCLE_FILLER_SINGLE_RESERVE_MAX = 24;
 constexpr std::size_t CET_CIRCLE_FILL_MAX_PAIR_PROBES = 32;
+constexpr std::size_t CET_CIRCLE_GAP_TEMPLATE_MAX_COPIES = 6;
 constexpr std::size_t CET_CIRCLE_GAP_FILL_MAX_ACCEPTED_ITEMS = 8;
 constexpr double CET_ELLIPSE_SIZE_TOLERANCE = 0.05;
 constexpr double CET_ELLIPSE_HONEYCOMB_ROW_RATIO = 0.90;
@@ -38,6 +39,9 @@ constexpr double CET_RECT_SQUARE_TOLERANCE = 0.01;
 constexpr double CET_RECT_MAX_AREA_LOSS_RATIO = 0.10;
 constexpr std::size_t CET_RECT_MAX_CLUSTER_CHILDREN = 32;
 constexpr std::size_t CET_TRIANGLE_MAX_CLUSTER_CHILDREN = 32;
+// Leave small triangle groups adaptable to the actual board remnant instead
+// of committing an entire same-size family to a long rectangle grid.
+constexpr std::size_t CET_TRIANGLE_REMAINDER_MAX_CLUSTER_CHILDREN = 4;
 constexpr std::size_t CET_GENERAL_TRIANGLE_MAX_CLUSTER_CHILDREN = 32;
 constexpr int CET_TRIANGLE_PAIR_PITCH_SEARCH_STEPS = 20;
 constexpr double CET_ROTATION_DUPLICATE_TOLERANCE = 1e-12;
@@ -66,7 +70,7 @@ constexpr std::size_t CET_ARC_MAX_CLUSTER_CHILDREN = 32;
 
 constexpr int CET_RECTANGLE_FILL_GRID_PROBE_COUNT = 7;
 constexpr std::size_t CET_RECTANGLE_FILL_MAX_AXIS_COORDINATES = 14;
-constexpr std::size_t CET_RECTANGLE_FILL_MAX_PROBE_COUNT = 96;
+constexpr std::size_t CET_RECTANGLE_FILL_MAX_PROBE_COUNT = 128;
 constexpr std::size_t CET_RECTANGLE_FILL_LARGE_ORDER_MAX_PROBE_COUNT = 56;
 constexpr std::size_t CET_RECTANGLE_FILL_MAX_CANDIDATE_ITEMS = 64;
 constexpr std::size_t CET_RECTANGLE_FILL_MAX_BASE_CANDIDATES = 8;
@@ -100,6 +104,19 @@ constexpr double CET_CLUSTER_FILL_VARIANT_ROTATION_TOLERANCE = 1e-9;
 // original irregular proxy.
 constexpr double CET_CLUSTER_ENVELOPE_FILL_MIN_FILL_RATIO_GAIN = 0.01;
 constexpr double CET_CLUSTER_ENVELOPE_FILL_SCORE_PER_RATIO = 1000.0;
+constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_BEAM_WIDTH = 3;
+// Circle-envelope filling is intentionally restrained: fillers are individual
+// small parts, not a second large triangle template inside the circle group.
+constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_MAX_DEPTH = CET_CIRCLE_GAP_TEMPLATE_MAX_COPIES;
+constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_MIN_DEPTH_BEFORE_TIMEOUT = 3;
+constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_MAX_CANDIDATE_FILLERS = 8;
+constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_MAX_PLACEMENT_ATTEMPTS = 128;
+constexpr long long CET_CLUSTER_ENVELOPE_FILL_MAX_SEARCH_TIME_MS = 4000;
+// Exact contour rebuilding is deferred until the rectangle-envelope beam has
+// been deduplicated, avoiding repeated Clipper unions for equivalent states.
+constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_MAX_TRUE_CONTOUR_STATES = 4;
+constexpr double CET_CLUSTER_ENVELOPE_FILL_CHILD_SCORE = 60.0;
+constexpr double CET_CLUSTER_ENVELOPE_FILL_TRUE_DENSITY_SCORE = 200.0;
 // Exterior-envelope searches are intentionally tighter than internal fills.
 // A large irregular skeleton already has many contour vertices, so probing all
 // skeletons and all fillers would make this optional regularization dominate
@@ -108,8 +125,10 @@ constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_MAX_BASE_CANDIDATES = 3;
 constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_LARGE_ORDER_MAX_BASE_CANDIDATES = 2;
 constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_LARGE_ORDER_BEAM_WIDTH = 2;
 constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_LARGE_ORDER_MAX_DEPTH = 1;
+constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_LARGE_ORDER_MIN_DEPTH_BEFORE_TIMEOUT = 1;
 constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_LARGE_ORDER_MAX_CANDIDATE_FILLERS = 4;
 constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_LARGE_ORDER_MAX_PLACEMENT_ATTEMPTS = 48;
+constexpr long long CET_CLUSTER_ENVELOPE_FILL_LARGE_ORDER_MAX_SEARCH_TIME_MS = 100;
 
 constexpr std::size_t CET_NEST_FULL_STRATEGY_ITEM_LIMIT = 96;
 constexpr std::size_t CET_NEST_REDUCED_STRATEGY_ITEM_LIMIT = 256;

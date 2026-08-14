@@ -340,26 +340,21 @@ namespace ET {
             Remaining.erase(std::unique(Remaining.begin(), Remaining.end()), Remaining.end());
 
             while (Remaining.size() >= 2){
-                std::size_t Low = 2;
-                std::size_t High = Remaining.size();
                 std::size_t BestCount = 0;
                 TetClusterCandidate BestCandidate;
 
-                while (Low <= High){
-                    const std::size_t Mid = Low + (High - Low) / 2;
-                    std::vector<int> TrialIndices(Remaining.begin(),Remaining.begin() + static_cast<std::vector<int>::difference_type>(Mid));
+                // Honeycomb layouts are not monotonic by item count: a 9-circle
+                // layout can be wider than a 10-circle layout with another row.
+                // Test every count from largest to smallest so all board-fitting
+                // same-size circles are kept in one skeleton whenever possible.
+                for (std::size_t Count = Remaining.size(); Count >= 2; --Count){
+                    std::vector<int> TrialIndices(Remaining.begin(), Remaining.begin() + static_cast<std::vector<int>::difference_type>(Count));
 
                     TetClusterCandidate TrialCandidate;
                     if (_BuildClusterCandidate(AOriginalItems, AFeatures, TrialIndices, AOptions, TrialCandidate)){
-                        BestCount = Mid;
+                        BestCount = Count;
                         BestCandidate = std::move(TrialCandidate);
-                        Low = Mid + 1;
-                    }
-                    else {
-                        if (Mid == 0){
-                            break;
-                        }
-                        High = Mid - 1;
+                        break;
                     }
                 }
 

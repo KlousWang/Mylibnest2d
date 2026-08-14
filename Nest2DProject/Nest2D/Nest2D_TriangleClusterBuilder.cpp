@@ -270,7 +270,7 @@ namespace ET {
                     continue;
                 }
                 CetClusterGeometryHelper Geometry;
-                const std::size_t MaxChildCount = std::min(Group.size() - (Group.size() % 2),CET_TRIANGLE_MAX_CLUSTER_CHILDREN);
+                const std::size_t MaxChildCount = std::min(Group.size() - (Group.size() % 2), CET_TRIANGLE_REMAINDER_MAX_CLUSTER_CHILDREN);
                 std::size_t PreferredChildCount = 0;
                 TetClusterCandidate FirstCandidate;
                 for (std::size_t TrialCount = MaxChildCount; TrialCount >= 2; TrialCount -= 2){
