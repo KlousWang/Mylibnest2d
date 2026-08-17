@@ -118,6 +118,35 @@ namespace ET {
                 return FitsNormally || FitsAfterRotation;
             }
 
+            // A circle skeleton may be transposed without rotating any child
+            // item.  This is different from rotating the finished cluster:
+            // ROTATIONS limits each item's allowed pose, while the relative
+            // direction of a group of rotationally symmetric circles is free.
+            bool FitsBinDirectly(double AClusterWidth, double AClusterHeight, const TetNestOptions& AOptions)
+            {
+                if (AClusterWidth <= 0.0 || AClusterHeight <= 0.0) return false;
+                const double BinWidth = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth));
+                const double BinHeight = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinHeight));
+                return BinWidth > 0.0 && BinHeight > 0.0
+                    && AClusterWidth <= BinWidth && AClusterHeight <= BinHeight;
+            }
+
+            void TransposeLayout(TetCircleLayout& ALayout)
+            {
+                for (TetCircleLayoutSlot& Slot : ALayout.Slots){
+                    std::swap(Slot.CenterX, Slot.CenterY);
+                }
+                std::swap(ALayout.Width, ALayout.Height);
+            }
+
+            void TransposeIfNeededForBin(TetCircleLayout& ALayout, const TetNestOptions& AOptions)
+            {
+                if (!FitsBinDirectly(ALayout.Width, ALayout.Height, AOptions)
+                    && FitsBinDirectly(ALayout.Height, ALayout.Width, AOptions)){
+                    TransposeLayout(ALayout);
+                }
+            }
+
             TetCircleLayout MakePairLayout(double ACellSize, double AGap)
             {
                 TetCircleLayout Layout;
@@ -240,6 +269,7 @@ namespace ET {
                         continue;
                     }
 
+                    TransposeIfNeededForBin(Layout, AOptions);
                     if (!FitsBin(Layout.Width, Layout.Height, AOptions)){
                         continue;
                     }
@@ -261,6 +291,25 @@ namespace ET {
                 }
 
                 return BestLayout;
+            }
+
+            TetCircleLayout BuildCircleLayout(std::size_t ACount, double ACellSize, double AGap, const TetNestOptions& AOptions)
+            {
+                TetCircleLayout Layout;
+                if (ACount == 2){
+                    Layout = MakePairLayout(ACellSize, AGap);
+                }
+                else if (ACount == 3){
+                    Layout = MakeTriangleLayout(ACellSize, AGap);
+                }
+                else if (ACount == 4){
+                    Layout = MakeSquareLayout(ACellSize, AGap);
+                }
+                else {
+                    Layout = SelectBestHoneycombLayout(ACount, ACellSize, AGap, AOptions);
+                }
+                TransposeIfNeededForBin(Layout, AOptions);
+                return Layout;
             }
         }
 
@@ -414,19 +463,7 @@ namespace ET {
             const double SafetyGap = RequiredGap > 0.0 ? std::max(CET_CLUSTER_MIN_SAFETY_GAP, RequiredGap * 0.001) : 0.0;
             const double Gap = RequiredGap + SafetyGap;
 
-            TetCircleLayout Layout;
-            if (Indices.size() == 2){
-                Layout = MakePairLayout(CellSize, Gap);
-            }
-            else if (Indices.size() == 3){
-                Layout = MakeTriangleLayout(CellSize, Gap);
-            }
-            else if (Indices.size() == 4){
-                Layout = MakeSquareLayout(CellSize, Gap);
-            }
-            else {
-                Layout = SelectBestHoneycombLayout(Indices.size(), CellSize, Gap, AOptions);
-            }
+            TetCircleLayout Layout = BuildCircleLayout(Indices.size(), CellSize, Gap, AOptions);
 
             if (Layout.Slots.size() != Indices.size() || Layout.Width <= 0.0 || Layout.Height <= 0.0){
                 return false;

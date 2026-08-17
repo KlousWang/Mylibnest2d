@@ -13,18 +13,6 @@
 using namespace libnest2d;
 
 namespace {
-	/*constexpr std::size_t CET_REMNANT_SKYLINE_SAMPLES = 64;
-	constexpr double CET_LARGE_ANCHOR_RATIO = 0.15;
-	constexpr std::size_t CET_LARGE_ANCHOR_MAX_COUNT = 8;
-
-	struct TetRemnantPartBounds
-	{
-		double MinX = 0.0;
-		double MinY = 0.0;
-		double MaxX = 0.0;
-		double MaxY = 0.0;
-	};*/
-
 	bool AreMetricValuesDifferent(double AFirst, double ASecond)
 	{
 		const double Scale = std::max({ 1.0, std::abs(AFirst), std::abs(ASecond) });

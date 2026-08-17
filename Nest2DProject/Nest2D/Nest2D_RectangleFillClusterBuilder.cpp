@@ -389,12 +389,6 @@ namespace ET {
         }
         void CetRectangleFillClusterBuilder::_BuildCircleProbePositions(const TetProbeContext& ACtx, std::vector<std::pair<double, double>>& AOutPositions) const
         {
-            struct TetCircleCenter {
-                double X = 0.0;
-                double Y = 0.0;
-                double Radius = 0.0;
-            };
-
             std::vector<TetCircleCenter> CircleCenters;
             CircleCenters.reserve(ACtx.Candidate.Transforms.size());
             CetClusterGeometryHelper Geometry;
