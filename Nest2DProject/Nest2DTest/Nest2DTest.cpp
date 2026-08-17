@@ -9,16 +9,45 @@
 #include"MenuRunnerBase.h"
 using namespace ET::CORE;
 
-int main() {
+int main()
+{
 	CetCoreAppConfig* AppConfig = (decltype(AppConfig))CetCoreObject::CreateIns("EtCore_AppConfig");
-	//std::cout << "AppConfig ptr: " << (void*)AppConfig << std::endl;
+	if (!AppConfig) {
+		std::cout << "Create application configuration failed." << std::endl;
+		return -1;
+	}
+
 	int loadResult = AppConfig->LoadAll("../Libnest2d.json");
-	//std::cout << "config " << config << std::endl;
-	int globalconfig= AppConfig->CreateGlobalVars();
-	//std::cout << "global config " << globalconfig << std::endl;
+	if (loadResult < 0) {
+		std::cout << "Load library configuration failed: " << loadResult << std::endl;
+		return loadResult;
+	}
+
+	int globalconfig = AppConfig->CreateGlobalVars();
+	if (globalconfig < 0) {
+		std::cout << "Create global instances failed: " << globalconfig << std::endl;
+		return globalconfig;
+	}
+
 	auto tmpObj1 = CetCoreObjStorage::GetClassIns("gCreateTestData");
 	auto tmpObj2 = CetCoreObjStorage::GetClassIns("gFile");
 	auto tmpObj3 = CetCoreObjStorage::GetClassIns("gNest2D");
+	if (!tmpObj2) {
+		tmpObj2 = CetCoreObject::CreateIns("File_Load");
+		if (tmpObj2) {
+			CetCoreObjStorage::SaveClassIns("gFile", tmpObj2);
+		}
+	}
+	if (!tmpObj3) {
+		tmpObj3 = CetCoreObject::CreateIns("Nest_2D");
+		if (tmpObj3) {
+			CetCoreObjStorage::SaveClassIns("gNest2D", tmpObj3);
+		}
+	}
+	if (!tmpObj1 || !tmpObj2 || !tmpObj3) {
+		std::cout << "Required global object is unavailable. Check Libnest2d.json and Nest2DDLL.json." << std::endl;
+		return -1;
+	}
     auto* TestApp =static_cast<ET::NEST2DTESTAPP::CetTestApp*>(CetCoreObject::CreateIns("Nest2DTestApp"));
     if (!TestApp) {
         std::cout << "Create Nest2DTestApp failed." << std::endl;

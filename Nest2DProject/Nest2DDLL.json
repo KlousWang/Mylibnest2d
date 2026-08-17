@@ -1,5 +1,7 @@
 {
   "ClassType": [
+    "Nest_2D, Nest_2D",
+    "File_Load, File_Load",
     "Nest2D_Engine, Nest2D_Engine",
     "Nest2D_InvokeFunctor, Nest2D_InvokeFunctor",
     "Nest2D_DataMapper, Nest2D_DataMapper",
@@ -15,7 +17,8 @@
 	"Nest2D_ShapeAnalyzer,Nest2D_ShapeAnalyzer",
 	"Nest2D_TriangleClusterBuilder,Nest2D_TriangleClusterBuilder",
 	"Nest2D_ClusterInvokeFunctor,Nest2D_ClusterInvokeFunctor",
-	"Nest2D_CircleClusterBuilder,Nest2D_CircleClusterBuilder"
+	"Nest2D_CircleClusterBuilder,Nest2D_CircleClusterBuilder",
+	"Nest2D_RectangleFillClusterBuilder,Nest2D_RectangleFillClusterBuilder"
 	],
   "ComponentClassType": [],
   "LocalObjIns_LocalType": [ 
