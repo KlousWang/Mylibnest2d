@@ -77,12 +77,16 @@
     <OutDir>$(SolutionDir)Bin</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <OutDir>$(SolutionDir)Bin\</OutDir>
+    <IntDir>$(SolutionDir)Bin\obj\$(ProjectName)\$(Configuration)\</IntDir>
     <ExternalIncludePath>$(SolutionDir)include\header;$(ExternalIncludePath)</ExternalIncludePath>
-    <LibraryPath>$(SolutionDir)lib;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(SolutionDir)Bin;$(SolutionDir)lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <OutDir>$(SolutionDir)Bin\</OutDir>
+    <IntDir>$(SolutionDir)Bin\obj\$(ProjectName)\$(Configuration)\</IntDir>
     <ExternalIncludePath>$(SolutionDir)include\header;$(ExternalIncludePath)</ExternalIncludePath>
-    <LibraryPath>$(SolutionDir)lib;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(SolutionDir)Bin;$(SolutionDir)lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -103,6 +107,9 @@
       <EnableUAC>false</EnableUAC>
       <AdditionalDependencies>EtTechCore.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>copy /Y &quot;$(SolutionDir)Nest2DDLL.json&quot; &quot;$(OutDir)Nest2DDLL.json&quot;</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -125,6 +132,9 @@
       <EnableUAC>false</EnableUAC>
       <AdditionalDependencies>EtTechCore.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>copy /Y &quot;$(SolutionDir)Nest2DDLL.json&quot; &quot;$(OutDir)Nest2DDLL.json&quot;</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>

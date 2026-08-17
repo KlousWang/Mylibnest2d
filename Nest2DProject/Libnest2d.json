@@ -1,5 +1,5 @@
 {
-	"LibConfigPath":"D:/Work/Project/libnest2d/KlousProject/Nest2DProject/",
+	"LibConfigPath":"D:/Work/Project/libnest2d/KlousProject/Nest2DProject/Bin/",
  "Libs": [
     "CreateTestDataAPI","Nest2D"
   ],
