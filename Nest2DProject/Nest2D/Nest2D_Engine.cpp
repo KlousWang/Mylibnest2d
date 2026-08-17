@@ -17,6 +17,7 @@
 #include<numeric>
 #include<set>
 #include<chrono>
+#include<tuple>
 
 //#include"libnest2d/optimizers/nlopt/subplex.hpp"
 
@@ -85,6 +86,417 @@ namespace ET {
 				}
 			}
 			return true;
+		}
+
+		struct TetAxisAlignedRectangle
+		{
+			std::size_t ItemIndex = 0;
+			int BinId = -1;
+			double MinX = 0.0;
+			double MinY = 0.0;
+			double Width = 0.0;
+			double Height = 0.0;
+		};
+
+		struct TetRectangleGridKey
+		{
+			int BinId = -1;
+			long long WidthKey = 0;
+			long long HeightKey = 0;
+
+			bool operator<(const TetRectangleGridKey& AOther) const
+			{
+				return std::tie(BinId, WidthKey, HeightKey) < std::tie(AOther.BinId, AOther.WidthKey, AOther.HeightKey);
+			}
+		};
+
+		struct TetRectangleFamilyKey
+		{
+			int BinId = -1;
+			long long ShortSideKey = 0;
+			long long LongSideKey = 0;
+
+			bool operator<(const TetRectangleFamilyKey& AOther) const
+			{
+				return std::tie(BinId, ShortSideKey, LongSideKey) < std::tie(AOther.BinId, AOther.ShortSideKey, AOther.LongSideKey);
+			}
+		};
+
+		struct TetRectangleGridGroup
+		{
+			std::vector<TetAxisAlignedRectangle> Items;
+			double OriginX = 0.0;
+			double OriginY = 0.0;
+			double PitchX = 0.0;
+			double PitchY = 0.0;
+			std::size_t ColumnCapacity = 0;
+			std::map<long long, double> RowCoordinates;
+			std::size_t InternalGapCount = 0;
+			double InternalGapArea = 0.0;
+		};
+
+		static bool TryGetAxisAlignedRectangle(const CetNestItem& AItem, TetAxisAlignedRectangle& AOutRectangle)
+		{
+			CetNestItem Item = AItem;
+			Item.inflation(0);
+			const auto Bounds = Item.boundingBox();
+			const double MinX = static_cast<double>(getX(Bounds.minCorner()));
+			const double MinY = static_cast<double>(getY(Bounds.minCorner()));
+			const double Width = static_cast<double>(Bounds.width());
+			const double Height = static_cast<double>(Bounds.height());
+			const double Area = std::abs(static_cast<double>(Item.area()));
+			if (Width <= 0.0 || Height <= 0.0 || std::abs(Area - Width * Height) > std::max(1.0, Width * Height * 1e-9)) {
+				return false;
+			}
+
+			AOutRectangle.MinX = MinX;
+			AOutRectangle.MinY = MinY;
+			AOutRectangle.Width = Width;
+			AOutRectangle.Height = Height;
+			return true;
+		}
+
+		static bool BuildRectangleGridGroup(const std::vector<TetAxisAlignedRectangle>& ARectangles, const TetNestOptions& AOptions, TetRectangleGridGroup& AOutGroup, bool ARequireMultipleRows = true)
+		{
+			AOutGroup = TetRectangleGridGroup{};
+			if (ARectangles.size() < 2 || AOptions.Board.Enabled || AOptions.BinWidth <= 0.0 || AOptions.BinHeight <= 0.0) {
+				return false;
+			}
+
+			const double Spacing = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
+			// Cluster expansion and rotation can introduce sub-0.01 mm coordinate drift.
+			// Retain a tight grid test while accepting the precision used by saved layouts.
+			const double GridTolerance = std::max(1.0, static_cast<double>(NestUtils::ToNestCoord(0.01)));
+			AOutGroup.Items = ARectangles;
+			AOutGroup.OriginX = ARectangles.front().MinX;
+			AOutGroup.OriginY = ARectangles.front().MinY;
+			for (const TetAxisAlignedRectangle& Rectangle : ARectangles) {
+				AOutGroup.OriginX = std::min(AOutGroup.OriginX, Rectangle.MinX);
+				AOutGroup.OriginY = std::min(AOutGroup.OriginY, Rectangle.MinY);
+			}
+			AOutGroup.PitchX = ARectangles.front().Width + Spacing;
+			AOutGroup.PitchY = ARectangles.front().Height + Spacing;
+			if (AOutGroup.PitchX <= 0.0 || AOutGroup.PitchY <= 0.0) {
+				return false;
+			}
+
+			const double BinWidth = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth));
+			AOutGroup.ColumnCapacity = static_cast<std::size_t>(std::floor((BinWidth - AOutGroup.OriginX + Spacing) / AOutGroup.PitchX + 1e-9));
+			if (AOutGroup.ColumnCapacity < 2) {
+				return false;
+			}
+
+			std::map<long long, std::set<long long>> OccupiedCells;
+			for (const TetAxisAlignedRectangle& Rectangle : ARectangles) {
+				const long long Column = std::llround((Rectangle.MinX - AOutGroup.OriginX) / AOutGroup.PitchX);
+				const long long Row = std::llround((Rectangle.MinY - AOutGroup.OriginY) / AOutGroup.PitchY);
+				if (Column < 0 || static_cast<std::size_t>(Column) >= AOutGroup.ColumnCapacity) {
+					return false;
+				}
+				const double ExpectedX = AOutGroup.OriginX + static_cast<double>(Column) * AOutGroup.PitchX;
+				const double ExpectedY = AOutGroup.OriginY + static_cast<double>(Row) * AOutGroup.PitchY;
+				if (std::abs(Rectangle.MinX - ExpectedX) > GridTolerance || std::abs(Rectangle.MinY - ExpectedY) > GridTolerance) {
+					return false;
+				}
+				OccupiedCells[Row].insert(Column);
+				AOutGroup.RowCoordinates[Row] = Rectangle.MinY;
+			}
+
+			if (ARequireMultipleRows && AOutGroup.RowCoordinates.size() < 2) {
+				return false;
+			}
+
+			const long long FirstRow = AOutGroup.RowCoordinates.begin()->first;
+			const long long LastRow = AOutGroup.RowCoordinates.rbegin()->first;
+			for (long long Row = FirstRow; Row <= LastRow; ++Row) {
+				const auto OccupiedIt = OccupiedCells.find(Row);
+				for (std::size_t Column = 0; Column < AOutGroup.ColumnCapacity; ++Column) {
+					const bool Occupied = OccupiedIt != OccupiedCells.end() && OccupiedIt->second.count(static_cast<long long>(Column)) != 0;
+					if (!Occupied && Row != LastRow) {
+						++AOutGroup.InternalGapCount;
+						AOutGroup.InternalGapArea += ARectangles.front().Width * ARectangles.front().Height;
+					}
+				}
+			}
+
+			return true;
+		}
+
+		static void EvaluateInternalGapMetrics(const CetTNestItemVector& AItems, const TetNestOptions& AOptions, TetTNestEvalResult& AInOutResult)
+		{
+			AInOutResult.HasInternalGapMetric = false;
+			AInOutResult.InternalGapArea = 0.0;
+			AInOutResult.InternalGapCount = 0;
+			if (AOptions.Board.Enabled || AItems.empty()) {
+				return;
+			}
+
+			std::map<TetRectangleGridKey, std::vector<TetAxisAlignedRectangle>> Groups;
+			for (std::size_t ItemIndex = 0; ItemIndex < AItems.size(); ++ItemIndex) {
+				if (AItems[ItemIndex].binId() < 0) {
+					continue;
+				}
+				TetAxisAlignedRectangle Rectangle;
+				if (!TryGetAxisAlignedRectangle(AItems[ItemIndex], Rectangle)) {
+					continue;
+				}
+				Rectangle.ItemIndex = ItemIndex;
+				Rectangle.BinId = AItems[ItemIndex].binId();
+				const TetRectangleGridKey Key{ Rectangle.BinId, std::llround(Rectangle.Width * 1000.0), std::llround(Rectangle.Height * 1000.0) };
+				Groups[Key].push_back(Rectangle);
+			}
+
+			for (const auto& Entry : Groups) {
+				TetRectangleGridGroup Group;
+				if (!BuildRectangleGridGroup(Entry.second, AOptions, Group)) {
+					continue;
+				}
+				AInOutResult.HasInternalGapMetric = true;
+				AInOutResult.InternalGapArea += Group.InternalGapArea;
+				AInOutResult.InternalGapCount += Group.InternalGapCount;
+			}
+		}
+
+		static bool AreItemsInsideRectangleBoard(const CetTNestItemVector& AItems, const TetNestOptions& AOptions)
+		{
+			const double BinWidth = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth));
+			const double BinHeight = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinHeight));
+			for (const CetNestItem& SourceItem : AItems) {
+				if (SourceItem.binId() < 0) {
+					return false;
+				}
+				CetNestItem Item = SourceItem;
+				Item.inflation(0);
+				const auto Bounds = Item.boundingBox();
+				if (static_cast<double>(getX(Bounds.minCorner())) < -1.0 || static_cast<double>(getY(Bounds.minCorner())) < -1.0
+					|| static_cast<double>(getX(Bounds.maxCorner())) > BinWidth + 1.0 || static_cast<double>(getY(Bounds.maxCorner())) > BinHeight + 1.0) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		static bool TryCompactUniformRectangleHoles(CetTNestItemVector& AItems, const TetNestOptions& AOptions)
+		{
+			if (AOptions.Board.Enabled || AItems.empty()) {
+				return false;
+			}
+
+			std::set<int> UsedBins;
+			for (const CetNestItem& Item : AItems) {
+				if (Item.binId() >= 0) {
+					UsedBins.insert(Item.binId());
+				}
+			}
+			if (UsedBins.size() != 1) {
+				return false;
+			}
+
+			std::map<TetRectangleGridKey, std::vector<TetAxisAlignedRectangle>> Groups;
+			for (std::size_t ItemIndex = 0; ItemIndex < AItems.size(); ++ItemIndex) {
+				TetAxisAlignedRectangle Rectangle;
+				if (!TryGetAxisAlignedRectangle(AItems[ItemIndex], Rectangle)) {
+					continue;
+				}
+				Rectangle.ItemIndex = ItemIndex;
+				Rectangle.BinId = AItems[ItemIndex].binId();
+				const TetRectangleGridKey Key{ Rectangle.BinId, std::llround(Rectangle.Width * 1000.0), std::llround(Rectangle.Height * 1000.0) };
+				Groups[Key].push_back(Rectangle);
+			}
+
+			TetRectangleGridGroup BestGroup;
+			for (const auto& Entry : Groups) {
+				TetRectangleGridGroup Group;
+				if (BuildRectangleGridGroup(Entry.second, AOptions, Group) && Group.InternalGapArea > BestGroup.InternalGapArea) {
+					BestGroup = std::move(Group);
+				}
+			}
+			if (BestGroup.InternalGapCount == 0 || BestGroup.RowCoordinates.empty()) {
+				return false;
+			}
+
+			const std::size_t RequiredRows = (BestGroup.Items.size() + BestGroup.ColumnCapacity - 1) / BestGroup.ColumnCapacity;
+			if (RequiredRows != BestGroup.RowCoordinates.size()) {
+				return false;
+			}
+
+			std::vector<TetAxisAlignedRectangle> OrderedItems = BestGroup.Items;
+			std::stable_sort(OrderedItems.begin(), OrderedItems.end(), [](const TetAxisAlignedRectangle& A, const TetAxisAlignedRectangle& B) {
+				if (std::abs(A.MinY - B.MinY) > 1.0) {
+					return A.MinY < B.MinY;
+				}
+				return A.MinX < B.MinX;
+			});
+			std::vector<double> RowCoordinates;
+			for (const auto& Entry : BestGroup.RowCoordinates) {
+				RowCoordinates.push_back(Entry.second);
+			}
+
+			TetTNestEvalResult Before{};
+			EvaluateInternalGapMetrics(AItems, AOptions, Before);
+			CetTNestItemVector Candidate = AItems;
+			for (std::size_t Position = 0; Position < OrderedItems.size(); ++Position) {
+				const std::size_t Row = Position / BestGroup.ColumnCapacity;
+				const std::size_t Column = Position % BestGroup.ColumnCapacity;
+				const double TargetX = BestGroup.OriginX + static_cast<double>(Column) * BestGroup.PitchX;
+				const double TargetY = RowCoordinates[Row];
+				const double DeltaX = TargetX - OrderedItems[Position].MinX;
+				const double DeltaY = TargetY - OrderedItems[Position].MinY;
+				auto Translation = Candidate[OrderedItems[Position].ItemIndex].translation();
+				Candidate[OrderedItems[Position].ItemIndex].translation(ClipperLib::IntPoint(
+					Translation.X + static_cast<ClipperLib::cInt>(std::llround(DeltaX)),
+					Translation.Y + static_cast<ClipperLib::cInt>(std::llround(DeltaY))));
+			}
+
+			TetTNestEvalResult After{};
+			EvaluateInternalGapMetrics(Candidate, AOptions, After);
+			if (!After.HasInternalGapMetric || After.InternalGapArea >= Before.InternalGapArea - 1e-9
+				|| !AreItemsInsideRectangleBoard(Candidate, AOptions) || !ValidatePlacedItemsSpacing(Candidate, AOptions)) {
+				return false;
+			}
+
+			std::cout << "[NEST][RECT_COMPACT] eligible=" << OrderedItems.size()
+				<< ", holes_before=" << Before.InternalGapCount
+				<< ", holes_after=" << After.InternalGapCount
+				<< ", applied=1" << std::endl;
+			AItems = std::move(Candidate);
+			return true;
+		}
+
+		static std::size_t GetRectangleGridEdgeGapCount(const TetRectangleGridGroup& AGroup)
+		{
+			if (AGroup.ColumnCapacity == 0 || AGroup.Items.empty() || AGroup.InternalGapCount != 0) {
+				return 0;
+			}
+			const std::size_t RequiredRows = (AGroup.Items.size() + AGroup.ColumnCapacity - 1) / AGroup.ColumnCapacity;
+			if (RequiredRows != AGroup.RowCoordinates.size()) {
+				return 0;
+			}
+			const std::size_t LastRowItemCount = AGroup.Items.size() % AGroup.ColumnCapacity;
+			return LastRowItemCount == 0 ? 0 : AGroup.ColumnCapacity - LastRowItemCount;
+		}
+
+		static bool TryFillRectangleGridEdgeFromCompatibleGroup(CetTNestItemVector& AItems, const TetNestOptions& AOptions)
+		{
+			if (AOptions.Board.Enabled || AItems.empty()) {
+				return false;
+			}
+
+			std::set<int> UsedBins;
+			std::map<TetRectangleGridKey, std::vector<TetAxisAlignedRectangle>> ExactGroups;
+			for (std::size_t ItemIndex = 0; ItemIndex < AItems.size(); ++ItemIndex) {
+				if (AItems[ItemIndex].binId() < 0) {
+					return false;
+				}
+				UsedBins.insert(AItems[ItemIndex].binId());
+				TetAxisAlignedRectangle Rectangle;
+				if (!TryGetAxisAlignedRectangle(AItems[ItemIndex], Rectangle)) {
+					continue;
+				}
+				Rectangle.ItemIndex = ItemIndex;
+				Rectangle.BinId = AItems[ItemIndex].binId();
+				const TetRectangleGridKey Key{ Rectangle.BinId, std::llround(Rectangle.Width * 1000.0), std::llround(Rectangle.Height * 1000.0) };
+				ExactGroups[Key].push_back(Rectangle);
+			}
+			if (UsedBins.size() != 1) {
+				return false;
+			}
+
+			std::map<TetRectangleFamilyKey, std::vector<TetRectangleGridGroup>> Families;
+			for (const auto& Entry : ExactGroups) {
+				TetRectangleGridGroup Group;
+				if (!BuildRectangleGridGroup(Entry.second, AOptions, Group, false)) {
+					continue;
+				}
+				const double ShortSide = std::min(Group.Items.front().Width, Group.Items.front().Height);
+				const double LongSide = std::max(Group.Items.front().Width, Group.Items.front().Height);
+				const TetRectangleFamilyKey FamilyKey{ Entry.first.BinId, std::llround(ShortSide * 1000.0), std::llround(LongSide * 1000.0) };
+				Families[FamilyKey].push_back(std::move(Group));
+			}
+
+			for (const auto& FamilyEntry : Families) {
+				const std::vector<TetRectangleGridGroup>& FamilyGroups = FamilyEntry.second;
+				for (std::size_t TargetIndex = 0; TargetIndex < FamilyGroups.size(); ++TargetIndex) {
+					const TetRectangleGridGroup& Target = FamilyGroups[TargetIndex];
+					const std::size_t TargetEdgeGapCount = GetRectangleGridEdgeGapCount(Target);
+					if (TargetEdgeGapCount == 0) {
+						continue;
+					}
+
+					for (std::size_t DonorIndex = 0; DonorIndex < FamilyGroups.size(); ++DonorIndex) {
+						if (DonorIndex == TargetIndex) {
+							continue;
+						}
+						const TetRectangleGridGroup& Donor = FamilyGroups[DonorIndex];
+						if (Donor.InternalGapCount != 0 || Donor.Items.size() <= TargetEdgeGapCount) {
+							continue;
+						}
+
+						std::vector<TetAxisAlignedRectangle> OrderedDonors = Donor.Items;
+						std::stable_sort(OrderedDonors.begin(), OrderedDonors.end(), [](const TetAxisAlignedRectangle& A, const TetAxisAlignedRectangle& B) {
+							if (std::abs(A.MinY - B.MinY) > 1.0) {
+								return A.MinY > B.MinY;
+							}
+							return A.MinX > B.MinX;
+						});
+						if (OrderedDonors.size() < TargetEdgeGapCount || Target.RowCoordinates.empty()) {
+							continue;
+						}
+
+						const long long LastTargetRow = Target.RowCoordinates.rbegin()->first;
+						const double TargetY = Target.RowCoordinates.rbegin()->second;
+						std::set<long long> OccupiedColumns;
+						for (const TetAxisAlignedRectangle& Rectangle : Target.Items) {
+							const long long Row = std::llround((Rectangle.MinY - Target.OriginY) / Target.PitchY);
+							if (Row == LastTargetRow) {
+								OccupiedColumns.insert(std::llround((Rectangle.MinX - Target.OriginX) / Target.PitchX));
+							}
+						}
+
+						std::vector<std::size_t> EmptyColumns;
+						for (std::size_t Column = 0; Column < Target.ColumnCapacity; ++Column) {
+							if (OccupiedColumns.count(static_cast<long long>(Column)) == 0) {
+								EmptyColumns.push_back(Column);
+							}
+						}
+						if (EmptyColumns.size() != TargetEdgeGapCount) {
+							continue;
+						}
+
+						CetTNestItemVector Candidate = AItems;
+						const double TargetRotation = Candidate[Target.Items.front().ItemIndex].rotation();
+						for (std::size_t TransferIndex = 0; TransferIndex < TargetEdgeGapCount; ++TransferIndex) {
+							CetNestItem& Item = Candidate[OrderedDonors[TransferIndex].ItemIndex];
+							Item.inflation(0);
+							Item.rotation(TargetRotation);
+							const auto Bounds = Item.boundingBox();
+							const double TargetX = Target.OriginX + static_cast<double>(EmptyColumns[TransferIndex]) * Target.PitchX;
+							const auto Translation = Item.translation();
+							Item.translation(ClipperLib::IntPoint(
+								Translation.X + static_cast<ClipperLib::cInt>(std::llround(TargetX - static_cast<double>(getX(Bounds.minCorner())))),
+								Translation.Y + static_cast<ClipperLib::cInt>(std::llround(TargetY - static_cast<double>(getY(Bounds.minCorner()))))));
+						}
+
+						TetTNestEvalResult After{};
+						EvaluateInternalGapMetrics(Candidate, AOptions, After);
+						const bool IsInsideBoard = AreItemsInsideRectangleBoard(Candidate, AOptions);
+						const bool HasValidSpacing = IsInsideBoard && ValidatePlacedItemsSpacing(Candidate, AOptions);
+						const bool HasNoInternalGap = !After.HasInternalGapMetric || After.InternalGapArea <= 1e-9;
+						if (!IsInsideBoard || !HasValidSpacing || !HasNoInternalGap) {
+							continue;
+						}
+
+						std::cout << "[NEST][RECT_EDGE_FILL] transferred=" << TargetEdgeGapCount
+							<< ", target_edge_before=" << TargetEdgeGapCount
+							<< ", target_edge_after=0"
+							<< ", applied=1" << std::endl;
+						AItems = std::move(Candidate);
+						return true;
+					}
+				}
+			}
+
+			return false;
 		}
 
 		static bool HasLockedCircleEnvelopeCluster(const std::vector<TetMetaItem>& AMetaItems)
@@ -749,10 +1161,18 @@ namespace ET {
 						std::cout << "[NEST][LOCKED CIRCLE ENVELOPE] Skip expanded-item repair." << std::endl;
 					}
 				}
+				TryCompactUniformRectangleHoles(ANestItems, AOptions);
+				TryFillRectangleGridEdgeFromCompatibleGroup(ANestItems, AOptions);
 				BestEval = Nest2DUtils->Nest2DStrategy->EvaluateNestResult(ANestItems, BestLayers);
+				EvaluateInternalGapMetrics(ANestItems, AOptions, BestEval);
 			}
-			std::cout << "================ BEST NEST RESULT ================" << std::endl;
-				std::cout << "[NEST BEST] bin0 count = " << BestEval.FirstBinCount << ", bin0 area = " << BestEval.FirstBinArea << ", layers = " << BestEval.Layers << std::endl;
+				std::cout << "================ BEST NEST RESULT ================" << std::endl;
+				std::cout << "[NEST BEST] bin0 count = " << BestEval.FirstBinCount
+					<< ", bin0 area = " << BestEval.FirstBinArea
+					<< ", layers = " << BestEval.Layers
+					<< ", internal gap area = " << BestEval.InternalGapArea
+					<< ", internal gap count = " << BestEval.InternalGapCount
+					<< std::endl;
 			Nest2DUtils->Nest2DStrategy->PrintBinCount(ANestItems);
 			std::cout << "==================================================" << std::endl;
 
@@ -900,6 +1320,9 @@ namespace ET {
 			}
 
 			TetTNestEvalResult Eval = Nest2DUtils->Nest2DStrategy->EvaluatePackedResultWithMeta(TestItems, TestMetaItems, AOriginalItems, AOptions, Layers);
+			CetTNestItemVector ExpandedItems;
+			Nest2DUtils->Nest2DCluster->ExpandClusterResultToOriginalItems(AOriginalItems, TestItems, TestMetaItems, ExpandedItems, false);
+			EvaluateInternalGapMetrics(ExpandedItems, AOptions, Eval);
 			_UpdateLocalBest(LocalBest, Eval, Layers, TestItems, TestMetaItems, HasCluster);
 			return LocalBest;
 		}
@@ -1002,7 +1425,10 @@ namespace ET {
 					continue;
 				}
 				TetTNestEvalResult Eval = Nest2DUtils->Nest2DStrategy->EvaluatePackedResultWithMeta(TestItems, TestMetaItems, AOriginalItems, AOptions, Layers);
-				std::cout << "[NEST][EVAL] Strategy = " << static_cast<int>(Strategy) << ", HasCluster = " << CurrentHasCluster << ", Eval.FirstBinCount = " << Eval.FirstBinCount << ", Eval.FirstBinArea = " << Eval.FirstBinArea << ", Eval.Layers = " << Eval.Layers << ", Eval.RemnantArea = " << Eval.ReusableRemnantArea << ", Eval.RemnantShortSide = " << Eval.ReusableRemnantShortSide << ", Eval.SkylineWaste = " << Eval.SkylineWasteArea << ", Eval.RemnantDirection = " << (Eval.RemnantIsTopStrip ? "Top" : "Right") << ", LocalBest.FirstBinCount = " << LocalBest.Eval.FirstBinCount << ", LocalBest.FirstBinArea = " << LocalBest.Eval.FirstBinArea << ", LocalBest.Layers = " << LocalBest.Eval.Layers << std::endl;
+				CetTNestItemVector ExpandedItems;
+				Nest2DUtils->Nest2DCluster->ExpandClusterResultToOriginalItems(AOriginalItems, TestItems, TestMetaItems, ExpandedItems, false);
+				EvaluateInternalGapMetrics(ExpandedItems, AOptions, Eval);
+				std::cout << "[NEST][EVAL] Strategy = " << static_cast<int>(Strategy) << ", HasCluster = " << CurrentHasCluster << ", Eval.FirstBinCount = " << Eval.FirstBinCount << ", Eval.FirstBinArea = " << Eval.FirstBinArea << ", Eval.Layers = " << Eval.Layers << ", Eval.InternalGapArea = " << Eval.InternalGapArea << ", Eval.InternalGapCount = " << Eval.InternalGapCount << ", Eval.RemnantArea = " << Eval.ReusableRemnantArea << ", Eval.RemnantShortSide = " << Eval.ReusableRemnantShortSide << ", Eval.SkylineWaste = " << Eval.SkylineWasteArea << ", Eval.RemnantDirection = " << (Eval.RemnantIsTopStrip ? "Top" : "Right") << ", LocalBest.FirstBinCount = " << LocalBest.Eval.FirstBinCount << ", LocalBest.FirstBinArea = " << LocalBest.Eval.FirstBinArea << ", LocalBest.Layers = " << LocalBest.Eval.Layers << std::endl;
 				_UpdateLocalBest(LocalBest, Eval, Layers, TestItems, TestMetaItems, CurrentHasCluster);
 				if (AOriginalItems.size() > CET_NEST_FULL_STRATEGY_ITEM_LIMIT && LocalBest.HasBest && LocalBest.Layers == 1){
 					// One sheet is already the minimum possible. On large orders a

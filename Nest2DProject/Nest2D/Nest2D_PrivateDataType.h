@@ -531,6 +531,9 @@ struct TetTNestEvalResult {
     int LastBinCount = 0;
     double LastBinArea = 0.0;
     std::size_t Layers = 0;
+    bool HasInternalGapMetric = false;
+    double InternalGapArea = 0.0;
+    std::size_t InternalGapCount = 0;
     bool HasRemnantMetrics = false;
     double ReusableRemnantArea = 0.0;
     double ReusableRemnantShortSide = 0.0;

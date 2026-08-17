@@ -277,16 +277,17 @@ bool IsEnvelopeStateBetter(const TetClusterFillSearchState& AFirst,
 	const TetClusterFillSearchState& ASecond) {
 	const TetClusterCandidate& First = AFirst.Candidate;
 	const TetClusterCandidate& Second = ASecond.Candidate;
-	// Score carries the geometry placement preference from the filler probe.
-	// Keep a proven three-circle-gap placement in the bounded beam instead of
-	// discarding it solely because an external small circle has more area.
-	if (std::abs(First.Score - Second.Score) > 1e-9) return First.Score > Second.Score;
-	if (std::abs(First.RealArea - Second.RealArea) > 1.0) return First.RealArea > Second.RealArea;
-	if (First.FillRatio > Second.FillRatio + 1e-9) return true;
-	if (Second.FillRatio > First.FillRatio + 1e-9) return false;
+	// The envelope dimensions are fixed.  Rank states by the material they
+	// actually recover from that envelope, so a locally verified set of small
+	// gap fillers is not discarded in favour of a higher temporary probe score.
 	if (IsFillMetricLess(First.ProxyWasteArea, Second.ProxyWasteArea)) return true;
 	if (IsFillMetricLess(Second.ProxyWasteArea, First.ProxyWasteArea)) return false;
+	if (std::abs(First.RealArea - Second.RealArea) > 1.0) return First.RealArea > Second.RealArea;
+	if (std::abs(Second.RealArea - First.RealArea) > 1.0) return false;
+	if (First.FillRatio > Second.FillRatio + 1e-9) return true;
+	if (Second.FillRatio > First.FillRatio + 1e-9) return false;
 	if (AFirst.FillerCount != ASecond.FillerCount) return AFirst.FillerCount > ASecond.FillerCount;
+	if (std::abs(First.Score - Second.Score) > 1e-9) return First.Score > Second.Score;
 	return First.OriginalIndices < Second.OriginalIndices;
 }
 
@@ -1266,7 +1267,7 @@ namespace ET {
             return Result;
         }
 
-		void CetClusterManager::ExpandClusterResultToOriginalItems(const CetTNestItemVector& AOriginalItems, const CetTNestItemVector& APackedItems, const std::vector<TetMetaItem>& AMetaItems, CetTNestItemVector& AOutOriginalItems)
+		void CetClusterManager::ExpandClusterResultToOriginalItems(const CetTNestItemVector& AOriginalItems, const CetTNestItemVector& APackedItems, const std::vector<TetMetaItem>& AMetaItems, CetTNestItemVector& AOutOriginalItems, bool ALog)
 		{
 			AOutOriginalItems = AOriginalItems;
 			if (APackedItems.size() != AMetaItems.size()) {
@@ -1282,10 +1283,14 @@ namespace ET {
 				double PackedRotation = PackedItem.rotation();
 				double CosR = std::cos(PackedRotation);
 				double SinR = std::sin(PackedRotation);
-				std::cout << "[CLUSTER][EXPAND PACKED] PackedIndex = " << PackedIndex << ", IsCluster = " << Meta.IsCluster << ", PackedBin = " << PackedItem.binId() << ", PackedX = " << PackedX << ", PackedY = " << PackedY << ", PackedRotation = " << PackedRotation << ", Children = " << Meta.TransformData.size() << std::endl;
-				_ExpandClusterChildren(PackedItem, Meta, AOutOriginalItems);
+				if (ALog) {
+					std::cout << "[CLUSTER][EXPAND PACKED] PackedIndex = " << PackedIndex << ", IsCluster = " << Meta.IsCluster << ", PackedBin = " << PackedItem.binId() << ", PackedX = " << PackedX << ", PackedY = " << PackedY << ", PackedRotation = " << PackedRotation << ", Children = " << Meta.TransformData.size() << std::endl;
+				}
+				_ExpandClusterChildren(PackedItem, Meta, AOutOriginalItems, ALog);
 			}
-			std::cout << "[CLUSTER] ExpandClusterResultToOriginalItems done. Original count = " << AOutOriginalItems.size() << std::endl;
+			if (ALog) {
+				std::cout << "[CLUSTER] ExpandClusterResultToOriginalItems done. Original count = " << AOutOriginalItems.size() << std::endl;
+			}
 		}
 
 		bool CetClusterManager::ValidatePackedResultSpacing(const CetTNestItemVector& AOriginalItems, const CetTNestItemVector& APackedItems, const std::vector<TetMetaItem>& AMetaItems, const TetNestOptions& AOptions, TetExpandedSpacingFailure* AOutFailure)

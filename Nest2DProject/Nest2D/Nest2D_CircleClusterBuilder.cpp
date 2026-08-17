@@ -199,6 +199,26 @@ namespace ET {
                 return Layout;
             }
 
+            TetCircleLayout MakeThreeColumnSixCircleLayout(double ACellSize, double AGap)
+            {
+                TetCircleLayout Layout;
+                const double Radius = ACellSize * 0.5;
+                const double Step = ACellSize + AGap;
+
+                Layout.Slots = {
+                    { Radius, Radius },
+                    { Radius + Step, Radius },
+                    { Radius + Step * 2.0, Radius },
+                    { Radius, Radius + Step },
+                    { Radius + Step, Radius + Step },
+                    { Radius + Step * 2.0, Radius + Step }
+                };
+                Layout.Width = ACellSize * 3.0 + AGap * 2.0;
+                Layout.Height = ACellSize * 2.0 + AGap;
+                Layout.ClusterType = "CircleGrid_6_C3";
+                return Layout;
+            }
+
             TetCircleLayout MakeHoneycombLayout(std::size_t ACount, int ARows, double ACellSize, double AGap)
             {
                 TetCircleLayout Layout;
@@ -304,6 +324,11 @@ namespace ET {
                 }
                 else if (ACount == 4){
                     Layout = MakeSquareLayout(ACellSize, AGap);
+                }
+                else if (ACount == 6){
+                    // A 3x2 rectangle leaves predictable contour gaps for small
+                    // fillers and stays narrower than a staggered 3+3 layout.
+                    Layout = MakeThreeColumnSixCircleLayout(ACellSize, AGap);
                 }
                 else {
                     Layout = SelectBestHoneycombLayout(ACount, ACellSize, AGap, AOptions);

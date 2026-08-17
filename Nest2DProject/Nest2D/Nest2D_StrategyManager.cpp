@@ -117,15 +117,24 @@ bool ET::NEST2DMANAGERLIB::CetStrategyManager::IsBetterNestResult(const TetTNest
 		return A.Layers < AB.Layers;
 	}
 
+	if (AreMetricValuesDifferent(A.FirstBinArea,AB.FirstBinArea)){
+		return A.FirstBinArea > AB.FirstBinArea;
+	}
+
+	if (A.FirstBinCount != AB.FirstBinCount){
+		return A.FirstBinCount > AB.FirstBinCount;
+	}
+
+	if (A.HasInternalGapMetric && AB.HasInternalGapMetric){
+		if (AreMetricValuesDifferent(A.InternalGapArea,AB.InternalGapArea)){
+			return A.InternalGapArea < AB.InternalGapArea;
+		}
+		if (A.InternalGapCount != AB.InternalGapCount){
+			return A.InternalGapCount < AB.InternalGapCount;
+		}
+	}
+
 	if (A.HasRemnantMetrics && AB.HasRemnantMetrics){
-		// Fill completed sheets first. With a fixed total part area this also
-		// minimizes the material consumed on the final sheet.
-		if (AreMetricValuesDifferent(A.FirstBinArea,AB.FirstBinArea)){
-			return A.FirstBinArea > AB.FirstBinArea;
-		}
-		if (A.FirstBinCount != AB.FirstBinCount){
-			return A.FirstBinCount > AB.FirstBinCount;
-		}
 		if (AreMetricValuesDifferent(A.ReusableRemnantArea,AB.ReusableRemnantArea)){
 			return A.ReusableRemnantArea > AB.ReusableRemnantArea;
 		}
@@ -138,14 +147,6 @@ bool ET::NEST2DMANAGERLIB::CetStrategyManager::IsBetterNestResult(const TetTNest
 		if (AreMetricValuesDifferent(A.UsedDepth,AB.UsedDepth)){
 			return A.UsedDepth < AB.UsedDepth;
 		}
-	}
-
-	if (AreMetricValuesDifferent(A.FirstBinArea,AB.FirstBinArea)){
-		return A.FirstBinArea > AB.FirstBinArea;
-	}
-
-	if (A.FirstBinCount != AB.FirstBinCount){
-		return A.FirstBinCount > AB.FirstBinCount;
 	}
 
 	return false;
@@ -232,6 +233,8 @@ TetTNestEvalResult ET::NEST2DMANAGERLIB::CetStrategyManager::EvaluatePackedResul
 	std::cout << "[NEST][EVAL][RETURN] Count=" << Result.FirstBinCount
 		<< ", Area=" << Result.FirstBinArea
 		<< ", Layers=" << Result.Layers
+		<< ", InternalGapArea=" << Result.InternalGapArea
+		<< ", InternalGapCount=" << Result.InternalGapCount
 		<< ", LastBinCount=" << Result.LastBinCount
 		<< ", RemnantArea=" << Result.ReusableRemnantArea
 		<< ", RemnantShortSide=" << Result.ReusableRemnantShortSide
