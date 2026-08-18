@@ -431,6 +431,7 @@ struct TetMetaItem {
 struct TetClusterCandidate {
     bool Valid = false; std::string ClusterType; std::string BuilderName;
     std::vector<int> OriginalIndices; std::vector<TetItemTransform> Transforms; CetPath ProxyContour;
+    std::size_t SkeletonChildCount = 0;
     bool ProxyContourNormalized = false; double ClusterWidth = 0.0; double ClusterHeight = 0.0;
     double RealArea = 0.0; double ProxyArea = 0.0; double FillRatio = 0.0; MetClusterProxyMode ProxyMode = MetClusterProxyMode::Unknown;
     double OccupiedArea = 0.0; double ReservedArea = 0.0; double ProxyWasteArea = 0.0; double ProxyWasteRatio = 0.0;

@@ -309,6 +309,51 @@ std::uint64_t MakeFillerFamilyKey(const TetShapeFeature& AFeature) {
 	return Hash;
 }
 
+bool HasValidCandidateInventory(const TetClusterCandidate& ACandidate,
+	const std::vector<TetShapeFeature>& AFeatures, const std::vector<bool>& AUsed) {
+	return ACandidate.SkeletonChildCount <= ACandidate.Transforms.size()
+		&& AFeatures.size() == AUsed.size()
+		&& ACandidate.OriginalIndices.size() == ACandidate.Transforms.size();
+}
+
+int FindAvailableFamilyItem(const std::vector<TetShapeFeature>& AFeatures,
+	const std::vector<bool>& AUsed, const std::set<int>& AReserved, int APrototypeId) {
+	if (APrototypeId < 0 || APrototypeId >= static_cast<int>(AFeatures.size())) return -1;
+	const std::uint64_t FamilyKey = MakeFillerFamilyKey(AFeatures[APrototypeId]);
+	for (int Index = 0; Index < static_cast<int>(AFeatures.size()); ++Index) {
+		if (!AUsed[Index] && AReserved.find(Index) == AReserved.end()
+			&& MakeFillerFamilyKey(AFeatures[Index]) == FamilyKey) return Index;
+	}
+	return -1;
+}
+
+bool TryBindCandidateInventory(const TetClusterCandidate& ACandidate,
+	const std::vector<TetShapeFeature>& AFeatures, const std::vector<bool>& AUsed,
+	TetClusterCandidate& AOutCandidate) {
+	AOutCandidate = ACandidate;
+	if (!HasValidCandidateInventory(ACandidate, AFeatures, AUsed)) return false;
+	if (ACandidate.SkeletonChildCount == 0) return true;
+	std::set<int> Reserved;
+	for (std::size_t Index = 0; Index < ACandidate.SkeletonChildCount; ++Index) {
+		const int OriginalId = ACandidate.Transforms[Index].OriginalId;
+		if (OriginalId < 0 || OriginalId >= static_cast<int>(AUsed.size())
+			|| AUsed[OriginalId] || !Reserved.insert(OriginalId).second) return false;
+	}
+	for (std::size_t Index = ACandidate.SkeletonChildCount; Index < ACandidate.Transforms.size(); ++Index) {
+		const int PrototypeId = ACandidate.Transforms[Index].OriginalId;
+		const int BoundId = FindAvailableFamilyItem(AFeatures, AUsed, Reserved, PrototypeId);
+		if (BoundId < 0) return false;
+		AOutCandidate.Transforms[Index].OriginalId = BoundId;
+		Reserved.insert(BoundId);
+	}
+	AOutCandidate.OriginalIndices.clear();
+	AOutCandidate.OriginalIndices.reserve(AOutCandidate.Transforms.size());
+	for (const TetItemTransform& Transform : AOutCandidate.Transforms) {
+		AOutCandidate.OriginalIndices.push_back(Transform.OriginalId);
+	}
+	return true;
+}
+
 std::vector<TetCircleCenter> CollectCircleCenters(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetClusterCandidate& ACandidate)
 {
 	std::vector<TetCircleCenter> Centers;
@@ -1459,7 +1504,7 @@ namespace ET {
 			// Keep skeletons and their bounded fill variants together for global selection.
 			std::vector<TetClusterCandidate> ExpandedCandidates;
 			_BuildFilledTemplateCandidateVariants(AOriginalItems, AFeatures, AOptions, BaseCandidates, ExpandedCandidates);
-			std::vector<TetClusterCandidate> AcceptedCandidates = _SelectAndOptimizeTemplateCandidates(AOriginalItems, AOptions, ExpandedCandidates, Used, Count);
+			std::vector<TetClusterCandidate> AcceptedCandidates = _SelectAndOptimizeTemplateCandidates(AOriginalItems, AFeatures, AOptions, ExpandedCandidates, Used, Count);
 			// Assemble clusters and append remaining singles.
 			int AcceptedClusterCount = 0;
 			int AcceptedFilledClusterCount = 0;
@@ -1658,7 +1703,7 @@ namespace ET {
 				<< " MaxPlacementAttempts=" << Config.MaxPlacementAttempts << std::endl;
 		}
 
-		std::vector<TetClusterCandidate> CetClusterManager::_SelectTemplateCandidates(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const std::vector<TetClusterCandidate>& ABaseCandidates, std::vector<bool>& AUsed)
+		std::vector<TetClusterCandidate> CetClusterManager::_SelectTemplateCandidates(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions, const std::vector<TetClusterCandidate>& ABaseCandidates, std::vector<bool>& AUsed)
 		{
 			const int Count = static_cast<int>(AOriginalItems.size());
 			std::vector<TetClusterCandidate> SortedCandidates = ABaseCandidates;
@@ -1696,13 +1741,15 @@ namespace ET {
 			std::vector<TetClusterCandidate> AcceptedCandidates;
 			AcceptedCandidates.reserve(SortedCandidates.size());
 			for (const TetClusterCandidate& Candidate : SortedCandidates) {
-				if (!_CanAcceptClusterCandidate(AOriginalItems, AOptions, Candidate, AUsed, Count)) {
+				TetClusterCandidate BoundCandidate;
+				if (!TryBindCandidateInventory(Candidate, AFeatures, AUsed, BoundCandidate)
+					|| !_CanAcceptClusterCandidate(AOriginalItems, AOptions, BoundCandidate, AUsed, Count)) {
 					std::cout << "[TEMPLATE][REJECT] Builder=" << Candidate.BuilderName << " Type=" << Candidate.ClusterType << " Score=" << Candidate.Score << std::endl;
 					continue;
 				}
 
-				AcceptedCandidates.push_back(Candidate);
-				for (int OriginalIndex : Candidate.OriginalIndices) {
+				AcceptedCandidates.push_back(std::move(BoundCandidate));
+				for (int OriginalIndex : AcceptedCandidates.back().OriginalIndices) {
 					AUsed[OriginalIndex] = true;
 				}
 
@@ -1712,12 +1759,12 @@ namespace ET {
 			return AcceptedCandidates;
 		}
 
-		std::vector<TetClusterCandidate> CetClusterManager::_SelectAndOptimizeTemplateCandidates(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, const std::vector<TetClusterCandidate>& ABaseCandidates, std::vector<bool>& AUsed, int AOriginalItemCount)
+		std::vector<TetClusterCandidate> CetClusterManager::_SelectAndOptimizeTemplateCandidates(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions, const std::vector<TetClusterCandidate>& ABaseCandidates, std::vector<bool>& AUsed, int AOriginalItemCount)
 		{
 #ifdef _DEBUG
 			const auto GreedyStartTime = std::chrono::steady_clock::now();
 #endif
-			std::vector<TetClusterCandidate> AcceptedCandidates = _SelectTemplateCandidates(AOriginalItems, AOptions, ABaseCandidates, AUsed);
+			std::vector<TetClusterCandidate> AcceptedCandidates = _SelectTemplateCandidates(AOriginalItems, AFeatures, AOptions, ABaseCandidates, AUsed);
 #ifdef _DEBUG
 			const auto GreedyEndTime = std::chrono::steady_clock::now();
 			const std::vector<TetClusterCandidate> GreedyResult = AcceptedCandidates;

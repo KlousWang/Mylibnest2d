@@ -518,6 +518,7 @@ namespace ET {
             AOutCandidate.ClusterType = Layout.ClusterType;
             AOutCandidate.OriginalIndices = Indices;
             AOutCandidate.Transforms = std::move(Transforms);
+            AOutCandidate.SkeletonChildCount = AOutCandidate.Transforms.size();
             AOutCandidate.Confidence = 1.0;
 
             CetClusterGeometryHelper Geometry;
