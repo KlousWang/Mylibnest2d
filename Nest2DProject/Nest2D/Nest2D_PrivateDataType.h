@@ -117,7 +117,7 @@ constexpr double CET_CLUSTER_FILL_VARIANT_ROTATION_TOLERANCE = 1e-9;
 // original irregular proxy.
 constexpr double CET_CLUSTER_ENVELOPE_FILL_MIN_FILL_RATIO_GAIN = 0.01;
 constexpr double CET_CLUSTER_ENVELOPE_FILL_SCORE_PER_RATIO = 1000.0;
-constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_BEAM_WIDTH = 3;
+constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_BEAM_WIDTH = 4;
 // Circle-envelope filling is intentionally restrained: fillers are individual
 // small parts, not a second large triangle template inside the circle group.
 constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_MAX_DEPTH = CET_CIRCLE_GAP_TEMPLATE_MAX_COPIES + 1;
@@ -127,7 +127,7 @@ constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_MAX_PLACEMENT_ATTEMPTS = 128;
 constexpr long long CET_CLUSTER_ENVELOPE_FILL_MAX_SEARCH_TIME_MS = 4000;
 // Exact contour rebuilding is deferred until the rectangle-envelope beam has
 // been deduplicated, avoiding repeated Clipper unions for equivalent states.
-constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_MAX_TRUE_CONTOUR_STATES = 4;
+constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_MAX_TRUE_CONTOUR_STATES = 6;
 constexpr double CET_CLUSTER_ENVELOPE_FILL_CHILD_SCORE = 60.0;
 constexpr double CET_CLUSTER_ENVELOPE_FILL_TRUE_DENSITY_SCORE = 200.0;
 // Exterior-envelope searches are intentionally tighter than internal fills.

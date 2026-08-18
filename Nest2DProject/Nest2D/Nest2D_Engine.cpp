@@ -499,21 +499,28 @@ namespace ET {
 			return false;
 		}
 
-		static bool HasLockedCircleEnvelopeCluster(const std::vector<TetMetaItem>& AMetaItems)
+		static bool IsLockedEnvelopeCluster(const TetMetaItem& AMeta)
+		{
+			if (!AMeta.IsCluster) return false;
+			const bool IsCircleEnvelope = AMeta.ClusterType.find("Circle") == 0;
+			const bool IsFilledEllipseEnvelope = AMeta.ClusterType.find("Ellipse") == 0
+				&& AMeta.ClusterType.find("_EnvelopeFill") != std::string::npos;
+			return IsCircleEnvelope || IsFilledEllipseEnvelope;
+		}
+
+		static bool HasLockedEnvelopeCluster(const std::vector<TetMetaItem>& AMetaItems)
 		{
 			for (const TetMetaItem& Meta : AMetaItems){
-				const bool IsCircleSkeleton = Meta.IsCluster
-					&& Meta.ClusterType.find("Circle") == 0;
-				if (IsCircleSkeleton) return true;
+				if (IsLockedEnvelopeCluster(Meta)) return true;
 			}
 			return false;
 		}
 
-		static std::vector<std::size_t> CollectLockedCircleEnvelopeChildren(const std::vector<TetMetaItem>& AMetaItems)
+		static std::vector<std::size_t> CollectLockedEnvelopeChildren(const std::vector<TetMetaItem>& AMetaItems)
 		{
 			std::vector<std::size_t> Indices;
 			for (const TetMetaItem& Meta : AMetaItems) {
-				if (!Meta.IsCluster || Meta.ClusterType.find("Circle") != 0) continue;
+				if (!IsLockedEnvelopeCluster(Meta)) continue;
 				for (const TetItemTransform& Transform : Meta.TransformData) if (Transform.OriginalId >= 0) Indices.push_back(static_cast<std::size_t>(Transform.OriginalId));
 			}
 			std::sort(Indices.begin(), Indices.end());
@@ -874,7 +881,7 @@ namespace ET {
 			std::size_t BestLayers = 0;
 			std::vector<TetMetaItem> BestMetaItems;
 			bool BestHasCluster = false;
-			bool BestHasLockedCircleEnvelope = false;
+			bool BestHasLockedEnvelope = false;
 
 			const std::vector<MetClusterStrategy> ClusterStrategies = BuildClusterStrategies(Features);
 
@@ -901,10 +908,10 @@ namespace ET {
 					LocalResult = _TryLocalClusterSpacingFallback(ClusterResult, OriginalItems, AOptions, ATracker, SpacingFailure);
 				}
 
-				const bool LocalHasLockedCircleEnvelope = HasLockedCircleEnvelopeCluster(LocalResult.MetaItems);
+				const bool LocalHasLockedEnvelope = HasLockedEnvelopeCluster(LocalResult.MetaItems);
 				const bool Better = !HasBest
-					|| (LocalHasLockedCircleEnvelope != BestHasLockedCircleEnvelope
-						? LocalHasLockedCircleEnvelope
+					|| (LocalHasLockedEnvelope != BestHasLockedEnvelope
+						? LocalHasLockedEnvelope
 						: ShoouldUpdateGlobalBest(LocalResult, HasBest, BestEval, BestLayers, BestHasCluster));
 
 				if (Better){
@@ -914,7 +921,7 @@ namespace ET {
 					BestItems = std::move(LocalResult.Items);
 					BestMetaItems = std::move(LocalResult.MetaItems);
 					BestHasCluster = LocalResult.HasCluster;
-					BestHasLockedCircleEnvelope = LocalHasLockedCircleEnvelope;
+					BestHasLockedEnvelope = LocalHasLockedEnvelope;
 
 					std::cout << "[POLYGON][GLOBAL BEST UPDATE] HasCluster = "
 						<< BestHasCluster
@@ -965,11 +972,11 @@ namespace ET {
 			double BoardBinHeight = AOptions.BinHeight;
 			CetPolygonImpl BinPoly = Nest2DUtils->Nest2DBord->BuildBinPolygonFromOptions(AOptions,BoardBinWidth,BoardBinHeight);
 
-			if (!BestHasLockedCircleEnvelope && _RepairAndEvacuate(ANestItems, AOptions, BinPoly, BoardBinWidth, BoardBinHeight, BestLayers)) {
+			if (!BestHasLockedEnvelope && _RepairAndEvacuate(ANestItems, AOptions, BinPoly, BoardBinWidth, BoardBinHeight, BestLayers)) {
 				_TryBoardFeedbackNest(ANestItems, AOptions, ATracker, BestLayers);
 			}
-			else if (BestHasLockedCircleEnvelope) {
-				std::cout << "[POLYGON][LOCKED CIRCLE ENVELOPE] Skip expanded-item repair." << std::endl;
+			else if (BestHasLockedEnvelope) {
+				std::cout << "[POLYGON][LOCKED ENVELOPE] Skip expanded-item repair." << std::endl;
 			}
 			BestEval = Nest2DUtils->Nest2DStrategy->EvaluateNestResult(ANestItems, BestLayers);
 			std::cout << "================ POLYGON BEST NEST RESULT ================" << std::endl;
@@ -1042,7 +1049,7 @@ namespace ET {
 			std::size_t BestLayers = 0;
 			std::vector<TetMetaItem> BestMetaItems;
 			bool BestHasCluster = false;
-			bool BestHasLockedCircleEnvelope = false;
+			bool BestHasLockedEnvelope = false;
 			
 			const std::vector<MetClusterStrategy> ClusterStrategies = BuildClusterStrategies(Features);
 			for (auto ClusterStrategy : ClusterStrategies){
@@ -1066,10 +1073,10 @@ namespace ET {
 				if (!LocalResult.HasBest && SpacingFailure.Valid) {
 					LocalResult = _TryLocalClusterSpacingFallback(ClusterResult, OriginalItems, AOptions, ATracker, SpacingFailure);
 				}
-				const bool LocalHasLockedCircleEnvelope = HasLockedCircleEnvelopeCluster(LocalResult.MetaItems);
+				const bool LocalHasLockedEnvelope = HasLockedEnvelopeCluster(LocalResult.MetaItems);
 				const bool Better = !HasBest
-					|| (LocalHasLockedCircleEnvelope != BestHasLockedCircleEnvelope
-						? LocalHasLockedCircleEnvelope
+					|| (LocalHasLockedEnvelope != BestHasLockedEnvelope
+						? LocalHasLockedEnvelope
 						: ShoouldUpdateGlobalBest(LocalResult, HasBest, BestEval, BestLayers, BestHasCluster));
 				
 				if (Better){
@@ -1080,9 +1087,9 @@ namespace ET {
 					BestItems = std::move(LocalResult.Items);
 					BestMetaItems = std::move(LocalResult.MetaItems);
 					BestHasCluster = LocalResult.HasCluster;
-					BestHasLockedCircleEnvelope = LocalHasLockedCircleEnvelope;
-					if (BestHasLockedCircleEnvelope) {
-						std::cout << "[NEST][LOCKED CIRCLE ENVELOPE] Preserve fixed circle composite." << std::endl;
+					BestHasLockedEnvelope = LocalHasLockedEnvelope;
+					if (BestHasLockedEnvelope) {
+						std::cout << "[NEST][LOCKED ENVELOPE] Preserve completed envelope-fill composite." << std::endl;
 					}
 					std::cout << "[NEST][GLOBAL BEST UPDATE] HasCluster = " << BestHasCluster
 						<< ", count = " << BestEval.FirstBinCount
@@ -1142,23 +1149,23 @@ namespace ET {
 				std::cout << "[NEST][REPAIR PREP] ExpandedItems=" << ANestItems.size() << " Layers=" << BestLayers << std::endl;
 				CetPolygonImpl RectBinPoly = Nest2DUtils->Nest2DBord->BuildRectangleBinPolygon(AOptions.BinWidth, AOptions.BinHeight);
 				std::cout << "[NEST][REPAIR PREP] RectangleBinReady Contour=" << RectBinPoly.Contour.size() << std::endl;
-				if (!BestHasLockedCircleEnvelope && _RepairAndEvacuate(ANestItems, AOptions, RectBinPoly, AOptions.BinWidth, AOptions.BinHeight, BestLayers)) {
+				if (!BestHasLockedEnvelope && _RepairAndEvacuate(ANestItems, AOptions, RectBinPoly, AOptions.BinWidth, AOptions.BinHeight, BestLayers)) {
 					_TryBoardFeedbackNest(ANestItems, AOptions, ATracker, BestLayers);
 				}
-				else if (BestHasLockedCircleEnvelope) {
+				else if (BestHasLockedEnvelope) {
 					const CetTNestItemVector BeforeEvacuation = ANestItems;
 					const std::size_t LayersBeforeEvacuation = BestLayers;
-					const std::vector<std::size_t> LockedChildren = CollectLockedCircleEnvelopeChildren(BestMetaItems);
+					const std::vector<std::size_t> LockedChildren = CollectLockedEnvelopeChildren(BestMetaItems);
 					TetNestOptions EvacuationOptions = AOptions;
 					EvacuationOptions.EnableLastBinEvacuation = true;
 					if (_RunLastBinEvacuation(ANestItems, EvacuationOptions, BestLayers)
 						&& PreservesLockedChildren(BeforeEvacuation, ANestItems, LockedChildren)) {
-						std::cout << "[NEST][LOCKED CIRCLE ENVELOPE] Last-bin direct backfill accepted." << std::endl;
+						std::cout << "[NEST][LOCKED ENVELOPE] Last-bin direct backfill accepted." << std::endl;
 					}
 					else {
 						ANestItems = BeforeEvacuation;
 						BestLayers = LayersBeforeEvacuation;
-						std::cout << "[NEST][LOCKED CIRCLE ENVELOPE] Skip expanded-item repair." << std::endl;
+						std::cout << "[NEST][LOCKED ENVELOPE] Skip expanded-item repair." << std::endl;
 					}
 				}
 				TryCompactUniformRectangleHoles(ANestItems, AOptions);

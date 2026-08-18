@@ -343,6 +343,7 @@ namespace ET {
                 AOutCandidate.Transforms.push_back(Transform);
             }
             if (!Geometry.FinalizeCandidate(ARequest.Items, ARequest.Options, AOutCandidate)) return false;
+            AOutCandidate.SkeletonChildCount = AOutCandidate.Transforms.size();
             AOutCandidate.Score = _CalculateScore(AOutCandidate, ARequest.Options);
             return true;
         }
