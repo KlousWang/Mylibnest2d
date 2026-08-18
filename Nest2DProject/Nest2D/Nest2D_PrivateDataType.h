@@ -9,6 +9,7 @@
 #include <utility>
 #include <limits>
 #include <array>
+#include <map>
 #include <libnest2d/backends/clipper/geometries.hpp>
 #include <libnest2d/libnest2d.hpp>
 
@@ -26,10 +27,12 @@ constexpr double CET_CLUSTER_THREE_HALF_PI = CET_CLUSTER_PI * 1.5;
 
 constexpr double CET_CIRCLE_SIZE_TOLERANCE = 0.01;
 constexpr double CET_CIRCLE_HONEYCOMB_ROW_RATIO = 0.86602540378443864676;
+constexpr std::size_t CET_CIRCLE_PERIODIC_MIN_CHILD_COUNT = 5;
 constexpr double CET_CIRCLE_FILLER_MIN_SIZE_RATIO = 2.0;
 constexpr std::size_t CET_CIRCLE_FILLER_SINGLE_RESERVE_MIN = 8;
 constexpr std::size_t CET_CIRCLE_FILLER_SINGLE_RESERVE_MAX = 24;
 constexpr std::size_t CET_CIRCLE_FILL_MAX_PAIR_PROBES = 32;
+constexpr std::size_t CET_CIRCLE_FILL_SPECIALIZED_PROBE_THRESHOLD = 36;
 constexpr std::size_t CET_CIRCLE_GAP_TEMPLATE_MAX_COPIES = 6;
 constexpr std::size_t CET_CIRCLE_GAP_FILL_MAX_ACCEPTED_ITEMS = 8;
 constexpr std::size_t CET_CIRCLE_GAP_MAX_NEIGHBORS = 8;
@@ -38,6 +41,10 @@ constexpr std::size_t CET_CIRCLE_GAP_SEARCH_MAX_CANDIDATES = 8;
 constexpr std::size_t CET_CIRCLE_GAP_SEARCH_MAX_ATTEMPTS = 64;
 constexpr long long CET_CIRCLE_GAP_SEARCH_MAX_TIME_MS = 80;
 constexpr long long CET_CIRCLE_GAP_TOTAL_SEARCH_MAX_TIME_MS = 500;
+constexpr std::size_t CET_CLUSTER_GLOBAL_REBALANCE_MAX_ATTEMPTS = 48;
+constexpr std::size_t CET_CLUSTER_GLOBAL_REBALANCE_MAX_UNASSIGNED_FILLERS = 12;
+constexpr std::size_t CET_CLUSTER_GLOBAL_REBALANCE_MAX_TRANSFERS = 6;
+constexpr long long CET_CLUSTER_GLOBAL_REBALANCE_MAX_SEARCH_TIME_MS = 600;
 constexpr double CET_ELLIPSE_SIZE_TOLERANCE = 0.05;
 constexpr double CET_ELLIPSE_HONEYCOMB_ROW_RATIO = 0.90;
 constexpr double CET_RECT_SIZE_TOLERANCE = 0.05;
@@ -113,7 +120,7 @@ constexpr double CET_CLUSTER_ENVELOPE_FILL_SCORE_PER_RATIO = 1000.0;
 constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_BEAM_WIDTH = 3;
 // Circle-envelope filling is intentionally restrained: fillers are individual
 // small parts, not a second large triangle template inside the circle group.
-constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_MAX_DEPTH = CET_CIRCLE_GAP_TEMPLATE_MAX_COPIES;
+constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_MAX_DEPTH = CET_CIRCLE_GAP_TEMPLATE_MAX_COPIES + 1;
 constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_MIN_DEPTH_BEFORE_TIMEOUT = 3;
 constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_MAX_CANDIDATE_FILLERS = 8;
 constexpr std::size_t CET_CLUSTER_ENVELOPE_FILL_MAX_PLACEMENT_ATTEMPTS = 128;
@@ -452,6 +459,30 @@ struct TetClusterFreeRegion {
     double Height = 0.0;
     bool IsClosed = false;
 };
+
+struct TetCircleGapTemplateAnchor {
+    double CenterX = 0.0;
+    double CenterY = 0.0;
+    double Angle = 0.0;
+    double Distance = 0.0;
+    int NeighborCount = 0;
+};
+
+struct TetCircleGapWindow {
+    double CenterX = 0.0;
+    double CenterY = 0.0;
+    double Angle = 0.0;
+    double HalfWidth = 0.0;
+    double HalfHeight = 0.0;
+    std::string ClassKey;
+};
+
+struct TetCircleGapTemplate {
+    TetCircleGapWindow Source;
+    std::vector<TetItemTransform> Transforms;
+};
+
+using TetCircleGapTemplateCache = std::map<std::string, std::map<std::string, TetCircleGapTemplate>>;
 
 
 // ============================================================================

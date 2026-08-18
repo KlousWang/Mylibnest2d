@@ -185,16 +185,16 @@ namespace ET {
 		}
 		bool CetTestApp::_InputNestInitOptions(TetNestDataOptions& AInput) const
 		{
-			std::cout << "Please enter bin Width£º";
+			std::cout << "Please enter bin width: ";
 			std::cin >> AInput.BinWidth;
 
-			std::cout << "Please enter bin height£º";
+			std::cout << "Please enter bin height: ";
 			std::cin >> AInput.BinHeight;
 
-			std::cout << "Please enter spacing£º";
+			std::cout << "Please enter spacing: ";
 			std::cin >> AInput.Spacing;
 
-			std::cout << "Please enter rotation number,for example 4£º";
+			std::cout << "Please enter rotation number, for example 4: ";
 			std::cin >> AInput.Rotations;
 
 			std::cout << "Please enter placer accuracy, for example 0.5: ";
@@ -410,7 +410,7 @@ namespace ET {
 				}
 				baseVerts.emplace_back(x, y);
 			}
-			// ¼ì²éÃæ»ý£¬·ÀÖ¹ËùÓÐµãÔÚÒ»ÌõÏßÉÏ£¬»òÕßÊäÈëÁËÎÞÐ§¶à±ßÐÎ
+			// æ£€æŸ¥é¢ç§¯ï¼Œé˜²æ­¢æ‰€æœ‰ç‚¹åœ¨ä¸€æ¡çº¿ä¸Šï¼Œæˆ–è€…è¾“å…¥äº†æ— æ•ˆå¤šè¾¹å½¢
 			double area = 0.0;
 			for (size_t i = 0; i < baseVerts.size(); ++i) {
 				const auto& p1 = baseVerts[i];
@@ -425,8 +425,8 @@ namespace ET {
 				return -1;
 			}
 
-			// ±£Ö¤ÍâÂÖÀªÊÇÄæÊ±Õë·½Ïò
-			// Èç¹ûÃæ»ýÐ¡ÓÚ 0£¬ËµÃ÷µ±Ç°µãÐòÊÇË³Ê±Õë£¬·´×ªÒ»ÏÂ
+			// ä¿è¯å¤–è½®å»“æ˜¯é€†æ—¶é’ˆæ–¹å‘
+			// å¦‚æžœé¢ç§¯å°äºŽ 0ï¼Œè¯´æ˜Žå½“å‰ç‚¹åºæ˜¯é¡ºæ—¶é’ˆï¼Œåè½¬ä¸€ä¸‹
 			if (area < 0.0) {
 				std::reverse(baseVerts.begin(), baseVerts.end());
 			}

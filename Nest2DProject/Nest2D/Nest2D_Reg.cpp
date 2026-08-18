@@ -45,5 +45,4 @@ namespace ET {
 		Reg_EtCore_Obj_Str(Nest2D_RectangleFillClusterBuilder, CetRectangleFillClusterBuilder)
 		//Reg_EtCore_Obj_Str(File_Load, CetFile)
 	}
-
 }

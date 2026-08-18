@@ -412,18 +412,17 @@ namespace ET {
             std::vector<int> Remaining = AIndices;
             std::sort(Remaining.begin(), Remaining.end());
             Remaining.erase(std::unique(Remaining.begin(), Remaining.end()), Remaining.end());
-
+            const std::size_t BoardCapacity = _CalculatePeriodicBoardCapacity(AFeatures[Remaining.front()], AOptions);
             while (Remaining.size() >= 2){
-                std::size_t BestCount = 0;
+                const std::size_t PreferredCount = BoardCapacity >= CET_CIRCLE_PERIODIC_MIN_CHILD_COUNT
+                    ? std::min(BoardCapacity, Remaining.size()) : Remaining.size();
+                std::vector<std::size_t> Counts{ PreferredCount };
+                if (PreferredCount != Remaining.size()) Counts.push_back(Remaining.size());
                 TetClusterCandidate BestCandidate;
-
-                // Honeycomb layouts are not monotonic by item count: a 9-circle
-                // layout can be wider than a 10-circle layout with another row.
-                // Test every count from largest to smallest so all board-fitting
-                // same-size circles are kept in one skeleton whenever possible.
-                for (std::size_t Count = Remaining.size(); Count >= 2; --Count){
+                std::size_t BestCount = 0;
+                for (std::size_t Count : Counts){
+                    if (Count < 2) continue;
                     std::vector<int> TrialIndices(Remaining.begin(), Remaining.begin() + static_cast<std::vector<int>::difference_type>(Count));
-
                     TetClusterCandidate TrialCandidate;
                     if (_BuildClusterCandidate(AOriginalItems, AFeatures, TrialIndices, AOptions, TrialCandidate)){
                         BestCount = Count;
@@ -431,17 +430,37 @@ namespace ET {
                         break;
                     }
                 }
-
-                if (BestCount < 2){
-                    std::cout << "[CIRCLE][REJECT] No board-fitting cluster can be built. RemainingCount = " << Remaining.size() << std::endl;
-                    return;
-                }
-
+                if (BestCount < 2) return;
                 AOutCandidates.push_back(std::move(BestCandidate));
-                std::cout << "[CIRCLE][CANDIDATE] Size = " << BestCount << ", Type = " << AOutCandidates.back().ClusterType << ", Score = " << AOutCandidates.back().Score << std::endl;
-
-                Remaining.erase(Remaining.begin(),Remaining.begin() + static_cast<std::vector<int>::difference_type>(BestCount));
+                std::cout << "[CIRCLE][PERIODIC LATTICE] BoardCapacity=" << BoardCapacity
+                    << ", ChildCount=" << BestCount << std::endl;
+                Remaining.erase(Remaining.begin(), Remaining.begin() + static_cast<std::vector<int>::difference_type>(BestCount));
             }
+        }
+
+        std::size_t CetCircleClusterBuilder::_CalculatePeriodicBoardCapacity(const TetShapeFeature& AFeature, const TetNestOptions& AOptions)
+        {
+            const double CellSize = GetCircleSizeKey(AFeature);
+            const double RequiredGap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
+            const double SafetyGap = RequiredGap > 0.0
+                ? std::max(CET_CLUSTER_MIN_SAFETY_GAP, RequiredGap * 0.001) : 0.0;
+            const double Step = CellSize + RequiredGap + SafetyGap;
+            auto Calculate = [&](double AWidth, double AHeight) {
+                const double RowStep = Step * CET_CIRCLE_HONEYCOMB_ROW_RATIO;
+                if (CellSize <= 0.0 || Step <= 0.0 || RowStep <= 0.0
+                    || AWidth < CellSize || AHeight < CellSize) return std::size_t{ 0 };
+                const std::size_t RowCount = static_cast<std::size_t>(std::floor((AHeight - CellSize) / RowStep)) + 1;
+                const std::size_t EvenColumns = static_cast<std::size_t>(std::floor((AWidth - CellSize) / Step)) + 1;
+                const double OddWidth = AWidth - CellSize - Step * 0.5;
+                const std::size_t OddColumns = OddWidth >= 0.0
+                    ? static_cast<std::size_t>(std::floor(OddWidth / Step)) + 1 : 0;
+                const std::size_t EvenRows = (RowCount + 1) / 2;
+                const std::size_t OddRows = RowCount / 2;
+                return EvenRows * EvenColumns + OddRows * OddColumns;
+            };
+            const double BinWidth = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth));
+            const double BinHeight = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinHeight));
+            return std::max(Calculate(BinWidth, BinHeight), Calculate(BinHeight, BinWidth));
         }
 
         bool CetCircleClusterBuilder::_BuildClusterCandidate(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const std::vector<int>& AIndices, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate)

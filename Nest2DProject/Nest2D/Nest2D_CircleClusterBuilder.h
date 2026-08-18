@@ -35,6 +35,7 @@ namespace ET {
 
         protected:
             void _BuildSameSizeClusterCandidates(const CetTNestItemVector& AOriginalItems,const std::vector<TetShapeFeature>& AFeatures,const std::vector<int>& AIndices,const TetNestOptions& AOptions,std::vector<TetClusterCandidate>& AOutCandidates);
+            std::size_t _CalculatePeriodicBoardCapacity(const TetShapeFeature& AFeature,const TetNestOptions& AOptions);
             bool _BuildClusterCandidate(const CetTNestItemVector& AOriginalItems,const std::vector<TetShapeFeature>& AFeatures,const std::vector<int>& AIndices,const TetNestOptions& AOptions,TetClusterCandidate& AOutCandidate);
             bool _FitsBin(double AClusterWidth,double AClusterHeight,const TetNestOptions& AOptions);
             double _CalculateScore(const TetClusterCandidate& ACandidate);

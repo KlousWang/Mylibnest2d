@@ -374,7 +374,11 @@ namespace ET {
 			// Geometry-driven contact probes must precede the uniform grid. Large
 			// orders intentionally truncate the probe list, and putting the grid
 			// first starved left/right/bottom ellipse-corner positions.
-			_BuildChildContourProbePositions(ACtx, AOutPositions);
+			const bool NeedsChildContourProbes = !HasCircleSkeleton
+				|| AOutPositions.size() < CET_CIRCLE_FILL_SPECIALIZED_PROBE_THRESHOLD;
+			if (NeedsChildContourProbes) {
+				_BuildChildContourProbePositions(ACtx, AOutPositions);
+			}
 
             for (int Row = 0; Row < CET_RECTANGLE_FILL_GRID_PROBE_COUNT; ++Row) {
                 const double YRatio = static_cast<double>(Row) / static_cast<double>(CET_RECTANGLE_FILL_GRID_PROBE_COUNT - 1);
