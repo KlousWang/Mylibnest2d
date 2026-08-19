@@ -172,6 +172,19 @@ bool IsCompletedEnvelopeFill(const TetClusterCandidate& ACandidate) {
 		&& ACandidate.OriginalIndices.size() >= 3;
 }
 
+bool IsCompletedEllipseEnvelopeFill(const TetClusterCandidate& ACandidate,
+	const std::vector<TetShapeFeature>& AFeatures) {
+	return IsCompletedEnvelopeFill(ACandidate)
+		&& ACandidate.SkeletonChildCount >= 2
+		&& ACandidate.SkeletonChildCount <= ACandidate.OriginalIndices.size()
+		&& std::all_of(ACandidate.OriginalIndices.begin(),
+			ACandidate.OriginalIndices.begin() + static_cast<std::ptrdiff_t>(ACandidate.SkeletonChildCount),
+			[&](int AIndex) {
+				return AIndex >= 0 && AIndex < static_cast<int>(AFeatures.size())
+					&& AFeatures[AIndex].ShapeType == MetShapeType::EllipseLike;
+			});
+}
+
 bool IsCircleSkeletonCandidate(const TetClusterCandidate& ACandidate) {
 	return ACandidate.SkeletonChildCount >= 2
 		&& (ACandidate.BuilderName == "CircleBuilder"
@@ -342,9 +355,16 @@ std::uint64_t GetEnvelopeSeedFamilyKey(const TetClusterFillSearchState& AState,
 }
 
 void TrimEnvelopeBeam(std::vector<TetClusterFillSearchState>& AStates, std::size_t AMaxCount,
-	const std::vector<TetShapeFeature>& AFeatures, std::size_t ASkeletonChildCount)
+	const std::vector<TetShapeFeature>& AFeatures, std::size_t ASkeletonChildCount,
+	bool APreferFillerCount = false)
 {
-	std::stable_sort(AStates.begin(), AStates.end(), IsEnvelopeStateBetter);
+	std::stable_sort(AStates.begin(), AStates.end(), [&](const TetClusterFillSearchState& AFirst,
+		const TetClusterFillSearchState& ASecond) {
+		if (APreferFillerCount && AFirst.FillerCount != ASecond.FillerCount) {
+			return AFirst.FillerCount > ASecond.FillerCount;
+		}
+		return IsEnvelopeStateBetter(AFirst, ASecond);
+	});
 	if (AStates.size() <= AMaxCount) return;
 	std::vector<TetClusterFillSearchState> Selected;
 	std::set<std::uint64_t> SeedFamilies;
@@ -1288,91 +1308,334 @@ void BuildFilledVariantsForBase(const CetTNestItemVector& AOriginalItems, const 
 	}
 }
 
-void BuildEnvelopeFilledVariantsForBase(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions, const TetClusterCandidate& ABaseCandidate, const TetClusterFillSearchConfig& AConfig, std::map<std::string, TetCircleGapTemplate>& AGapTemplates, std::vector<TetClusterCandidate>& AOutVariants, TetClusterFillSearchStats& AStats)
+long long QuantizeEllipseTemplateRatio(double AValue)
 {
-	AOutVariants.clear();
+	return std::llround(std::max(0.0, AValue) / CET_ELLIPSE_GAP_TEMPLATE_SIZE_TOLERANCE);
+}
+
+std::string BuildEllipseGapTemplateCacheKey(const TetClusterCandidate& ABaseCandidate,
+	const std::vector<TetShapeFeature>& AFeatures)
+{
+	std::vector<long long> AspectRatios;
+	for (std::size_t Index = 0; Index < ABaseCandidate.SkeletonChildCount
+		&& Index < ABaseCandidate.OriginalIndices.size(); ++Index) {
+		const int OriginalIndex = ABaseCandidate.OriginalIndices[Index];
+		if (OriginalIndex < 0 || OriginalIndex >= static_cast<int>(AFeatures.size())) continue;
+		const TetShapeFeature& Feature = AFeatures[OriginalIndex];
+		AspectRatios.push_back(QuantizeEllipseTemplateRatio(
+			std::min(Feature.Width, Feature.Height) / std::max(1.0, std::max(Feature.Width, Feature.Height))));
+	}
+	std::sort(AspectRatios.begin(), AspectRatios.end());
+	const double ShortSide = std::max(1.0, std::min(ABaseCandidate.ClusterWidth, ABaseCandidate.ClusterHeight));
+	const double LongSide = std::max(ABaseCandidate.ClusterWidth, ABaseCandidate.ClusterHeight);
+	std::vector<long long> SkeletonDistances;
+	const double Normalizer = std::max(1.0, std::hypot(ABaseCandidate.ClusterWidth, ABaseCandidate.ClusterHeight));
+	for (std::size_t First = 0; First < ABaseCandidate.SkeletonChildCount
+		&& First < ABaseCandidate.Transforms.size(); ++First) {
+		for (std::size_t Second = First + 1; Second < ABaseCandidate.SkeletonChildCount
+			&& Second < ABaseCandidate.Transforms.size(); ++Second) {
+			const TetItemTransform& FirstTransform = ABaseCandidate.Transforms[First];
+			const TetItemTransform& SecondTransform = ABaseCandidate.Transforms[Second];
+			SkeletonDistances.push_back(QuantizeEllipseTemplateRatio(std::hypot(
+				SecondTransform.RelativeX - FirstTransform.RelativeX,
+				SecondTransform.RelativeY - FirstTransform.RelativeY) / Normalizer));
+		}
+	}
+	std::sort(SkeletonDistances.begin(), SkeletonDistances.end());
+	std::ostringstream Stream;
+	Stream << ABaseCandidate.ClusterType << '|' << ABaseCandidate.SkeletonChildCount << '|'
+		<< QuantizeEllipseTemplateRatio(ShortSide / std::max(1.0, LongSide));
+	for (long long Ratio : AspectRatios) Stream << '|' << Ratio;
+	for (long long Distance : SkeletonDistances) Stream << '|' << Distance;
+	return Stream.str();
+}
+
+double GetEllipseTemplateFrameAngle(const CetTNestItemVector& AOriginalItems,
+	const TetClusterCandidate& ACandidate)
+{
+	if (ACandidate.SkeletonChildCount < 2 || ACandidate.Transforms.size() < 2) return 0.0;
+	ET::NEST2DMANAGERLIB::CetClusterGeometryHelper Geometry;
+	auto GetCenter = [&](const TetItemTransform& Transform, double& AX, double& AY) {
+		if (Transform.OriginalId < 0
+			|| Transform.OriginalId >= static_cast<int>(AOriginalItems.size())) return false;
+		const CetPath Contour = Geometry.TransformContour(Geometry.GetIdentityContour(
+			AOriginalItems[Transform.OriginalId]), Transform.RelativeRotation, Transform.RelativeX, Transform.RelativeY);
+		double MinX = 0.0, MinY = 0.0, MaxX = 0.0, MaxY = 0.0;
+		if (!Geometry.GetBounds(Contour, MinX, MinY, MaxX, MaxY)) return false;
+		AX = (MinX + MaxX) * 0.5;
+		AY = (MinY + MaxY) * 0.5;
+		return true;
+	};
+	double FirstX = 0.0, FirstY = 0.0, SecondX = 0.0, SecondY = 0.0;
+	if (!GetCenter(ACandidate.Transforms[0], FirstX, FirstY)
+		|| !GetCenter(ACandidate.Transforms[1], SecondX, SecondY)) return 0.0;
+	return std::atan2(SecondY - FirstY, SecondX - FirstX);
+}
+
+double NormalizeClusterAngle(double AAngle)
+{
+	while (AAngle > CET_CLUSTER_PI) AAngle -= CET_CLUSTER_TWO_PI;
+	while (AAngle < -CET_CLUSTER_PI) AAngle += CET_CLUSTER_TWO_PI;
+	return AAngle;
+}
+
+bool BuildEllipseTemplateTransform(const CetTNestItemVector& AOriginalItems,
+	const TetEllipseGapTemplate& ATemplate, const TetClusterCandidate& AEnvelopeCandidate,
+	const TetItemTransform& ASourceTransform, int ATargetId, double ATargetAngle, bool AMirror,
+	double ARotation, TetItemTransform& AOutTransform)
+{
+	ET::NEST2DMANAGERLIB::CetClusterGeometryHelper Geometry;
+	if (ASourceTransform.OriginalId < 0
+		|| ASourceTransform.OriginalId >= static_cast<int>(AOriginalItems.size())
+		|| ATargetId < 0 || ATargetId >= static_cast<int>(AOriginalItems.size())) return false;
+	const CetPath SourceContour = Geometry.TransformContour(Geometry.GetIdentityContour(
+		AOriginalItems[ASourceTransform.OriginalId]), ASourceTransform.RelativeRotation,
+		ASourceTransform.RelativeX, ASourceTransform.RelativeY);
+	double SourceMinX = 0.0, SourceMinY = 0.0, SourceMaxX = 0.0, SourceMaxY = 0.0;
+	if (!Geometry.GetBounds(SourceContour, SourceMinX, SourceMinY, SourceMaxX, SourceMaxY)) return false;
+	const double Delta = NormalizeClusterAngle(ATargetAngle - ATemplate.SourceAngle);
+	const bool SwapsEnvelopeAxes = std::abs(std::sin(Delta)) > std::abs(std::cos(Delta));
+	const double ScaleX = (SwapsEnvelopeAxes ? AEnvelopeCandidate.ClusterHeight
+		: AEnvelopeCandidate.ClusterWidth) / ATemplate.EnvelopeWidth;
+	const double ScaleY = (SwapsEnvelopeAxes ? AEnvelopeCandidate.ClusterWidth
+		: AEnvelopeCandidate.ClusterHeight) / ATemplate.EnvelopeHeight;
+	double OffsetX = ((SourceMinX + SourceMaxX) - ATemplate.EnvelopeWidth) * 0.5;
+	double OffsetY = ((SourceMinY + SourceMaxY) - ATemplate.EnvelopeHeight) * 0.5;
+	if (AMirror) OffsetX = -OffsetX;
+	OffsetX *= ScaleX;
+	OffsetY *= ScaleY;
+	const double Cosine = std::cos(Delta), Sine = std::sin(Delta);
+	const double CenterX = AEnvelopeCandidate.ClusterWidth * 0.5 + OffsetX * Cosine - OffsetY * Sine;
+	const double CenterY = AEnvelopeCandidate.ClusterHeight * 0.5 + OffsetX * Sine + OffsetY * Cosine;
+	const CetPath Rotated = Geometry.TransformContour(Geometry.GetIdentityContour(AOriginalItems[ATargetId]),
+		ARotation, 0.0, 0.0);
+	double MinX = 0.0, MinY = 0.0, MaxX = 0.0, MaxY = 0.0;
+	if (!Geometry.GetBounds(Rotated, MinX, MinY, MaxX, MaxY)) return false;
+	AOutTransform.OriginalId = ATargetId;
+	AOutTransform.RelativeRotation = ARotation;
+	AOutTransform.RelativeX = CenterX - (MinX + MaxX) * 0.5;
+	AOutTransform.RelativeY = CenterY - (MinY + MaxY) * 0.5;
+	return true;
+}
+
+bool TryBuildEllipseTemplateVariant(const CetTNestItemVector& AOriginalItems,
+	const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions,
+	const TetClusterCandidate& ABaseCandidate, const TetClusterCandidate& AEnvelopeCandidate,
+	const TetEllipseGapTemplate& ATemplate, bool AMirror, TetClusterCandidate& AOutCandidate)
+{
+	AOutCandidate = TetClusterCandidate{};
+	if (ATemplate.Transforms.size() <= ATemplate.SkeletonChildCount
+		|| ATemplate.SkeletonChildCount != ABaseCandidate.SkeletonChildCount) return false;
+	const double TargetAngle = GetEllipseTemplateFrameAngle(AOriginalItems, ABaseCandidate);
+	const double Delta = NormalizeClusterAngle(TargetAngle - ATemplate.SourceAngle);
+	const std::vector<double> Allowed = ET::NEST2DMANAGERLIB::CetRotationUtils::BuildAllowedRotations(AOptions.Rotations);
+	if (Allowed.empty()) return false;
+	ET::NEST2DMANAGERLIB::CetRectangleFillClusterBuilder Builder;
+	TetClusterCandidate Current = AEnvelopeCandidate;
+	std::set<int> Reserved(Current.OriginalIndices.begin(), Current.OriginalIndices.end());
+	for (std::size_t Index = ATemplate.SkeletonChildCount; Index < ATemplate.Transforms.size(); ++Index) {
+		const TetItemTransform& Source = ATemplate.Transforms[Index];
+		const int TargetId = FindAvailableFamilyItem(AFeatures, std::vector<bool>(AFeatures.size(), false), Reserved, Source.OriginalId);
+		if (TargetId < 0) return false;
+		const double Desired = AMirror ? CET_CLUSTER_PI - Source.RelativeRotation + Delta
+			: Source.RelativeRotation + Delta;
+		std::vector<double> Rotations = Allowed;
+		std::stable_sort(Rotations.begin(), Rotations.end(), [&](double A, double B) {
+			const bool AAligned = std::abs(NormalizeClusterAngle(A - Desired))
+				<= CET_ELLIPSE_GAP_TEMPLATE_ANGLE_TOLERANCE;
+			const bool BAligned = std::abs(NormalizeClusterAngle(B - Desired))
+				<= CET_ELLIPSE_GAP_TEMPLATE_ANGLE_TOLERANCE;
+			if (AAligned != BAligned) return AAligned;
+			return std::abs(NormalizeClusterAngle(A - Desired))
+				< std::abs(NormalizeClusterAngle(B - Desired));
+		});
+		bool Appended = false;
+		for (double Rotation : Rotations) {
+			TetItemTransform Transform;
+			if (!BuildEllipseTemplateTransform(AOriginalItems, ATemplate, AEnvelopeCandidate, Source,
+				TargetId, TargetAngle, AMirror, Rotation, Transform)) continue;
+			TetClusterCandidate Next;
+			if (Builder.TryAppendFillerTemplateInRectangleEnvelope(AOriginalItems, AFeatures, ABaseCandidate,
+				AEnvelopeCandidate, Current, Transform, AOptions, Next)) {
+				Current = std::move(Next);
+				Reserved.insert(TargetId);
+				Appended = true;
+				break;
+			}
+		}
+		if (!Appended) return false;
+	}
+	AOutCandidate = std::move(Current);
+	return IsEnvelopeFillStateWorthExpanding(AEnvelopeCandidate, AOutCandidate);
+}
+
+bool TryBuildCachedEllipseTemplateVariant(const CetTNestItemVector& AOriginalItems,
+	const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions,
+	const TetClusterCandidate& ABaseCandidate, const TetClusterCandidate& AEnvelopeCandidate,
+	const TetEllipseGapTemplateCache& ATemplates, TetClusterCandidate& AOutCandidate)
+{
+	AOutCandidate = TetClusterCandidate{};
+	const auto It = ATemplates.find(BuildEllipseGapTemplateCacheKey(ABaseCandidate, AFeatures));
+	if (It == ATemplates.end()) return false;
+	const TetEllipseGapTemplate& Template = It->second;
+	const double TargetAngle = GetEllipseTemplateFrameAngle(AOriginalItems, ABaseCandidate);
+	const double Delta = NormalizeClusterAngle(TargetAngle - Template.SourceAngle);
+	const bool SwapsEnvelopeAxes = std::abs(std::sin(Delta)) > std::abs(std::cos(Delta));
+	const double WidthRatio = (SwapsEnvelopeAxes ? AEnvelopeCandidate.ClusterHeight
+		: AEnvelopeCandidate.ClusterWidth) / std::max(1.0, Template.EnvelopeWidth);
+	const double HeightRatio = (SwapsEnvelopeAxes ? AEnvelopeCandidate.ClusterWidth
+		: AEnvelopeCandidate.ClusterHeight) / std::max(1.0, Template.EnvelopeHeight);
+	if (std::abs(WidthRatio - 1.0) > CET_ELLIPSE_GAP_TEMPLATE_SIZE_TOLERANCE
+		|| std::abs(HeightRatio - 1.0) > CET_ELLIPSE_GAP_TEMPLATE_SIZE_TOLERANCE) return false;
+	if (TryBuildEllipseTemplateVariant(AOriginalItems, AFeatures, AOptions, ABaseCandidate,
+		AEnvelopeCandidate, Template, false, AOutCandidate)) return true;
+	return TryBuildEllipseTemplateVariant(AOriginalItems, AFeatures, AOptions, ABaseCandidate,
+		AEnvelopeCandidate, Template, true, AOutCandidate);
+}
+
+void CacheEllipseTemplateVariant(const CetTNestItemVector& AOriginalItems,
+	const TetClusterCandidate& ABaseCandidate, const TetClusterCandidate& AEnvelopeCandidate,
+	const std::vector<TetShapeFeature>& AFeatures, const std::vector<TetClusterFillSearchState>& AStates,
+	bool AHasValidatedVariant,
+	TetEllipseGapTemplateCache& ATemplates)
+{
+	if (!AHasValidatedVariant || AStates.empty()) return;
+	const TetClusterFillSearchState* Best = &AStates.front();
+	for (const TetClusterFillSearchState& State : AStates) {
+		if (IsEnvelopeStateBetter(State, *Best)) Best = &State;
+	}
+	if (Best->Candidate.Transforms.size() <= ABaseCandidate.SkeletonChildCount) return;
+	const std::string Key = BuildEllipseGapTemplateCacheKey(ABaseCandidate, AFeatures);
+	if (ATemplates.find(Key) != ATemplates.end()) return;
+	TetEllipseGapTemplate Template;
+	Template.SourceAngle = GetEllipseTemplateFrameAngle(AOriginalItems, ABaseCandidate);
+	Template.EnvelopeWidth = AEnvelopeCandidate.ClusterWidth;
+	Template.EnvelopeHeight = AEnvelopeCandidate.ClusterHeight;
+	Template.SkeletonChildCount = ABaseCandidate.SkeletonChildCount;
+	const std::size_t TransformCount = std::min(Best->Candidate.Transforms.size(),
+		Template.SkeletonChildCount + CET_ELLIPSE_GAP_TEMPLATE_MAX_COPIES);
+	Template.Transforms.assign(Best->Candidate.Transforms.begin(),
+		Best->Candidate.Transforms.begin() + TransformCount);
+	ATemplates.emplace(Key, std::move(Template));
+	std::cout << "[TEMPLATE][ELLIPSE GAP CACHE STORE] Fillers="
+		<< TransformCount - ABaseCandidate.SkeletonChildCount << std::endl;
+}
+
+void SearchEnvelopeFillVariants(const CetTNestItemVector& AOriginalItems,
+	const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions,
+	const TetClusterCandidate& ABaseCandidate, const TetClusterCandidate& AEnvelopeCandidate,
+	const TetClusterFillSearchConfig& AConfig, std::map<std::string, TetCircleGapTemplate>& AGapTemplates,
+	const TetClusterFillSearchState* ASeedState, std::vector<TetClusterFillSearchState>& AOutStates,
+	TetClusterFillSearchStats& AStats)
+{
 	const auto SearchStart = std::chrono::steady_clock::now();
 	std::size_t LocalAttempts = 0;
-	auto TimeLimitReached = [&]() {
-		return AConfig.MaxElapsedMs > 0 && std::chrono::duration_cast<std::chrono::milliseconds>(
-			std::chrono::steady_clock::now() - SearchStart).count() >= AConfig.MaxElapsedMs;
-	};
-	TetClusterCandidate EnvelopeCandidate;
-	if (!BuildRectangleEnvelopeCandidate(AOriginalItems, AOptions, ABaseCandidate, EnvelopeCandidate) || EnvelopeCandidate.ProxyWasteArea <= 0.0) {
-		AStats.EnvelopeSearchMs += std::chrono::duration<double, std::milli>(
-			std::chrono::steady_clock::now() - SearchStart).count();
-		return;
-	}
-
 	const bool IsCircleBase = IsFixedCircleEnvelopeBase(ABaseCandidate, AFeatures);
-	ET::NEST2DMANAGERLIB::CetRectangleFillClusterBuilder Builder;
-	ET::NEST2DMANAGERLIB::CetClusterGeometryHelper Geometry;
-	const std::vector<TetCircleGapTemplateAnchor> GapTemplateAnchors = IsCircleBase
+	const std::vector<TetCircleGapTemplateAnchor> Anchors = IsCircleBase
 		? CollectCircleGapTemplateAnchors(AOriginalItems, AFeatures, ABaseCandidate)
 		: std::vector<TetCircleGapTemplateAnchor>{};
-	std::vector<TetClusterFillSearchState> AllVariants;
-	TetClusterCandidate LocalGapCandidate;
-	if (IsCircleBase && BuildLocalCircleGapFilledCandidate(AOriginalItems, AFeatures, AOptions, ABaseCandidate,
-		EnvelopeCandidate, AGapTemplates, LocalGapCandidate) && PreservesBaseTransforms(ABaseCandidate, LocalGapCandidate)
-		&& IsEnvelopeFillStateWorthExpanding(EnvelopeCandidate, LocalGapCandidate)) {
-		const std::size_t LocalFillers = LocalGapCandidate.Transforms.size() - ABaseCandidate.Transforms.size();
-		AllVariants.push_back({ LocalGapCandidate, LocalFillers });
-		std::cout << "[TEMPLATE][LOCAL GAP] Fillers=" << LocalFillers << std::endl;
+	ET::NEST2DMANAGERLIB::CetRectangleFillClusterBuilder Builder;
+	ET::NEST2DMANAGERLIB::CetClusterGeometryHelper Geometry;
+	AOutStates.clear();
+	const bool IsEllipseBase = IsFixedEllipseEnvelopeBase(ABaseCandidate, AFeatures);
+	std::vector<TetClusterFreeRegion> BaseFreeRegions;
+	if (!Geometry.ExtractCandidateFreeRegions(AOriginalItems, AOptions, AEnvelopeCandidate,
+		BaseFreeRegions) || BaseFreeRegions.empty()) return;
+	AStats.EnvelopeFreeRegionCount += BaseFreeRegions.size();
+	auto TimeLimitReached = [&]() {
+		return CircleGapSearchTimeReached(SearchStart, AConfig.MaxElapsedMs);
+	};
+	if (ASeedState != nullptr && PreservesBaseTransforms(ABaseCandidate, ASeedState->Candidate)
+		&& IsEnvelopeFillStateWorthExpanding(AEnvelopeCandidate, ASeedState->Candidate)) {
+		AOutStates.push_back(*ASeedState);
 	}
-	const TetClusterFillSearchState InitialState = AllVariants.empty()
-		? TetClusterFillSearchState{ EnvelopeCandidate, 0 } : AllVariants.front();
-	std::vector<TetClusterFillSearchState> Beam{ InitialState };
-	const std::size_t MaxFillerCount = InitialState.FillerCount + AConfig.MaxDepth;
+	TetClusterCandidate LocalGap;
+	if (IsCircleBase && BuildLocalCircleGapFilledCandidate(AOriginalItems, AFeatures, AOptions,
+		ABaseCandidate, AEnvelopeCandidate, AGapTemplates, LocalGap)
+		&& PreservesBaseTransforms(ABaseCandidate, LocalGap)
+		&& IsEnvelopeFillStateWorthExpanding(AEnvelopeCandidate, LocalGap)) {
+		AOutStates.push_back({ LocalGap, LocalGap.Transforms.size() - ABaseCandidate.Transforms.size() });
+		std::cout << "[TEMPLATE][LOCAL GAP] Fillers=" << AOutStates.front().FillerCount << std::endl;
+	}
+	const TetClusterFillSearchState Initial = AOutStates.empty()
+		? TetClusterFillSearchState{ AEnvelopeCandidate, 0 } : AOutStates.front();
+	std::vector<TetClusterFillSearchState> Beam{ Initial };
+	const std::size_t MaxFillers = Initial.FillerCount + AConfig.MaxDepth;
 	for (std::size_t Depth = 0; Depth < AConfig.MaxDepth && !Beam.empty(); ++Depth) {
-		const bool MayStopForTime = Depth >= AConfig.MinDepthBeforeTimeout;
-		if (MayStopForTime && TimeLimitReached()) { ++AStats.EnvelopeTimeLimitHits; break; }
-		std::vector<TetClusterFillSearchState> NextBeam;
+		if (TimeLimitReached()) { ++AStats.EnvelopeTimeLimitHits; break; }
+		std::vector<TetClusterFillSearchState> Next;
 		for (const TetClusterFillSearchState& State : Beam) {
-			if (State.FillerCount >= MaxFillerCount) continue;
-			std::vector<TetClusterFreeRegion> FreeRegions;
-			if (!Geometry.ExtractCandidateFreeRegions(AOriginalItems, AOptions, State.Candidate, FreeRegions) || FreeRegions.empty()) continue;
-			AStats.EnvelopeFreeRegionCount += FreeRegions.size();
-			const std::vector<int> Fillers = CollectCompatibleFillers(AFeatures, State.Candidate, FreeRegions, AConfig, true);
-			for (int FillerIndex : Fillers) {
+			if (State.FillerCount >= MaxFillers) continue;
+			const std::vector<int> Fillers = CollectCompatibleFillers(AFeatures, State.Candidate,
+				BaseFreeRegions, AConfig, !IsEllipseBase);
+			for (int Filler : Fillers) {
 				if ((AConfig.MaxPlacementAttempts > 0 && LocalAttempts >= AConfig.MaxPlacementAttempts)
-					|| (MayStopForTime && TimeLimitReached())) break;
-				if (ContainsOriginalIndex(State.Candidate, FillerIndex)) continue;
-				++LocalAttempts;
-				++AStats.EnvelopeSearchAttempts;
+					|| TimeLimitReached()) break;
+				if (ContainsOriginalIndex(State.Candidate, Filler)) continue;
+				++LocalAttempts; ++AStats.EnvelopeSearchAttempts;
 				TetClusterCandidate Candidate;
-				if (!Builder.TryAppendFillerInRectangleEnvelope(AOriginalItems, AFeatures, ABaseCandidate, EnvelopeCandidate, State.Candidate, FreeRegions, FillerIndex, AOptions, Candidate)) continue;
-				std::size_t TemplateCopies = 0;
-				TetClusterCandidate CopiedCandidate;
-				const std::size_t RemainingTemplateCopies = MaxFillerCount > State.FillerCount + 1
-					? MaxFillerCount - State.FillerCount - 1 : 0;
+				if (!Builder.TryAppendFillerInRectangleEnvelope(AOriginalItems, AFeatures, ABaseCandidate,
+					AEnvelopeCandidate, State.Candidate, BaseFreeRegions, Filler, AOptions, Candidate)) continue;
+				std::size_t Copies = 0;
+				TetClusterCandidate Copied;
+				const std::size_t Remaining = MaxFillers > State.FillerCount + 1 ? MaxFillers - State.FillerCount - 1 : 0;
 				if (IsCircleBase && TryCopyCircleGapTemplate(AOriginalItems, AFeatures, AOptions, ABaseCandidate,
-					EnvelopeCandidate, GapTemplateAnchors, Candidate, RemainingTemplateCopies, CopiedCandidate, TemplateCopies)) {
-					Candidate = std::move(CopiedCandidate);
-					std::cout << "[TEMPLATE][GAP COPY] Source=" << FillerIndex
-						<< ", Copies=" << TemplateCopies << std::endl;
-				}
+					AEnvelopeCandidate, Anchors, Candidate, Remaining, Copied, Copies)) Candidate = std::move(Copied);
 				if (!PreservesBaseTransforms(ABaseCandidate, Candidate)
-					|| !IsEnvelopeFillStateWorthExpanding(EnvelopeCandidate, Candidate)) continue;
-				NextBeam.push_back({ std::move(Candidate), State.FillerCount + 1 + TemplateCopies });
+					|| !IsEnvelopeFillStateWorthExpanding(AEnvelopeCandidate, Candidate)) continue;
+				Next.push_back({ std::move(Candidate), State.FillerCount + 1 + Copies });
 				++AStats.EnvelopeGeneratedVariantCount;
 			}
 		}
-		if (MayStopForTime && TimeLimitReached()) ++AStats.EnvelopeTimeLimitHits;
-		DeduplicateFilledStates(NextBeam);
-		TrimEnvelopeBeam(NextBeam, AConfig.BeamWidth, AFeatures, ABaseCandidate.SkeletonChildCount);
-		AllVariants.insert(AllVariants.end(), NextBeam.begin(), NextBeam.end());
-		Beam = std::move(NextBeam);
+		DeduplicateFilledStates(Next);
+		TrimEnvelopeBeam(Next, AConfig.BeamWidth, AFeatures, ABaseCandidate.SkeletonChildCount,
+			IsEllipseBase);
+		AOutStates.insert(AOutStates.end(), Next.begin(), Next.end());
+		Beam = std::move(Next);
 		AStats.EnvelopeMaxDepthReached = std::max(AStats.EnvelopeMaxDepthReached, Depth + 1);
-		if (AConfig.MaxPlacementAttempts > 0 && LocalAttempts >= AConfig.MaxPlacementAttempts) break;
-		if (Depth + 1 >= AConfig.MinDepthBeforeTimeout && TimeLimitReached()) {
-			++AStats.EnvelopeTimeLimitHits;
+		if (AConfig.MaxPlacementAttempts > 0 && LocalAttempts >= AConfig.MaxPlacementAttempts
+			|| TimeLimitReached()) {
+			if (TimeLimitReached()) ++AStats.EnvelopeTimeLimitHits;
 			break;
 		}
 	}
-	FinalizeEnvelopeFilledStates(AOriginalItems, AFeatures, AOptions, ABaseCandidate,
-		AllVariants, AOutVariants, AStats);
-	const auto SearchEnd = std::chrono::steady_clock::now();
-	AStats.EnvelopeSearchMs += std::chrono::duration<double, std::milli>(SearchEnd - SearchStart).count();
+	AStats.EnvelopeSearchMs += std::chrono::duration<double, std::milli>(
+		std::chrono::steady_clock::now() - SearchStart).count();
+}
+
+bool TryBuildCachedEllipseTemplateSeed(const CetTNestItemVector& AOriginalItems,
+	const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions,
+	const TetClusterCandidate& ABaseCandidate, const TetClusterCandidate& AEnvelopeCandidate,
+	const TetEllipseGapTemplateCache& ATemplates, TetClusterFillSearchState& AOutSeed)
+{
+	AOutSeed = TetClusterFillSearchState{};
+	TetClusterCandidate Candidate;
+	if (!TryBuildCachedEllipseTemplateVariant(AOriginalItems, AFeatures, AOptions, ABaseCandidate,
+		AEnvelopeCandidate, ATemplates, Candidate)) return false;
+	AOutSeed.Candidate = std::move(Candidate);
+	AOutSeed.FillerCount = AOutSeed.Candidate.Transforms.size() - ABaseCandidate.Transforms.size();
+	return true;
+}
+
+void BuildEnvelopeFilledVariantsForBase(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions, const TetClusterCandidate& ABaseCandidate, const TetClusterFillSearchConfig& AConfig, std::map<std::string, TetCircleGapTemplate>& AGapTemplates, TetEllipseGapTemplateCache& AEllipseTemplates, std::vector<TetClusterCandidate>& AOutVariants, TetClusterFillSearchStats& AStats)
+{
+	AOutVariants.clear();
+	TetClusterCandidate EnvelopeCandidate;
+	if (!BuildRectangleEnvelopeCandidate(AOriginalItems, AOptions, ABaseCandidate, EnvelopeCandidate)
+		|| EnvelopeCandidate.ProxyWasteArea <= 0.0) return;
+	const bool IsEllipseBase = IsFixedEllipseEnvelopeBase(ABaseCandidate, AFeatures);
+	TetClusterFillSearchState CachedSeed;
+	if (IsEllipseBase && TryBuildCachedEllipseTemplateSeed(AOriginalItems, AFeatures, AOptions,
+		ABaseCandidate, EnvelopeCandidate, AEllipseTemplates, CachedSeed)) {
+		std::cout << "[TEMPLATE][ELLIPSE GAP CACHE SEED] Fillers="
+			<< CachedSeed.FillerCount << std::endl;
+	}
+	std::vector<TetClusterFillSearchState> States;
+	SearchEnvelopeFillVariants(AOriginalItems, AFeatures, AOptions, ABaseCandidate, EnvelopeCandidate,
+		AConfig, AGapTemplates, CachedSeed.Candidate.Valid ? &CachedSeed : nullptr, States, AStats);
+	FinalizeEnvelopeFilledStates(AOriginalItems, AFeatures, AOptions, ABaseCandidate, States, AOutVariants, AStats);
+	if (IsEllipseBase) CacheEllipseTemplateVariant(AOriginalItems, ABaseCandidate, EnvelopeCandidate,
+		AFeatures, States, !AOutVariants.empty(), AEllipseTemplates);
 }
 
 TetPairCandidateKey MakePairCandidateKey(int AFirst, int ASecond) {
@@ -1922,6 +2185,7 @@ namespace ET {
 			}
 			const TetClusterFillSearchConfig EnvelopeConfig = GetClusterEnvelopeFillSearchConfig(AOriginalItems.size());
 			TetCircleGapTemplateCache CircleGapTemplateCache;
+			TetEllipseGapTemplateCache EllipseGapTemplateCache;
 			std::vector<const TetClusterCandidate*> EnvelopeBaseCandidates;
 			EnvelopeBaseCandidates.reserve(ABaseCandidates.size());
 			for (const TetClusterCandidate& BaseCandidate : ABaseCandidates) {
@@ -1932,14 +2196,25 @@ namespace ET {
 				}
 			}
 			std::stable_sort(EnvelopeBaseCandidates.begin(), EnvelopeBaseCandidates.end(), [](const TetClusterCandidate* AFirst, const TetClusterCandidate* ASecond) {
+				const bool FirstIsEllipse = AFirst->BuilderName == "EllipseBuilder";
+				const bool SecondIsEllipse = ASecond->BuilderName == "EllipseBuilder";
+				if (FirstIsEllipse != SecondIsEllipse) return FirstIsEllipse;
 				const double FirstAvailableArea = std::max(0.0, AFirst->BoundingBoxArea - AFirst->ReservedArea);
 				const double SecondAvailableArea = std::max(0.0, ASecond->BoundingBoxArea - ASecond->ReservedArea);
 				if (std::abs(FirstAvailableArea - SecondAvailableArea) > 1.0) return FirstAvailableArea > SecondAvailableArea;
 				return AFirst->ClusterType < ASecond->ClusterType;
 				});
-			const std::size_t EnvelopeBaseLimit = AOriginalItems.size() > CET_NEST_FULL_STRATEGY_ITEM_LIMIT
-				? CET_CLUSTER_ENVELOPE_FILL_LARGE_ORDER_MAX_BASE_CANDIDATES
-				: CET_CLUSTER_ENVELOPE_FILL_MAX_BASE_CANDIDATES;
+			const bool HasEllipseEnvelopeBase = std::any_of(EnvelopeBaseCandidates.begin(),
+				EnvelopeBaseCandidates.end(), [&](const TetClusterCandidate* Candidate) {
+					return IsFixedEllipseEnvelopeBase(*Candidate, AFeatures);
+				});
+			const std::size_t EnvelopeBaseLimit = HasEllipseEnvelopeBase
+				? (AOriginalItems.size() > CET_NEST_FULL_STRATEGY_ITEM_LIMIT
+					? CET_ELLIPSE_GAP_FILL_LARGE_ORDER_MAX_BASE_CANDIDATES
+					: CET_ELLIPSE_GAP_FILL_MAX_BASE_CANDIDATES)
+				: (AOriginalItems.size() > CET_NEST_FULL_STRATEGY_ITEM_LIMIT
+					? CET_CLUSTER_ENVELOPE_FILL_LARGE_ORDER_MAX_BASE_CANDIDATES
+					: CET_CLUSTER_ENVELOPE_FILL_MAX_BASE_CANDIDATES);
 			if (EnvelopeBaseCandidates.size() > EnvelopeBaseLimit) {
 				EnvelopeBaseCandidates.resize(EnvelopeBaseLimit);
 			}
@@ -1948,7 +2223,7 @@ namespace ET {
 				std::map<std::string, TetCircleGapTemplate>& GapTemplates =
 					CircleGapTemplateCache[BuildCircleGapTemplateCacheKey(*BaseCandidate)];
 				BuildEnvelopeFilledVariantsForBase(AOriginalItems, AFeatures, AOptions, *BaseCandidate,
-					EnvelopeConfig, GapTemplates, Variants, Stats);
+					EnvelopeConfig, GapTemplates, EllipseGapTemplateCache, Variants, Stats);
 				if (Variants.empty()) continue;
 				const TetClusterCandidate& BestVariant = Variants.front();
 				std::cout << "[TEMPLATE][ENVELOPE FILL] BaseType=" << BaseCandidate->ClusterType
@@ -2061,6 +2336,15 @@ namespace ET {
 			std::vector<TetClusterCandidate> AcceptedCandidates;
 			AcceptedCandidates.reserve(SortedCandidates.size());
 			for (const TetClusterCandidate& Candidate : SortedCandidates) {
+				const bool HasAcceptedEllipseEnvelope = std::any_of(AcceptedCandidates.begin(),
+					AcceptedCandidates.end(), [&](const TetClusterCandidate& Accepted) {
+						return IsCompletedEllipseEnvelopeFill(Accepted, AFeatures);
+					});
+				if (HasAcceptedEllipseEnvelope && Candidate.BuilderName == "TriangleBuilder") {
+					std::cout << "[TEMPLATE][DEFER] Builder=TriangleBuilder Type="
+						<< Candidate.ClusterType << " Reason=EllipseEnvelope" << std::endl;
+					continue;
+				}
 				TetClusterCandidate BoundCandidate;
 				if (!TryBindCandidateInventory(Candidate, AFeatures, AUsed, BoundCandidate)
 					|| !_CanAcceptClusterCandidate(AOriginalItems, AOptions, BoundCandidate, AUsed, Count)) {

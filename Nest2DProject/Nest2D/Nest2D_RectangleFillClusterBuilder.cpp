@@ -295,9 +295,19 @@ namespace ET {
                 std::vector<std::pair<double, double>> ProbePositions;
                 _BuildProbePositions(ProbeCtx, ProbePositions);
 
-                const std::size_t ProbeCount = AOriginalItems.size() > CET_NEST_FULL_STRATEGY_ITEM_LIMIT
-                    ? std::min(ProbePositions.size(), CET_RECTANGLE_FILL_LARGE_ORDER_MAX_PROBE_COUNT)
-                    : ProbePositions.size();
+                const std::size_t EllipseCount = static_cast<std::size_t>(std::count_if(
+                    ACurrentCandidate.Transforms.begin(), ACurrentCandidate.Transforms.end(),
+                    [&](const TetItemTransform& Transform) {
+                        return Transform.OriginalId >= 0
+                            && Transform.OriginalId < static_cast<int>(AFeatures.size())
+                            && AFeatures[Transform.OriginalId].ShapeType == MetShapeType::EllipseLike;
+                    }));
+                const bool HasDenseEllipseSkeleton = EllipseCount >= 8;
+                const std::size_t ProbeLimit = HasDenseEllipseSkeleton
+                    ? CET_ELLIPSE_GAP_FILL_DENSE_SKELETON_PROBE_COUNT
+                    : (AOriginalItems.size() > CET_NEST_FULL_STRATEGY_ITEM_LIMIT
+                        ? CET_RECTANGLE_FILL_LARGE_ORDER_MAX_PROBE_COUNT : ProbePositions.size());
+                const std::size_t ProbeCount = std::min(ProbePositions.size(), ProbeLimit);
 
                 for (std::size_t ProbeIndex = 0; ProbeIndex < ProbeCount; ++ProbeIndex) {
                     const auto& ProbePosition = ProbePositions[ProbeIndex];

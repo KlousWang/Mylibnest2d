@@ -47,6 +47,12 @@ constexpr std::size_t CET_CLUSTER_GLOBAL_REBALANCE_MAX_TRANSFERS = 6;
 constexpr long long CET_CLUSTER_GLOBAL_REBALANCE_MAX_SEARCH_TIME_MS = 600;
 constexpr double CET_ELLIPSE_SIZE_TOLERANCE = 0.05;
 constexpr double CET_ELLIPSE_HONEYCOMB_ROW_RATIO = 0.90;
+constexpr double CET_ELLIPSE_GAP_TEMPLATE_SIZE_TOLERANCE = 0.03;
+constexpr double CET_ELLIPSE_GAP_TEMPLATE_ANGLE_TOLERANCE = CET_CLUSTER_PI / 36.0;
+constexpr std::size_t CET_ELLIPSE_GAP_TEMPLATE_MAX_COPIES = 8;
+constexpr std::size_t CET_ELLIPSE_GAP_FILL_MAX_BASE_CANDIDATES = 12;
+constexpr std::size_t CET_ELLIPSE_GAP_FILL_LARGE_ORDER_MAX_BASE_CANDIDATES = 4;
+constexpr std::size_t CET_ELLIPSE_GAP_FILL_DENSE_SKELETON_PROBE_COUNT = 24;
 constexpr double CET_RECT_SIZE_TOLERANCE = 0.05;
 constexpr double CET_RECT_SQUARE_TOLERANCE = 0.01;
 constexpr double CET_RECT_MAX_AREA_LOSS_RATIO = 0.10;
@@ -483,6 +489,16 @@ struct TetCircleGapTemplate {
 };
 
 using TetCircleGapTemplateCache = std::map<std::string, std::map<std::string, TetCircleGapTemplate>>;
+
+struct TetEllipseGapTemplate {
+	double SourceAngle = 0.0;
+	double EnvelopeWidth = 0.0;
+	double EnvelopeHeight = 0.0;
+	std::size_t SkeletonChildCount = 0;
+	std::vector<TetItemTransform> Transforms;
+};
+
+using TetEllipseGapTemplateCache = std::map<std::string, TetEllipseGapTemplate>;
 
 
 // ============================================================================
