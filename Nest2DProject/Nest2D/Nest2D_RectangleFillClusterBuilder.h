@@ -57,6 +57,11 @@ namespace ET {
 
             void _BuildCircleProbePositions(const TetProbeContext& ACtx, std::vector<std::pair<double, double>>& AOutPositions) const;
 
+            void _BuildEllipseProbePositions(const TetProbeContext& ACtx, std::vector<std::pair<double, double>>& AOutPositions) const;
+
+            void _BuildEllipseNeighborLists(const std::vector<TetEllipseCenter>& ACenters,
+                std::vector<std::vector<std::size_t>>& AOutNeighbors) const;
+
             void _BuildChildContourProbePositions(const TetProbeContext& ACtx, std::vector<std::pair<double, double>>& AOutPositions) const;
         };
     }

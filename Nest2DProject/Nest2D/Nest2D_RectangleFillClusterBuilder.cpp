@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <unordered_set>
 #include <utility>
 
@@ -367,8 +368,15 @@ namespace ET {
                 return Transform.OriginalId >= 0 && Transform.OriginalId < static_cast<int>(ACtx.Features.size())
                     && ACtx.Features[Transform.OriginalId].ShapeType == MetShapeType::CircleLike;
                 });
+            const bool HasEllipseSkeleton = std::any_of(ACtx.Candidate.Transforms.begin(), ACtx.Candidate.Transforms.end(), [&](const TetItemTransform& Transform) {
+                return Transform.OriginalId >= 0 && Transform.OriginalId < static_cast<int>(ACtx.Features.size())
+                    && ACtx.Features[Transform.OriginalId].ShapeType == MetShapeType::EllipseLike;
+                });
             if (HasCircleSkeleton) {
                 _BuildCircleProbePositions(ACtx, AOutPositions);
+            }
+            if (HasEllipseSkeleton) {
+                _BuildEllipseProbePositions(ACtx, AOutPositions);
             }
 
             auto AddPosition = [&](double AX, double AY) {
@@ -384,7 +392,8 @@ namespace ET {
 			// Geometry-driven contact probes must precede the uniform grid. Large
 			// orders intentionally truncate the probe list, and putting the grid
 			// first starved left/right/bottom ellipse-corner positions.
-			const bool NeedsChildContourProbes = !HasCircleSkeleton
+			const bool NeedsChildContourProbes = HasEllipseSkeleton
+				|| (!HasCircleSkeleton && !HasEllipseSkeleton)
 				|| AOutPositions.size() < CET_CIRCLE_FILL_SPECIALIZED_PROBE_THRESHOLD;
 			if (NeedsChildContourProbes) {
 				_BuildChildContourProbePositions(ACtx, AOutPositions);
@@ -486,6 +495,101 @@ namespace ET {
                 ++TripleProbeCount;
             }
         }
+        void CetRectangleFillClusterBuilder::_BuildEllipseProbePositions(const TetProbeContext& ACtx, std::vector<std::pair<double, double>>& AOutPositions) const
+        {
+            std::vector<TetEllipseCenter> Centers;
+            CetClusterGeometryHelper Geometry;
+            for (const TetItemTransform& Transform : ACtx.Candidate.Transforms) {
+                if (Transform.OriginalId < 0 || Transform.OriginalId >= static_cast<int>(ACtx.Features.size())
+                    || ACtx.Features[Transform.OriginalId].ShapeType != MetShapeType::EllipseLike) continue;
+                const CetPath Contour = Geometry.TransformContour(Geometry.GetIdentityContour(
+                    ACtx.OriginalItems[Transform.OriginalId]), Transform.RelativeRotation,
+                    Transform.RelativeX, Transform.RelativeY);
+                double MinX = 0.0, MinY = 0.0, MaxX = 0.0, MaxY = 0.0;
+                if (Geometry.GetBounds(Contour, MinX, MinY, MaxX, MaxY)) {
+                    Centers.push_back({ (MinX + MaxX) * 0.5, (MinY + MaxY) * 0.5,
+                        (MaxX - MinX) * 0.5, (MaxY - MinY) * 0.5 });
+                }
+            }
+            const auto AddCentered = [&](double AX, double AY) {
+                _AppendProbePosition(AOutPositions, AX - ACtx.FillerWidth * 0.5,
+                    AY - ACtx.FillerHeight * 0.5, ACtx.MaxX, ACtx.MaxY);
+            };
+            std::vector<std::vector<std::size_t>> Neighbors;
+            _BuildEllipseNeighborLists(Centers, Neighbors);
+            std::size_t PairCount = 0;
+            for (std::size_t First = 0; First < Neighbors.size() && PairCount < CET_ELLIPSE_GAP_FILL_MAX_PAIR_PROBES; ++First) {
+                for (std::size_t Second : Neighbors[First]) {
+                    if (Second <= First) continue;
+                    const double DeltaX = Centers[Second].X - Centers[First].X;
+                    const double DeltaY = Centers[Second].Y - Centers[First].Y;
+                    const double Distance = std::hypot(DeltaX, DeltaY);
+                    if (Distance <= CET_RECTANGLE_FILL_POSITION_TOLERANCE) continue;
+                    const double NormalX = -DeltaY / Distance;
+                    const double NormalY = DeltaX / Distance;
+                    const double MidX = (Centers[First].X + Centers[Second].X) * 0.5;
+                    const double MidY = (Centers[First].Y + Centers[Second].Y) * 0.5;
+                    AddCentered(MidX, MidY);
+                    const double Offset = std::min({ Centers[First].HalfWidth, Centers[First].HalfHeight,
+                        Centers[Second].HalfWidth, Centers[Second].HalfHeight }) * 0.25;
+                    AddCentered(MidX + NormalX * Offset, MidY + NormalY * Offset);
+                    AddCentered(MidX - NormalX * Offset, MidY - NormalY * Offset);
+                    ++PairCount;
+                }
+            }
+            std::size_t TripleCount = 0;
+            for (std::size_t First = 0; First < Neighbors.size() && TripleCount < CET_ELLIPSE_GAP_FILL_MAX_TRIPLE_PROBES; ++First) {
+                const std::vector<std::size_t>& Local = Neighbors[First];
+                for (std::size_t Left = 0; Left < Local.size() && TripleCount < CET_ELLIPSE_GAP_FILL_MAX_TRIPLE_PROBES; ++Left) {
+                    for (std::size_t Right = Left + 1; Right < Local.size() && TripleCount < CET_ELLIPSE_GAP_FILL_MAX_TRIPLE_PROBES; ++Right) {
+                        const std::size_t Second = Local[Left], Third = Local[Right];
+                        const double Cross = (Centers[Second].X - Centers[First].X) * (Centers[Third].Y - Centers[First].Y)
+                            - (Centers[Second].Y - Centers[First].Y) * (Centers[Third].X - Centers[First].X);
+                        if (std::abs(Cross) <= CET_RECTANGLE_FILL_POSITION_TOLERANCE) continue;
+                        AddCentered((Centers[First].X + Centers[Second].X + Centers[Third].X) / 3.0,
+                            (Centers[First].Y + Centers[Second].Y + Centers[Third].Y) / 3.0);
+                        ++TripleCount;
+                    }
+                }
+            }
+        }
+        void CetRectangleFillClusterBuilder::_BuildEllipseNeighborLists(
+            const std::vector<TetEllipseCenter>& ACenters,
+            std::vector<std::vector<std::size_t>>& AOutNeighbors) const
+        {
+            double MaxExtent = 0.0;
+            for (const TetEllipseCenter& Center : ACenters) {
+                MaxExtent = std::max(MaxExtent, std::max(Center.HalfWidth, Center.HalfHeight));
+            }
+            const double CellSize = std::max(1.0, MaxExtent * 2.0);
+            std::map<std::pair<long long, long long>, std::vector<std::size_t>> Grid;
+            for (std::size_t Index = 0; Index < ACenters.size(); ++Index) {
+                Grid[{ static_cast<long long>(std::floor(ACenters[Index].X / CellSize)),
+                    static_cast<long long>(std::floor(ACenters[Index].Y / CellSize)) }].push_back(Index);
+            }
+            AOutNeighbors.assign(ACenters.size(), {});
+            for (std::size_t First = 0; First < ACenters.size(); ++First) {
+                std::vector<std::pair<double, std::size_t>> Ranked;
+                const long long CellX = static_cast<long long>(std::floor(ACenters[First].X / CellSize));
+                const long long CellY = static_cast<long long>(std::floor(ACenters[First].Y / CellSize));
+                const double Reach = std::max(ACenters[First].HalfWidth, ACenters[First].HalfHeight) * 5.0;
+                for (long long Y = CellY - 2; Y <= CellY + 2; ++Y) for (long long X = CellX - 2; X <= CellX + 2; ++X) {
+                    const auto It = Grid.find({ X, Y });
+                    if (It == Grid.end()) continue;
+                    for (std::size_t Second : It->second) {
+                        if (First == Second) continue;
+                        const double Distance = std::hypot(ACenters[Second].X - ACenters[First].X,
+                            ACenters[Second].Y - ACenters[First].Y);
+                        if (Distance <= Reach + std::max(ACenters[Second].HalfWidth, ACenters[Second].HalfHeight) * 2.0) {
+                            Ranked.push_back({ Distance, Second });
+                        }
+                    }
+                }
+                std::stable_sort(Ranked.begin(), Ranked.end());
+                if (Ranked.size() > CET_ELLIPSE_GAP_FILL_MAX_NEIGHBORS) Ranked.resize(CET_ELLIPSE_GAP_FILL_MAX_NEIGHBORS);
+                for (const auto& Entry : Ranked) AOutNeighbors[First].push_back(Entry.second);
+            }
+        }
         void CetRectangleFillClusterBuilder::_BuildChildContourProbePositions(const TetProbeContext& ACtx, std::vector<std::pair<double, double>>& AOutPositions) const
         {
             std::vector<double> XEvents{ 0.0, ACtx.MaxX };
@@ -495,7 +599,7 @@ namespace ET {
                 if (!std::isfinite(AValue) || AValue < -CET_RECTANGLE_FILL_POSITION_TOLERANCE || AValue > AMaximum + CET_RECTANGLE_FILL_POSITION_TOLERANCE) {
                     return;
                 }
-                const double Quantized = std::llround(std::clamp(AValue, 0.0, AMaximum));
+				const double Quantized = std::clamp(AValue, 0.0, AMaximum);
                 for (double Existing : AEvents) {
                     if (std::abs(Existing - Quantized) <= CET_RECTANGLE_FILL_POSITION_TOLERANCE) {
                         return;
@@ -603,8 +707,8 @@ namespace ET {
                 return;
             }
 
-            const double QuantizedX = std::llround(std::clamp(AX, 0.0, AMaxX));
-            const double QuantizedY = std::llround(std::clamp(AY, 0.0, AMaxY));
+			const double QuantizedX = std::clamp(AX, 0.0, AMaxX);
+			const double QuantizedY = std::clamp(AY, 0.0, AMaxY);
             for (const auto& Existing : APositions){
                 if (std::abs(Existing.first - QuantizedX) <= CET_RECTANGLE_FILL_POSITION_TOLERANCE && std::abs(Existing.second - QuantizedY) <= CET_RECTANGLE_FILL_POSITION_TOLERANCE){
                     return;

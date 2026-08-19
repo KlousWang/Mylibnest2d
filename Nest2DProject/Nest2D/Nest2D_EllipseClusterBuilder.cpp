@@ -279,8 +279,25 @@ namespace ET {
                 return;
             }
             const std::size_t OldCandidateCount = AOut.size();
-            for (const std::vector<int>& Group : Groups){
-                _BuildSameSizeClusterCandidates(AItems, AFeatures, Group, AOptions, AOut);
+            for (std::size_t GroupIndex = 0; GroupIndex < Groups.size(); ++GroupIndex){
+                const std::vector<int>& Group = Groups[GroupIndex];
+                std::vector<int> ClusterIndices = Group;
+                const double GroupSize = Group.empty() ? 0.0 : AFeatures[Group.front()].EllipseMajorAxis;
+                bool HasLargerFamily = false;
+                for (std::size_t LargerIndex = GroupIndex + 1; LargerIndex < Groups.size(); ++LargerIndex){
+                    const std::vector<int>& LargerGroup = Groups[LargerIndex];
+                    if (!LargerGroup.empty() && GroupSize > 0.0
+                        && AFeatures[LargerGroup.front()].EllipseMajorAxis >= GroupSize * CET_ELLIPSE_FILLER_MIN_SIZE_RATIO){
+                        HasLargerFamily = true;
+                        break;
+                    }
+                }
+                if (HasLargerFamily && ClusterIndices.size() >= CET_ELLIPSE_FILLER_SINGLE_RESERVE_MIN * 2){
+                    const std::size_t ReserveCount = std::min(CET_ELLIPSE_FILLER_SINGLE_RESERVE_MAX,
+                        std::max(CET_ELLIPSE_FILLER_SINGLE_RESERVE_MIN, ClusterIndices.size() / 4));
+                    if (ClusterIndices.size() > ReserveCount) ClusterIndices.resize(ClusterIndices.size() - ReserveCount);
+                }
+                _BuildSameSizeClusterCandidates(AItems, AFeatures, ClusterIndices, AOptions, AOut);
             }
             std::cout << "[ELLIPSE][BUILD CANDIDATES] GroupCount = " << Groups.size() << ", NewCandidateCount = " << AOut.size() - OldCandidateCount << std::endl;
         }
@@ -313,6 +330,19 @@ namespace ET {
 
                 AOut.push_back(std::move(BestCandidate));
                 std::cout << "[ELLIPSE][CANDIDATE] Size = " << BestCount << ", Type = " << AOut.back().ClusterType << ", Score = " << AOut.back().Score << std::endl;
+
+                // Keep one smaller skeleton alternative.  It gives the
+                // selector a chance to preserve a few ellipses for later
+                // envelope filling when the largest layout is too rigid.
+                if (BestCount >= 4){
+                    const std::size_t AlternateCount = BestCount - 2;
+                    std::vector<int> AlternateIndices(Remaining.begin(),
+                        Remaining.begin() + static_cast<std::vector<int>::difference_type>(AlternateCount));
+                    TetClusterCandidate AlternateCandidate;
+                    if (_BuildClusterCandidate(AItems, AFeatures, AlternateIndices, AOptions, AlternateCandidate)){
+                        AOut.push_back(std::move(AlternateCandidate));
+                    }
+                }
 
                 Remaining.erase(Remaining.begin(),Remaining.begin() + static_cast<std::vector<int>::difference_type>(BestCount));
             }
