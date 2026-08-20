@@ -416,12 +416,9 @@ namespace ET {
             while (Remaining.size() >= 2){
                 const std::size_t PreferredCount = BoardCapacity >= CET_CIRCLE_PERIODIC_MIN_CHILD_COUNT
                     ? std::min(BoardCapacity, Remaining.size()) : Remaining.size();
-                std::vector<std::size_t> Counts{ PreferredCount };
-                if (PreferredCount != Remaining.size()) Counts.push_back(Remaining.size());
                 TetClusterCandidate BestCandidate;
                 std::size_t BestCount = 0;
-                for (std::size_t Count : Counts){
-                    if (Count < 2) continue;
+                for (std::size_t Count = PreferredCount; Count >= 2; --Count){
                     std::vector<int> TrialIndices(Remaining.begin(), Remaining.begin() + static_cast<std::vector<int>::difference_type>(Count));
                     TetClusterCandidate TrialCandidate;
                     if (_BuildClusterCandidate(AOriginalItems, AFeatures, TrialIndices, AOptions, TrialCandidate)){
@@ -429,10 +426,11 @@ namespace ET {
                         BestCandidate = std::move(TrialCandidate);
                         break;
                     }
+                    std::cout << "[FRAME][CIRCLE] Rejected ChildCount=" << Count << std::endl;
                 }
                 if (BestCount < 2) return;
                 AOutCandidates.push_back(std::move(BestCandidate));
-                std::cout << "[CIRCLE][PERIODIC LATTICE] BoardCapacity=" << BoardCapacity
+                std::cout << "[FRAME][CIRCLE] Accepted BoardCapacity=" << BoardCapacity
                     << ", ChildCount=" << BestCount << std::endl;
                 Remaining.erase(Remaining.begin(), Remaining.begin() + static_cast<std::vector<int>::difference_type>(BestCount));
             }
