@@ -56,15 +56,16 @@ constexpr std::size_t CET_ELLIPSE_GAP_TEMPLATE_MAX_COPIES = 8;
 constexpr std::size_t CET_ELLIPSE_GAP_FILL_MAX_BASE_CANDIDATES = 12;
 constexpr std::size_t CET_ELLIPSE_GAP_FILL_LARGE_ORDER_MAX_BASE_CANDIDATES = 4;
 constexpr std::size_t CET_ELLIPSE_GAP_FILL_DENSE_SKELETON_PROBE_COUNT = 96;
-constexpr std::size_t CET_ELLIPSE_GAP_FILL_FREE_REGION_PROBE_COUNT = 256;
+constexpr std::size_t CET_ELLIPSE_GAP_FILL_FREE_REGION_PROBE_COUNT = 64;
 constexpr std::size_t CET_ELLIPSE_GAP_FILL_MAX_NEIGHBORS = 6;
 constexpr std::size_t CET_ELLIPSE_GAP_FILL_MAX_PAIR_PROBES = 64;
 constexpr std::size_t CET_ELLIPSE_GAP_FILL_MAX_TRIPLE_PROBES = 64;
-constexpr std::size_t CET_ELLIPSE_GAP_FILL_MAX_WINDOWS = 12;
-constexpr std::size_t CET_ELLIPSE_GAP_FILL_MAX_ATTEMPTS = 32;
-constexpr long long CET_ELLIPSE_GAP_FILL_MAX_TIME_MS = 80;
-constexpr long long CET_ELLIPSE_GAP_FILL_TOTAL_TIME_MS = 400;
-constexpr long long CET_ELLIPSE_GAP_FILL_GENERIC_TIME_MS = 800;
+constexpr std::size_t CET_ELLIPSE_GAP_FILL_MAX_WINDOWS = 128;
+constexpr std::size_t CET_ELLIPSE_GAP_FILL_MAX_ATTEMPTS = 256;
+constexpr std::size_t CET_ELLIPSE_GAP_FILL_MAX_COMPOSITE_DEPTH = 8;
+constexpr long long CET_ELLIPSE_GAP_FILL_MAX_TIME_MS = 180;
+constexpr long long CET_ELLIPSE_GAP_FILL_TOTAL_TIME_MS = 4000;
+constexpr long long CET_ELLIPSE_GAP_FILL_GENERIC_TIME_MS = 2500;
 constexpr double CET_RECT_SIZE_TOLERANCE = 0.05;
 constexpr double CET_RECT_SQUARE_TOLERANCE = 0.01;
 constexpr double CET_RECT_MAX_AREA_LOSS_RATIO = 0.10;
@@ -511,6 +512,13 @@ struct TetEllipseGapTemplate {
 };
 
 using TetEllipseGapTemplateCache = std::map<std::string, TetEllipseGapTemplate>;
+
+struct TetEllipseGapWindowTemplate {
+    TetCircleGapWindow Source;
+    std::vector<TetItemTransform> Transforms;
+};
+
+using TetEllipseGapWindowTemplateCache = std::map<std::string, TetEllipseGapWindowTemplate>;
 
 
 // ============================================================================

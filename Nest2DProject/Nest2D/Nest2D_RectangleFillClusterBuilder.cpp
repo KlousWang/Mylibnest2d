@@ -307,8 +307,17 @@ namespace ET {
                 if (HasDenseEllipseSkeleton) {
                     std::vector<std::pair<double, double>> FreeRegionPositions;
                     _BuildFreeRegionProbePositions(ProbeCtx, AFreeRegions, FreeRegionPositions);
-                    FreeRegionPositions.insert(FreeRegionPositions.end(), ProbePositions.begin(), ProbePositions.end());
-                    ProbePositions = std::move(FreeRegionPositions);
+                    // Keep both generic and contour-contact probes. The exact
+                    // free-region vertices cover narrow pockets that a regular
+                    // ellipse grid cannot represent.
+                    const std::size_t FillerCount = ACurrentCandidate.Transforms.size()
+                        - std::min(ACurrentCandidate.SkeletonChildCount, ACurrentCandidate.Transforms.size());
+                    if (FillerCount >= CET_ELLIPSE_GAP_FILL_MAX_COMPOSITE_DEPTH) {
+                        FreeRegionPositions.insert(FreeRegionPositions.end(), ProbePositions.begin(), ProbePositions.end());
+                        ProbePositions = std::move(FreeRegionPositions);
+                    } else {
+                        ProbePositions.insert(ProbePositions.end(), FreeRegionPositions.begin(), FreeRegionPositions.end());
+                    }
                 }
                 const std::size_t ProbeLimit = HasDenseEllipseSkeleton
                     ? CET_ELLIPSE_GAP_FILL_FREE_REGION_PROBE_COUNT
@@ -336,6 +345,11 @@ namespace ET {
                     if (!_IsContourInsideFreeRegions(FillerContour, AFreeRegions)
                         || !Geometry.CanAppendTransformWithSpacing(AOriginalItems, AOptions, ACurrentCandidate.Transforms, FillerTransform)) {
                         continue;
+                    }
+
+                    if (HasDenseEllipseSkeleton) {
+                        AOutTransform = FillerTransform;
+                        return true;
                     }
 
                     const double PlacementScore = _CalculatePlacementScore(AOriginalItems, ACurrentCandidate, PositionX, PositionY, PositionX + FillerWidth, PositionY + FillerHeight, RequiredGap);
