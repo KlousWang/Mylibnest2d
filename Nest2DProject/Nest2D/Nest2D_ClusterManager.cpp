@@ -1138,6 +1138,145 @@ bool TryRemoveInventoryFiller(const CetTNestItemVector& AOriginalItems,
 	return true;
 }
 
+bool IsTriangleBuilderCandidate(const TetClusterCandidate& ACandidate)
+{
+	return ACandidate.Valid && ACandidate.BuilderName == "TriangleBuilder"
+		&& ACandidate.OriginalIndices.size() == ACandidate.Transforms.size()
+		&& ACandidate.OriginalIndices.size() >= 4;
+}
+
+bool IsDeferredTriangleCandidate(const TetClusterCandidate& ACandidate)
+{
+	return ACandidate.BuilderName == "TriangleBuilder";
+}
+
+bool HasFilledEllipseCandidate(const std::vector<TetClusterCandidate>& ACandidates)
+{
+	for (const TetClusterCandidate& Candidate : ACandidates) {
+		if (Candidate.ClusterType.find("Ellipse") != std::string::npos
+			&& Candidate.OriginalIndices.size() > Candidate.SkeletonChildCount) return true;
+	}
+	return false;
+}
+
+bool HasExactCandidateInventory(const TetClusterCandidate& ACandidate,
+	const std::vector<int>& AExpectedIndices)
+{
+	if (!ACandidate.Valid || ACandidate.OriginalIndices.size() != AExpectedIndices.size()
+		|| ACandidate.Transforms.size() != AExpectedIndices.size()) return false;
+	std::set<int> Actual(ACandidate.OriginalIndices.begin(), ACandidate.OriginalIndices.end());
+	std::set<int> Expected(AExpectedIndices.begin(), AExpectedIndices.end());
+	return Actual == Expected && Actual.size() == AExpectedIndices.size();
+}
+
+bool IsInventoryTransferWorthKeeping(const TetClusterCandidate& ATargetBefore,
+	const TetClusterCandidate& ATargetAfter, const TetClusterCandidate& ASourceBefore,
+	const TetClusterCandidate& ASourceAfter);
+
+bool TryBuildReducedTriangleCandidate(const CetTNestItemVector& AOriginalItems,
+	const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions,
+	const TetClusterCandidate& ASourceCandidate, const std::set<int>& ARemovedIds,
+	TetClusterCandidate& AOutCandidate)
+{
+	AOutCandidate = TetClusterCandidate{};
+	std::vector<int> Remaining;
+	for (int OriginalId : ASourceCandidate.OriginalIndices) {
+		if (ARemovedIds.find(OriginalId) == ARemovedIds.end()) Remaining.push_back(OriginalId);
+	}
+	if (Remaining.size() < 2) return false;
+	ET::NEST2DMANAGERLIB::CetTriangleClusterBuilder Builder;
+	std::vector<TetClusterCandidate> Candidates;
+	Builder.BuildCandidates(AOriginalItems, AFeatures, Remaining, AOptions, Candidates);
+	for (const TetClusterCandidate& Candidate : Candidates) {
+		if (HasExactCandidateInventory(Candidate, Remaining)) {
+			AOutCandidate = Candidate;
+			PreserveInventoryProxy(ASourceCandidate, AOutCandidate);
+			AOutCandidate.BuilderName = "GlobalInventoryRebalance";
+			AOutCandidate.ClusterType = ASourceCandidate.ClusterType + "_Reduced";
+			return true;
+		}
+	}
+	return false;
+}
+
+bool IsTriangleTransferWorthKeeping(const TetClusterCandidate& ATargetBefore,
+	const TetClusterCandidate& ATargetAfter, const TetClusterCandidate& ASourceBefore,
+	const TetClusterCandidate& ASourceAfter);
+
+bool TryTransferTrianglePair(const CetTNestItemVector& AOriginalItems,
+	const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions,
+	const TetClusterCandidate& ATargetBefore, const TetClusterCandidate& ASourceBefore,
+	TetClusterCandidate& AOutTarget, TetClusterCandidate& AOutSource,
+	std::pair<int, int>& AOutPair)
+{
+	const std::size_t ItemCount = ASourceBefore.OriginalIndices.size();
+	for (std::size_t First = ItemCount - 2; ; --First) {
+		for (std::size_t Second = ItemCount - 1; Second > First; --Second) {
+			const int FirstId = ASourceBefore.OriginalIndices[First];
+			const int SecondId = ASourceBefore.OriginalIndices[Second];
+			TetClusterCandidate ExpandedTarget;
+			if (!TryAppendInventoryFiller(AOriginalItems, AFeatures, AOptions,
+				ATargetBefore, FirstId, ExpandedTarget)) {
+				continue;
+			}
+			TetClusterCandidate ExpandedTargetPair;
+			if (!TryAppendInventoryFiller(AOriginalItems, AFeatures, AOptions,
+				ExpandedTarget, SecondId, ExpandedTargetPair)) {
+				std::cout << "[TEMPLATE][TRIANGLE TRANSFER PROBE] Pair="
+					<< FirstId << "," << SecondId << " SecondAppend=reject" << std::endl;
+				continue;
+			}
+			const std::set<int> RemovedIds = { FirstId, SecondId };
+			TetClusterCandidate ReducedSource;
+			if (!TryBuildReducedTriangleCandidate(AOriginalItems, AFeatures, AOptions,
+				ASourceBefore, RemovedIds, ReducedSource)) {
+				std::cout << "[TEMPLATE][TRIANGLE TRANSFER PROBE] Pair="
+					<< FirstId << "," << SecondId << " ReducedSource=reject" << std::endl;
+				continue;
+			}
+			if (!IsTriangleTransferWorthKeeping(ATargetBefore, ExpandedTargetPair,
+				ASourceBefore, ReducedSource)) {
+				std::cout << "[TEMPLATE][TRIANGLE TRANSFER PROBE] Pair="
+					<< FirstId << "," << SecondId << " Gain=reject" << std::endl;
+				continue;
+			}
+			AOutTarget = std::move(ExpandedTargetPair);
+			AOutSource = std::move(ReducedSource);
+			AOutPair = { FirstId, SecondId };
+			return true;
+		}
+		if (First == 0) break;
+	}
+	return false;
+}
+
+bool IsTransferPairGloballyUnique(const std::vector<TetClusterCandidate>& AAcceptedCandidates,
+	std::size_t ASourceIndex, const std::pair<int, int>& APair)
+{
+	for (std::size_t CandidateIndex = 0; CandidateIndex < AAcceptedCandidates.size(); ++CandidateIndex) {
+		if (CandidateIndex == ASourceIndex) continue;
+		for (int OriginalId : AAcceptedCandidates[CandidateIndex].OriginalIndices) {
+			if (OriginalId == APair.first || OriginalId == APair.second) return false;
+		}
+	}
+	return APair.first >= 0 && APair.second >= 0 && APair.first != APair.second;
+}
+
+bool IsTriangleTransferWorthKeeping(const TetClusterCandidate& ATargetBefore,
+	const TetClusterCandidate& ATargetAfter, const TetClusterCandidate& ASourceBefore,
+	const TetClusterCandidate& ASourceAfter)
+{
+	if (ATargetAfter.RealArea <= ATargetBefore.RealArea) return false;
+	const double TotalBefore = ATargetBefore.ProxyWasteArea + ASourceBefore.ProxyWasteArea;
+	const double TotalAfter = ATargetAfter.ProxyWasteArea + ASourceAfter.ProxyWasteArea;
+	const double Tolerance = std::max(1.0, ATargetBefore.ProxyArea
+		* CET_CLUSTER_GEOMETRY_RELATIVE_AREA_TOLERANCE);
+	std::cout << "[TEMPLATE][TRIANGLE TRANSFER METRIC] TargetArea="
+		<< ATargetBefore.RealArea << "->" << ATargetAfter.RealArea
+		<< " Waste=" << TotalBefore << "->" << TotalAfter << std::endl;
+	return TotalAfter <= TotalBefore + Tolerance;
+}
+
 bool IsInventoryTransferWorthKeeping(const TetClusterCandidate& ATargetBefore,
 	const TetClusterCandidate& ATargetAfter, const TetClusterCandidate& ASourceBefore,
 	const TetClusterCandidate& ASourceAfter)
@@ -1229,6 +1368,33 @@ void RebalanceAcceptedClusterInventory(const CetTNestItemVector& AOriginalItems,
 					<< " Target=" << TargetIndex << " Filler=" << OriginalId << std::endl;
 				break;
 			}
+		}
+	}
+	const auto TriangleTransferStart = std::chrono::steady_clock::now();
+	for (std::size_t TargetIndex : Targets) {
+		if (Transfers >= CET_CLUSTER_GLOBAL_REBALANCE_MAX_TRANSFERS
+			|| CircleGapSearchTimeReached(TriangleTransferStart, CET_CLUSTER_GLOBAL_REBALANCE_MAX_SEARCH_TIME_MS)) break;
+		if (!IsInventoryRebalanceCandidate(AAcceptedCandidates[TargetIndex])) continue;
+		for (std::size_t SourceIndex = 0; SourceIndex < AAcceptedCandidates.size(); ++SourceIndex) {
+			if (TargetIndex == SourceIndex || !IsTriangleBuilderCandidate(AAcceptedCandidates[SourceIndex])) continue;
+			TetClusterCandidate ExpandedTarget;
+			TetClusterCandidate ReducedSource;
+			std::pair<int, int> MovedPair = { -1, -1 };
+			if (!TryTransferTrianglePair(AOriginalItems, AFeatures, AOptions,
+				AAcceptedCandidates[TargetIndex], AAcceptedCandidates[SourceIndex],
+				ExpandedTarget, ReducedSource, MovedPair)) continue;
+			if (!IsTransferPairGloballyUnique(AAcceptedCandidates, SourceIndex, MovedPair)) {
+			std::cout << "[TEMPLATE][TRIANGLE TRANSFER] Pair=" << MovedPair.first
+				<< "," << MovedPair.second << " DuplicateInventory=reject" << std::endl;
+			continue;
+		}
+			AAcceptedCandidates[TargetIndex] = std::move(ExpandedTarget);
+			AAcceptedCandidates[SourceIndex] = std::move(ReducedSource);
+			++Transfers;
+			std::cout << "[TEMPLATE][TRIANGLE TRANSFER] Source=" << SourceIndex
+				<< " Target=" << TargetIndex << " Fillers="
+				<< MovedPair.first << "," << MovedPair.second << std::endl;
+			break;
 		}
 	}
 }
@@ -2559,10 +2725,15 @@ namespace ET {
 
 			std::cout << "[TEMPLATE][BASE CANDIDATE TOTAL] " << SortedCandidates.size() << std::endl;
 
-			std::vector<TetClusterCandidate> AcceptedCandidates;
-			AcceptedCandidates.reserve(SortedCandidates.size());
-			for (const TetClusterCandidate& Candidate : SortedCandidates) {
-				TetClusterCandidate BoundCandidate;
+		std::vector<TetClusterCandidate> AcceptedCandidates;
+		AcceptedCandidates.reserve(SortedCandidates.size());
+		std::vector<TetClusterCandidate> DeferredTriangles;
+		for (const TetClusterCandidate& Candidate : SortedCandidates) {
+			if (IsDeferredTriangleCandidate(Candidate)) {
+				DeferredTriangles.push_back(Candidate);
+				continue;
+			}
+			TetClusterCandidate BoundCandidate;
 				if (!TryBindCandidateInventory(Candidate, AFeatures, AUsed, BoundCandidate)
 					|| !_CanAcceptClusterCandidate(AOriginalItems, AOptions, BoundCandidate, AUsed, Count)) {
 					std::cout << "[TEMPLATE][REJECT] Builder=" << Candidate.BuilderName << " Type=" << Candidate.ClusterType << " Score=" << Candidate.Score << std::endl;
@@ -2578,6 +2749,28 @@ namespace ET {
 			}
 
 			RebalanceAcceptedClusterInventory(AOriginalItems, AFeatures, AOptions, AcceptedCandidates, AUsed);
+		const bool DeferRemainingTriangles = HasFilledEllipseCandidate(AcceptedCandidates);
+		for (const TetClusterCandidate& Candidate : DeferredTriangles) {
+			if (DeferRemainingTriangles) {
+				std::cout << "[TEMPLATE][DEFERRED TRIANGLE SINGLE] Type="
+					<< Candidate.ClusterType << std::endl;
+				continue;
+			}
+			TetClusterCandidate BoundCandidate;
+			if (!TryBindCandidateInventory(Candidate, AFeatures, AUsed, BoundCandidate)
+				|| !_CanAcceptClusterCandidate(AOriginalItems, AOptions, BoundCandidate, AUsed, Count)) {
+				std::cout << "[TEMPLATE][DEFERRED TRIANGLE REJECT] Type="
+					<< Candidate.ClusterType << std::endl;
+				continue;
+			}
+			AcceptedCandidates.push_back(std::move(BoundCandidate));
+			for (int OriginalIndex : AcceptedCandidates.back().OriginalIndices) {
+				AUsed[OriginalIndex] = true;
+			}
+			std::cout << "[TEMPLATE][DEFERRED TRIANGLE ACCEPT] Type="
+				<< Candidate.ClusterType << " ChildCount="
+				<< Candidate.OriginalIndices.size() << std::endl;
+		}
 			return AcceptedCandidates;
 		}
 

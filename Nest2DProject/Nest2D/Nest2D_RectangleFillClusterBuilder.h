@@ -62,6 +62,10 @@ namespace ET {
             void _BuildEllipseNeighborLists(const std::vector<TetEllipseCenter>& ACenters,
                 std::vector<std::vector<std::size_t>>& AOutNeighbors) const;
 
+            void _BuildFreeRegionProbePositions(const TetProbeContext& ACtx,
+                const std::vector<TetClusterFreeRegion>& AFreeRegions,
+                std::vector<std::pair<double, double>>& AOutPositions) const;
+
             void _BuildChildContourProbePositions(const TetProbeContext& ACtx, std::vector<std::pair<double, double>>& AOutPositions) const;
         };
     }

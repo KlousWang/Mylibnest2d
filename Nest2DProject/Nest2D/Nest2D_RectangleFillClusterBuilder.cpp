@@ -304,8 +304,14 @@ namespace ET {
                             && AFeatures[Transform.OriginalId].ShapeType == MetShapeType::EllipseLike;
                     }));
                 const bool HasDenseEllipseSkeleton = EllipseCount >= 8;
+                if (HasDenseEllipseSkeleton) {
+                    std::vector<std::pair<double, double>> FreeRegionPositions;
+                    _BuildFreeRegionProbePositions(ProbeCtx, AFreeRegions, FreeRegionPositions);
+                    FreeRegionPositions.insert(FreeRegionPositions.end(), ProbePositions.begin(), ProbePositions.end());
+                    ProbePositions = std::move(FreeRegionPositions);
+                }
                 const std::size_t ProbeLimit = HasDenseEllipseSkeleton
-                    ? CET_ELLIPSE_GAP_FILL_DENSE_SKELETON_PROBE_COUNT
+                    ? CET_ELLIPSE_GAP_FILL_FREE_REGION_PROBE_COUNT
                     : (AOriginalItems.size() > CET_NEST_FULL_STRATEGY_ITEM_LIMIT
                         ? CET_RECTANGLE_FILL_LARGE_ORDER_MAX_PROBE_COUNT : ProbePositions.size());
                 const std::size_t ProbeCount = std::min(ProbePositions.size(), ProbeLimit);
@@ -588,6 +594,36 @@ namespace ET {
                 std::stable_sort(Ranked.begin(), Ranked.end());
                 if (Ranked.size() > CET_ELLIPSE_GAP_FILL_MAX_NEIGHBORS) Ranked.resize(CET_ELLIPSE_GAP_FILL_MAX_NEIGHBORS);
                 for (const auto& Entry : Ranked) AOutNeighbors[First].push_back(Entry.second);
+            }
+        }
+        void CetRectangleFillClusterBuilder::_BuildFreeRegionProbePositions(const TetProbeContext& ACtx,
+            const std::vector<TetClusterFreeRegion>& AFreeRegions,
+            std::vector<std::pair<double, double>>& AOutPositions) const
+        {
+            AOutPositions.clear();
+            const auto Append = [&](double AX, double AY) {
+                if (!std::isfinite(AX) || !std::isfinite(AY) || AX < 0.0 || AY < 0.0
+                    || AX > ACtx.MaxX || AY > ACtx.MaxY
+                    || AOutPositions.size() >= CET_ELLIPSE_GAP_FILL_FREE_REGION_PROBE_COUNT) return;
+                for (const auto& Existing : AOutPositions) {
+                    if (std::abs(Existing.first - AX) <= CET_RECTANGLE_FILL_POSITION_TOLERANCE
+                        && std::abs(Existing.second - AY) <= CET_RECTANGLE_FILL_POSITION_TOLERANCE) return;
+                }
+                AOutPositions.emplace_back(AX, AY);
+            };
+            const auto AddContour = [&](const CetPath& AContour) {
+                if (AContour.empty()) return;
+                const std::size_t Step = std::max<std::size_t>(1, AContour.size() / 4);
+                for (std::size_t Index = 0; Index < AContour.size(); Index += Step) {
+                    for (const ClipperLib::IntPoint& FillerVertex : ACtx.RotatedFiller) {
+                        Append(static_cast<double>(AContour[Index].X - FillerVertex.X) + ACtx.FillerMinX,
+                            static_cast<double>(AContour[Index].Y - FillerVertex.Y) + ACtx.FillerMinY);
+                    }
+                }
+            };
+            for (const TetClusterFreeRegion& Region : AFreeRegions) {
+                for (const CetPath& Hole : Region.Holes) AddContour(Hole);
+                AddContour(Region.Contour);
             }
         }
         void CetRectangleFillClusterBuilder::_BuildChildContourProbePositions(const TetProbeContext& ACtx, std::vector<std::pair<double, double>>& AOutPositions) const
