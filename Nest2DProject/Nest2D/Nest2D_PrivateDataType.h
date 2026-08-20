@@ -63,6 +63,7 @@ constexpr std::size_t CET_ELLIPSE_GAP_FILL_MAX_TRIPLE_PROBES = 64;
 constexpr std::size_t CET_ELLIPSE_GAP_FILL_MAX_WINDOWS = 128;
 constexpr std::size_t CET_ELLIPSE_GAP_FILL_MAX_ATTEMPTS = 256;
 constexpr std::size_t CET_ELLIPSE_GAP_FILL_MAX_COMPOSITE_DEPTH = 8;
+constexpr std::size_t CET_ELLIPSE_GAP_FILL_MAX_TEMPLATE_DEPTH = 32;
 constexpr long long CET_ELLIPSE_GAP_FILL_MAX_TIME_MS = 180;
 constexpr long long CET_ELLIPSE_GAP_FILL_TOTAL_TIME_MS = 4000;
 constexpr long long CET_ELLIPSE_GAP_FILL_GENERIC_TIME_MS = 2500;

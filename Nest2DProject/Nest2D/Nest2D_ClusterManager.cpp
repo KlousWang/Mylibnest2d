@@ -1633,7 +1633,7 @@ bool SearchEllipseGapWindow(const CetTNestItemVector& AOriginalItems, const std:
 	ET::NEST2DMANAGERLIB::CetClusterGeometryHelper Geometry;
 	ET::NEST2DMANAGERLIB::CetRectangleFillClusterBuilder Builder;
 	std::size_t Attempts = 0;
-	const std::size_t MaxDepth = std::min<std::size_t>(1, AConfig.MaxDepth);
+	const std::size_t MaxDepth = std::min(CET_ELLIPSE_GAP_FILL_MAX_TEMPLATE_DEPTH, AConfig.MaxDepth);
 	for (std::size_t Depth = 0; Depth < MaxDepth && !Beam.empty(); ++Depth) {
 		Next.clear();
 		for (const TetClusterFillSearchState& State : Beam) {
@@ -1698,6 +1698,44 @@ bool TryCopyEllipseGapWindowTemplate(const CetTNestItemVector& AOriginalItems,
 	return true;
 }
 
+void CollectEllipseGapGroups(const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions,
+	const TetClusterCandidate& ACandidate, const std::vector<TetCircleGapWindow>& AWindows,
+	std::vector<std::vector<TetCircleGapWindow>>& AOutGroups)
+{
+	AOutGroups.clear();
+	std::map<std::string, std::size_t> GroupIndices;
+	for (const TetCircleGapWindow& Window : AWindows) {
+		std::string Signature;
+		if (!BuildEllipseGapRegionSignature(AOriginalItems, AOptions, ACandidate, Window, Signature)) continue;
+		const auto Result = GroupIndices.emplace(Signature, AOutGroups.size());
+		if (Result.second) AOutGroups.push_back({});
+		AOutGroups[Result.first->second].push_back(Window);
+	}
+}
+
+bool BuildCompleteEllipseGapTemplate(const CetTNestItemVector& AOriginalItems,
+	const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions,
+	const TetClusterCandidate& ABaseCandidate, const TetClusterCandidate& AEnvelopeCandidate,
+	const TetClusterFillSearchConfig& AConfig, const TetClusterFillSearchState& ACurrent,
+	const TetCircleGapWindow& AWindow, TetClusterCandidate& AOutCandidate,
+	TetEllipseGapWindowTemplate& AOutTemplate)
+{
+	AOutCandidate = TetClusterCandidate{};
+	AOutTemplate = TetEllipseGapWindowTemplate{};
+	const std::size_t Remaining = AOriginalItems.size() > ACurrent.Candidate.Transforms.size()
+		? AOriginalItems.size() - ACurrent.Candidate.Transforms.size() : 0;
+	if (Remaining == 0) return false;
+	TetClusterFillSearchConfig TemplateConfig = AConfig;
+	TemplateConfig.MaxDepth = std::min(Remaining, CET_ELLIPSE_GAP_FILL_MAX_TEMPLATE_DEPTH);
+	const std::size_t Start = ACurrent.Candidate.Transforms.size();
+	if (!SearchEllipseGapWindow(AOriginalItems, AFeatures, AOptions, ABaseCandidate,
+		AEnvelopeCandidate, AWindow, TemplateConfig, ACurrent, AOutCandidate)) return false;
+	AOutTemplate.Source = AWindow;
+	AOutTemplate.Transforms.assign(AOutCandidate.Transforms.begin() + static_cast<std::ptrdiff_t>(Start),
+		AOutCandidate.Transforms.end());
+	return !AOutTemplate.Transforms.empty();
+}
+
 bool BuildLocalEllipseGapFilledCandidate(const CetTNestItemVector& AOriginalItems,
 	const std::vector<TetShapeFeature>& AFeatures, const TetNestOptions& AOptions,
 	const TetClusterCandidate& ABaseCandidate, const TetClusterCandidate& AEnvelopeCandidate,
@@ -1708,37 +1746,30 @@ bool BuildLocalEllipseGapFilledCandidate(const CetTNestItemVector& AOriginalItem
 		ABaseCandidate, AEnvelopeCandidate);
 	const auto SearchStart = std::chrono::steady_clock::now();
 	TetClusterFillSearchState Current{ AOutCandidate, 0 };
-	TetEllipseGapWindowTemplateCache Templates;
-	TetClusterFillSearchConfig LayerConfig = AConfig;
-	LayerConfig.MaxDepth = 1;
-	for (std::size_t Layer = 0; Layer < CET_ELLIPSE_GAP_FILL_MAX_COMPOSITE_DEPTH; ++Layer) {
-		bool FilledLayer = false;
-		for (const TetCircleGapWindow& Window : Windows) {
-			if (CircleGapSearchTimeReached(SearchStart, CET_ELLIPSE_GAP_FILL_TOTAL_TIME_MS)) break;
-			std::string RegionKey;
-			if (!BuildEllipseGapRegionSignature(AOriginalItems, AOptions, Current.Candidate, Window, RegionKey)) continue;
-			RegionKey += "|layer=" + std::to_string(Layer);
-			const auto Cached = Templates.find(RegionKey);
-			TetClusterCandidate Copied;
-			if (Cached != Templates.end() && TryCopyEllipseGapWindowTemplate(AOriginalItems, AFeatures,
-				AOptions, ABaseCandidate, AEnvelopeCandidate, Cached->second, Window, Current.Candidate, Copied)) {
-				Current = { std::move(Copied), Current.FillerCount + Cached->second.Transforms.size() };
-				FilledLayer = true;
-				continue;
-			}
-			const std::size_t TransformCount = Current.Candidate.Transforms.size();
+	while (!CircleGapSearchTimeReached(SearchStart, CET_ELLIPSE_GAP_FILL_TOTAL_TIME_MS)) {
+		std::vector<std::vector<TetCircleGapWindow>> Groups;
+		CollectEllipseGapGroups(AOriginalItems, AOptions, Current.Candidate, Windows, Groups);
+		bool FilledBatch = false;
+		for (const std::vector<TetCircleGapWindow>& Group : Groups) {
+			if (Group.empty() || CircleGapSearchTimeReached(SearchStart, CET_ELLIPSE_GAP_FILL_TOTAL_TIME_MS)) break;
 			TetClusterCandidate Candidate;
-			if (!SearchEllipseGapWindow(AOriginalItems, AFeatures, AOptions, ABaseCandidate,
-				AEnvelopeCandidate, Window, LayerConfig, Current, Candidate)) continue;
 			TetEllipseGapWindowTemplate Template;
-			Template.Source = Window;
-			Template.Transforms.assign(Candidate.Transforms.begin() + static_cast<std::ptrdiff_t>(TransformCount),
-				Candidate.Transforms.end());
-			if (!Template.Transforms.empty()) Templates.emplace(RegionKey, std::move(Template));
+			if (!BuildCompleteEllipseGapTemplate(AOriginalItems, AFeatures, AOptions, ABaseCandidate,
+				AEnvelopeCandidate, AConfig, Current, Group.front(), Candidate, Template)) continue;
 			Current = { std::move(Candidate), Current.Candidate.Transforms.size() - ABaseCandidate.Transforms.size() };
-			FilledLayer = true;
+			std::size_t Copies = 0;
+			for (std::size_t Index = 1; Index < Group.size(); ++Index) {
+				TetClusterCandidate Copied;
+				if (!TryCopyEllipseGapWindowTemplate(AOriginalItems, AFeatures, AOptions, ABaseCandidate,
+					AEnvelopeCandidate, Template, Group[Index], Current.Candidate, Copied)) break;
+				Current = { std::move(Copied), Current.Candidate.Transforms.size() - ABaseCandidate.Transforms.size() };
+				++Copies;
+			}
+			std::cout << "[TEMPLATE][ELLIPSE COMPLETE TEMPLATE] Class=" << Template.Source.ClassKey
+				<< " Fillers=" << Template.Transforms.size() << " Copies=" << Copies << std::endl;
+			FilledBatch = true;
 		}
-		if (!FilledLayer || CircleGapSearchTimeReached(SearchStart, CET_ELLIPSE_GAP_FILL_TOTAL_TIME_MS)) break;
+		if (!FilledBatch) break;
 	}
 	AOutCandidate = std::move(Current.Candidate);
 	return AOutCandidate.Transforms.size() > ABaseCandidate.Transforms.size();
