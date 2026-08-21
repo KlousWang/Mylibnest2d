@@ -30,8 +30,10 @@ namespace ET {
             std::size_t RunRectangleBoardNesting(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker);
             bool _RunLastBinEvacuation(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, std::size_t& ALayers);
             bool _RepairAndEvacuate(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, const CetPolygonImpl& ABinPoly, double ABinWidth, double ABinHeight, std::size_t& ALayers);
+			bool _TryLockedEnvelopeBoardRepair(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, const CetPolygonImpl& ABinPoly, double ABinWidth, double ABinHeight, const std::vector<std::size_t>& ALockedChildren, std::size_t& ALayers);
             bool _TryBoardFeedbackNest(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker, std::size_t& ALayers);
-            std::size_t RunRectangleNestOnce(CetTNestItemVector& ATestItems,const TetNestOptions& AOptions,TetNestProgressTracker& ATracker);
+            std::size_t RunRectangleNestOnce(CetTNestItemVector& ATestItems, const TetNestOptions& AOptions,
+                TetNestProgressTracker& ATracker, bool AUseFillerSelector = false, bool AAllowRotations = true);
             TetLocalBestResult EvaluateSortingStrategies(const TetClusterBuildResult& AClusterResult, const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker, TetExpandedSpacingFailure* AOutSpacingFailure = nullptr);
             TetLocalBestResult _EvaluateSingleSortingStrategy(const TetClusterBuildResult& AClusterResult, const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker, MetENestOrderStrategy AStrategy, TetExpandedSpacingFailure* AOutSpacingFailure = nullptr);
             TetLocalBestResult _TryLocalClusterSpacingFallback(const TetClusterBuildResult& AClusterResult, const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker, const TetExpandedSpacingFailure& AInitialFailure);
@@ -39,6 +41,11 @@ namespace ET {
 			std::vector<std::size_t> _BuildPriorityOrder(CetTNestItemVector& AItems, const TetNestOptions& AOptions, MetENestOrderStrategy AStrategy) const;
 			void _BuildSortedTestData(CetTNestItemVector& APriorityItems, const std::vector<TetMetaItem>& AMetaItems, const std::vector<std::size_t>& ASortedIndices, CetTNestItemVector& AOutItems, std::vector<TetMetaItem>& AOutMetaItems) const;
 			void _UpdateLocalBest(TetLocalBestResult& ALocalBest, TetTNestEvalResult AEvaluation, std::size_t ALayers, CetTNestItemVector& AItems, std::vector<TetMetaItem>& AMetaItems, bool AHasCluster) const;
+			void _TryQuarterTurnCandidates(TetLocalBestResult& ALocalBest, const CetTNestItemVector& AOriginalItems,
+				const TetNestOptions& AOptions, TetNestProgressTracker& ATracker, bool AHasCluster);
+			void _TryOppositeEdgeCandidate(TetLocalBestResult& ALocalBest, const TetClusterBuildResult& AClusterResult,
+				const CetTNestItemVector& AOriginalItems,
+				const TetNestOptions& AOptions, TetNestProgressTracker& ATracker, bool AHasCluster);
 			bool ShoouldUpdateGlobalBest(const TetLocalBestResult& ALocalResult,bool AHasBest, const TetTNestEvalResult& ABestEval, std::size_t ABestLayers, bool ABestHasCluster);
             //std::size_t RunRectangleBoardNestingFill(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, TetNestProgressTracker& Tracker);
         };

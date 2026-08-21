@@ -19,6 +19,30 @@ namespace {
 		return std::abs(AFirst - ASecond) > Scale * 1e-9;
 	}
 
+	bool IsMoreBalancedBoardUsage(const std::vector<double>& AAreas, const std::vector<double>& BAreas)
+	{
+		if (AAreas.empty() || BAreas.empty()) return false;
+		std::vector<double> SortedA = AAreas;
+		std::vector<double> SortedB = BAreas;
+		std::sort(SortedA.begin(), SortedA.end());
+		std::sort(SortedB.begin(), SortedB.end());
+		const std::size_t Count = std::min(SortedA.size(), SortedB.size());
+		for (std::size_t Index = 0; Index < Count; ++Index) {
+			if (AreMetricValuesDifferent(SortedA[Index], SortedB[Index])) {
+				return SortedA[Index] > SortedB[Index];
+			}
+		}
+		return false;
+	}
+
+	void AddBinArea(TetTNestEvalResult& AResult, int ABinId, double AArea)
+	{
+		if (ABinId < 0 || !std::isfinite(AArea) || AArea <= 0.0) return;
+		const std::size_t BinIndex = static_cast<std::size_t>(ABinId);
+		if (AResult.BinAreas.size() <= BinIndex) AResult.BinAreas.resize(BinIndex + 1, 0.0);
+		AResult.BinAreas[BinIndex] += AArea;
+	}
+
 	struct TetAreaDensityMetric
 	{
 		double Area = 0.0;
@@ -102,10 +126,14 @@ TetTNestEvalResult ET::NEST2DMANAGERLIB::CetStrategyManager::EvaluateNestResult(
 {
 	TetTNestEvalResult Result{};
 	Result.Layers = ALayers;
+	Result.BinAreas.resize(ALayers, 0.0);
 	for (const auto& Item : AItems){
-		if (Item.binId() == 0){
+		const int BinId = Item.binId();
+		const double Area = std::abs(static_cast<double>(Item.area()));
+		AddBinArea(Result, BinId, Area);
+		if (BinId == 0){
 			Result.FirstBinCount++;
-			Result.FirstBinArea += std::abs( static_cast<double>(Item.area()));
+			Result.FirstBinArea += Area;
 		}
 	}
 	return Result;
@@ -115,6 +143,13 @@ bool ET::NEST2DMANAGERLIB::CetStrategyManager::IsBetterNestResult(const TetTNest
 {
 	if (A.Layers != AB.Layers){
 		return A.Layers < AB.Layers;
+	}
+
+	if (IsMoreBalancedBoardUsage(A.BinAreas, AB.BinAreas)){
+		return true;
+	}
+	if (IsMoreBalancedBoardUsage(AB.BinAreas, A.BinAreas)){
+		return false;
 	}
 
 	if (AreMetricValuesDifferent(A.FirstBinArea,AB.FirstBinArea)){
@@ -132,6 +167,18 @@ bool ET::NEST2DMANAGERLIB::CetStrategyManager::IsBetterNestResult(const TetTNest
 		if (A.InternalGapCount != AB.InternalGapCount){
 			return A.InternalGapCount < AB.InternalGapCount;
 		}
+	}
+
+	if (A.HasBoardFreeRegionMetric && AB.HasBoardFreeRegionMetric) {
+		if (AreMetricValuesDifferent(A.FragmentedFreeArea, AB.FragmentedFreeArea)) return A.FragmentedFreeArea < AB.FragmentedFreeArea;
+		if (AreMetricValuesDifferent(A.LargestFreeRegionArea, AB.LargestFreeRegionArea)) return A.LargestFreeRegionArea > AB.LargestFreeRegionArea;
+		if (A.BoardFreeRegionCount != AB.BoardFreeRegionCount) return A.BoardFreeRegionCount < AB.BoardFreeRegionCount;
+	}
+
+	if (A.HasPassableFreeRegionMetric && AB.HasPassableFreeRegionMetric) {
+		if (AreMetricValuesDifferent(A.FragmentedPassableFreeArea, AB.FragmentedPassableFreeArea)) return A.FragmentedPassableFreeArea < AB.FragmentedPassableFreeArea;
+		if (AreMetricValuesDifferent(A.LargestPassableFreeRegionArea, AB.LargestPassableFreeRegionArea)) return A.LargestPassableFreeRegionArea > AB.LargestPassableFreeRegionArea;
+		if (A.PassableFreeRegionCount != AB.PassableFreeRegionCount) return A.PassableFreeRegionCount < AB.PassableFreeRegionCount;
 	}
 
 	if (A.HasRemnantMetrics && AB.HasRemnantMetrics){
@@ -223,6 +270,7 @@ TetTNestEvalResult ET::NEST2DMANAGERLIB::CetStrategyManager::EvaluatePackedResul
 	for (const CetNestItem& PackedItem : AItems) {
 		LastBinId = std::max(LastBinId, PackedItem.binId());
 	}
+	Result.BinAreas.resize(std::max(ALayers, LastBinId < 0 ? std::size_t{ 0 } : static_cast<std::size_t>(LastBinId + 1)), 0.0);
 
 	// 1. 提取包围盒并统计基础面积数据
 	std::vector<TetRemnantPartBounds> LastBinBounds = _ExtractLastBinBounds(AItems, AMetaItems, AOriginalItems, LastBinId, Result);
@@ -232,6 +280,7 @@ TetTNestEvalResult ET::NEST2DMANAGERLIB::CetStrategyManager::EvaluatePackedResul
 
 	std::cout << "[NEST][EVAL][RETURN] Count=" << Result.FirstBinCount
 		<< ", Area=" << Result.FirstBinArea
+		<< ", LeastUsedArea=" << (Result.BinAreas.empty() ? 0.0 : *std::min_element(Result.BinAreas.begin(), Result.BinAreas.end()))
 		<< ", Layers=" << Result.Layers
 		<< ", InternalGapArea=" << Result.InternalGapArea
 		<< ", InternalGapCount=" << Result.InternalGapCount
@@ -279,6 +328,7 @@ std::vector<TetRemnantPartBounds> ET::NEST2DMANAGERLIB::CetStrategyManager::_Ext
 				AOutResult.FirstBinCount++;
 				AOutResult.FirstBinArea += OriginalArea;
 			}
+			AddBinArea(AOutResult, PackedBinId, OriginalArea);
 			if (PackedBinId != ALastBinId) {
 				continue;
 			}

@@ -169,6 +169,16 @@ namespace ET {
                     }
                 }
 			   Nest2DUtils->Nest2DGeometryUtils->ValidateItemsInsideBoard(AItems, AOptions.Board);
+			   const bool HasUnplacedItem = std::any_of(AItems.begin(), AItems.end(), [](const TetNestPolygon& AItem) {
+				   return AItem.Out_bin < 0;
+			   });
+			   if (HasUnplacedItem){
+				   if (AResult){
+					   AResult->Code = NEST2D_ERR_CORE_NESTING_FAILED;
+					   AResult->Message = "Nesting result contains an unplaced or out-of-board item.";
+				   }
+				   return NEST2D_ERR_CORE_NESTING_FAILED;
+			   }
                 UsedBins = RecalcUsedBinsFromItems(AItems);
 			}
             CetAreaUsageCalculator LocalUsageCalculator;

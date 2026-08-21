@@ -68,6 +68,7 @@ namespace ET {
             m_SearchDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(CET_REPAIR_MAX_SEARCH_TIME_MS);
             m_SearchBudgetReached = false;
 			_HadBoardFillChanges = false;
+			m_LockedItemIndices.clear();
 
             _BuildRotations();
         }
@@ -100,6 +101,47 @@ namespace ET {
             ALayers = _CompactItemBins();
 
             std::cout << "[REPAIR] finish polygon board repair. Layers = " << ALayers << std::endl;
+        }
+
+        bool CetPolygonBoardRepairer::RepairLockedEnvelope(std::size_t& ALayers, const std::vector<std::size_t>& ALockedItems)
+        {
+            if (_Items == nullptr || _Options == nullptr || _BinPoly == nullptr || ALayers == 0) return false;
+			m_LockedItemIndices = ALockedItems;
+            m_RemainingPlacementChecks = std::min(m_RemainingPlacementChecks, CET_LOCKED_ENVELOPE_LOCAL_FILL_MAX_PLACEMENT_CHECKS);
+			m_SearchDeadline = std::chrono::steady_clock::now()
+                + std::chrono::milliseconds(CET_LOCKED_ENVELOPE_LOCAL_FILL_MAX_SEARCH_TIME_MS);
+            m_SearchBudgetReached = false;
+			std::vector<int> TargetBins;
+			for (std::size_t Index : m_LockedItemIndices) if (Index < _Items->size()) {
+				const int Bin = static_cast<int>((*_Items)[Index].binId());
+				if (Bin >= 0 && std::find(TargetBins.begin(), TargetBins.end(), Bin) == TargetBins.end()) TargetBins.push_back(Bin);
+			}
+			for (int Bin = 0; Bin < static_cast<int>(ALayers); ++Bin)
+				if (std::find(TargetBins.begin(), TargetBins.end(), Bin) == TargetBins.end()) TargetBins.push_back(Bin);
+            bool Changed = false;
+            for (int Pass = 0; Pass < CET_LOCKED_ENVELOPE_LOCAL_FILL_MAX_PASSES && _CanContinueSearch(); ++Pass) {
+                bool PassChanged = false;
+				for (int Bin : TargetBins) {
+					if (Bin >= static_cast<int>(ALayers) || !_CanContinueSearch()) break;
+                    std::vector<TetClusterFreeRegion> FreeRegions;
+                    if (!_ExtractBoardFreeRegions(Bin, FreeRegions)) continue;
+                    TetBoardLocalFillCandidate Candidate;
+                    if (!_FindBestLocalCandidateForTargetBin(Bin, FreeRegions, Candidate)
+                        || !_ApplyLocalFillCandidate(Candidate)) continue;
+                    _HadBoardFillChanges = true;
+                    Changed = true;
+                    PassChanged = true;
+                    std::cout << "[LOCKED ENVELOPE][LOCAL FILL] Bin=" << Bin
+                        << " Parts=" << Candidate.Placements.size()
+                        << " AreaGain=" << Candidate.OccupiedAreaGain << std::endl;
+                    break;
+                }
+                if (!PassChanged) break;
+                ALayers = _CompactItemBins();
+            }
+            if (m_SearchBudgetReached) std::cout << "[LOCKED ENVELOPE][LOCAL FILL] Search limit reached." << std::endl;
+			m_LockedItemIndices.clear();
+            return Changed;
         }
 
         bool CetPolygonBoardRepairer::EvacuateLastBin(std::size_t& ALayers, TetLastBinEvacuationStats& AStats)
@@ -1711,18 +1753,37 @@ namespace ET {
             for (std::size_t Index = 0; Index < _Items->size(); ++Index) {
                 const CetNestItem& Item = (*_Items)[Index];
                 if (Item.binId() >= 0 && Item.binId() <= ATargetBin) continue;
+				if (std::find(m_LockedItemIndices.begin(), m_LockedItemIndices.end(), Index) != m_LockedItemIndices.end()) continue;
                 const double Area = std::abs(static_cast<double>(Item.area()));
                 if (std::isfinite(Area) && Area > 0.0 && Area <= AFreeRegion.Area + AreaTolerance) Result.push_back(Index);
             }
-            std::stable_sort(Result.begin(), Result.end(), [&](std::size_t A, std::size_t B) {
-                const double AreaA = std::abs(static_cast<double>((*_Items)[A].area()));
-                const double AreaB = std::abs(static_cast<double>((*_Items)[B].area()));
-                return std::abs(AreaA - AreaB) > 1.0 ? AreaA > AreaB : A < B;
-                });
             const std::size_t Limit = _Items->size() > CET_NEST_FULL_STRATEGY_ITEM_LIMIT
                 ? CET_BOARD_LOCAL_FILL_LARGE_ORDER_MAX_CANDIDATE_ITEMS : CET_BOARD_LOCAL_FILL_MAX_CANDIDATE_ITEMS;
-            if (Result.size() > Limit) Result.resize(Limit);
-            return Result;
+            if (Result.size() <= Limit) return Result;
+            const double RegionAspect = AFreeRegion.Height > 0.0 ? AFreeRegion.Width / AFreeRegion.Height : 1.0;
+            auto Area = [&](std::size_t Index) { return std::abs(static_cast<double>((*_Items)[Index].area())); };
+            auto AspectDistance = [&](std::size_t Index) {
+                const auto Bounds = (*_Items)[Index].boundingBox();
+                const double Width = std::max(1.0, static_cast<double>(Bounds.width()));
+                const double Height = std::max(1.0, static_cast<double>(Bounds.height()));
+                return std::abs(std::log((Width / Height) / std::max(1e-9, RegionAspect)));
+            };
+            auto Select = [&](const auto& Compare) {
+                const std::size_t Best = *std::min_element(Result.begin(), Result.end(), Compare);
+                if (std::find(Result.begin(), Result.end(), Best) != Result.end()) return Best;
+                return Result.front();
+            };
+            const double TargetArea = AFreeRegion.Area / static_cast<double>(Limit);
+            const std::array<std::size_t, 4> Picks{
+                Select([&](std::size_t A, std::size_t B) { return Area(A) > Area(B); }),
+                Select([&](std::size_t A, std::size_t B) { return Area(A) < Area(B); }),
+                Select([&](std::size_t A, std::size_t B) { return AspectDistance(A) < AspectDistance(B); }),
+                Select([&](std::size_t A, std::size_t B) { return std::abs(Area(A) - TargetArea) < std::abs(Area(B) - TargetArea); }) };
+            std::vector<std::size_t> Selected;
+            for (std::size_t Index : Picks) if (std::find(Selected.begin(), Selected.end(), Index) == Selected.end()) Selected.push_back(Index);
+            std::stable_sort(Result.begin(), Result.end(), [&](std::size_t A, std::size_t B) { return Area(A) > Area(B); });
+            for (std::size_t Index : Result) if (Selected.size() < Limit && std::find(Selected.begin(), Selected.end(), Index) == Selected.end()) Selected.push_back(Index);
+            return Selected;
         }
 
         void CetPolygonBoardRepairer::_UpdateBoardLocalEnvelope(const std::vector<TetHoleFillCandidate>& APlacements, double& AOutArea, double& AOutFillRatio) const

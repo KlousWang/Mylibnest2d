@@ -196,6 +196,9 @@ constexpr std::size_t CET_BOARD_LOCAL_FILL_MAX_DEPTH = 3;
 constexpr std::size_t CET_BOARD_LOCAL_FILL_MAX_VARIANTS_PER_REGION = 8;
 constexpr long long CET_BOARD_LOCAL_FILL_MAX_PLACEMENT_CHECKS_PER_ITEM = 1200;
 constexpr long long CET_BOARD_LOCAL_FILL_MAX_PLACEMENT_CHECKS_PER_REGION = 3000;
+constexpr int CET_LOCKED_ENVELOPE_LOCAL_FILL_MAX_PASSES = 4;
+constexpr long long CET_LOCKED_ENVELOPE_LOCAL_FILL_MAX_SEARCH_TIME_MS = 2400;
+constexpr long long CET_LOCKED_ENVELOPE_LOCAL_FILL_MAX_PLACEMENT_CHECKS = 12000;
 constexpr std::size_t CET_BOARD_FEEDBACK_NEST_MAX_ITEM_COUNT = 64;
 // Board-composite search is deliberately small: it supplements an already
 // completed global nest and must never become a second unbounded nester.
@@ -610,6 +613,10 @@ struct TriangleEdgePairRequest {
 struct TetTNestEvalResult {
     int FirstBinCount = 0;
     double FirstBinArea = 0.0;
+    // Actual original-part area for every used board.  Keeping this separate
+    // from proxy geometry prevents a dense first board from hiding a sparse
+    // later board during global candidate selection.
+    std::vector<double> BinAreas;
     int LastBinCount = 0;
     double LastBinArea = 0.0;
     std::size_t Layers = 0;
@@ -622,6 +629,18 @@ struct TetTNestEvalResult {
     double SkylineWasteArea = 0.0;
     double UsedDepth = 0.0;
     bool RemnantIsTopStrip = true;
+    bool HasBoardFreeRegionMetric = false;
+    std::size_t BoardFreeRegionCount = 0;
+    double LargestFreeRegionArea = 0.0;
+    double FragmentedFreeArea = 0.0;
+    // Free space after reserving half of the smallest available part on both
+    // sides of a passage. This detects channels that are geometrically open
+    // but cannot carry any remaining part into the larger free region.
+    bool HasPassableFreeRegionMetric = false;
+    std::size_t PassableFreeRegionCount = 0;
+    double LargestPassableFreeRegionArea = 0.0;
+    double FragmentedPassableFreeArea = 0.0;
+    double MinimumPassableWidth = 0.0;
 };
 
 struct TetClusterBuildResult {

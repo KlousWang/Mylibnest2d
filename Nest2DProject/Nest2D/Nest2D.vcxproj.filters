@@ -188,9 +188,6 @@
     <ClCompile Include="Nest2D_TriangleClusterBuilder.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="Nest2D_ClusterInvokeFunctor.cpp">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="Nest2D_CircleClusterBuilder.cpp">
       <Filter>源文件</Filter>
     </ClCompile>

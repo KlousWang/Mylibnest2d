@@ -108,7 +108,7 @@
       <AdditionalDependencies>EtTechCore.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy /Y &quot;$(SolutionDir)Nest2DDLL.json&quot; &quot;$(OutDir)Nest2DDLL.json&quot;</Command>
+      <Command>copy /Y "$(SolutionDir)Nest2DDLL.json" "$(OutDir)Nest2DDLL.json"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -133,7 +133,7 @@
       <AdditionalDependencies>EtTechCore.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy /Y &quot;$(SolutionDir)Nest2DDLL.json&quot; &quot;$(OutDir)Nest2DDLL.json&quot;</Command>
+      <Command>copy /Y "$(SolutionDir)Nest2DDLL.json" "$(OutDir)Nest2DDLL.json"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -228,7 +228,6 @@
     <ClCompile Include="Nest2D_CircleClusterBuilder.cpp" />
     <ClCompile Include="Nest2D_ClusterBoundary.cpp" />
     <ClCompile Include="Nest2D_ClusterGeometryHelper.cpp" />
-    <ClCompile Include="Nest2D_ClusterInvokeFunctor.cpp" />
     <ClCompile Include="Nest2D_ClusterManager.cpp" />
     <ClCompile Include="Nest2D_CustomClusterBuilder.cpp" />
     <ClCompile Include="Nest2D_EllipseClusterBuilder.cpp" />

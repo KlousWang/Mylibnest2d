@@ -14,6 +14,7 @@
 #include<algorithm>
 #include<limits>
 #include<cmath>
+#include<array>
 #include<numeric>
 #include<set>
 #include<chrono>
@@ -35,6 +36,68 @@ namespace ET {
 		static void FillRotations(std::vector<libnest2d::Radians>& ARotations, int ARotationCount)
 		{
 			ARotations = CetRotationUtils::BuildAllowedLibRotations(ARotationCount);
+		}
+
+		template <typename TSelector>
+		static std::size_t RunRectangleNestWithSelector(CetTNestItemVector& AItems,
+			const TetNestOptions& AOptions, TetNestProgressTracker& ATracker, bool AAllowRotations)
+		{
+			const auto Width = NestUtils::ToNestCoord(AOptions.BinWidth);
+			const auto Height = NestUtils::ToNestCoord(AOptions.BinHeight);
+			Box Bin(Width, Height, { Width / 2, Height / 2 });
+			using TPlacer = placers::_BottomLeftPlacer<CetPolygonImpl>;
+			NestConfig<TPlacer, TSelector> Config;
+			Config.placer_config.min_obj_distance = NestUtils::ToNestCoord(AOptions.Spacing);
+			Config.placer_config.epsilon = 1;
+			Config.placer_config.allow_rotations = AAllowRotations && CetRotationUtils::IsAllowedRotation(
+				CET_CLUSTER_HALF_PI, AOptions.Rotations, 1e-9);
+			std::cout << "================ DEBUG INFO ================" << std::endl;
+			std::cout << "UsePolygonBoard: false" << std::endl;
+			std::cout << "Bin Width: " << Bin.width() << ", Height: " << Bin.height() << std::endl;
+			std::cout << "Spacing: " << NestUtils::ToNestCoord(AOptions.Spacing) << std::endl;
+			std::cout << "============================================" << std::endl;
+			const std::size_t Layers = nest(AItems, Bin, NestUtils::ToNestCoord(AOptions.Spacing),
+				Config, ProgressFunction{ ATracker });
+			std::cout << "[NEST] Layers = " << Layers << std::endl;
+			Nest2DUtils->Nest2DStrategy->PrintBinCount(AItems);
+			return Layers;
+		}
+
+		static std::size_t RunRectangleNestFromOppositeEdge(CetTNestItemVector& AItems,
+			const TetNestOptions& AOptions, TetNestProgressTracker& ATracker)
+		{
+			const auto Width = NestUtils::ToNestCoord(AOptions.BinWidth);
+			const auto Height = NestUtils::ToNestCoord(AOptions.BinHeight);
+			Box Bin(Width, Height, { Width / 2, Height / 2 });
+			using TPlacer = placers::_NofitPolyPlacer<CetPolygonImpl>;
+			using TSelector = selections::_FirstFitSelection<CetPolygonImpl>;
+			NestConfig<TPlacer, TSelector> Config;
+			Config.placer_config.accuracy = AOptions.Placer.Accuracy;
+			Config.placer_config.parallel = AOptions.Placer.Parallel;
+			Config.placer_config.explore_holes = false;
+			FillRotations(Config.placer_config.rotations, AOptions.Rotations);
+			Config.placer_config.alignment = placers::NfpPConfig<CetPolygonImpl>::Alignment::TOP_RIGHT;
+			Config.placer_config.starting_point = placers::NfpPConfig<CetPolygonImpl>::Alignment::TOP_RIGHT;
+			const std::size_t Layers = nest(AItems, Bin, NestUtils::ToNestCoord(AOptions.Spacing),
+				Config, ProgressFunction{ ATracker });
+			std::cout << "[NEST][OPPOSITE EDGE] Layers=" << Layers << std::endl;
+			Nest2DUtils->Nest2DStrategy->PrintBinCount(AItems);
+			return Layers;
+		}
+
+		static void ApplyClusterEdgeClearance(CetTNestItemVector& AItems, const std::vector<TetMetaItem>& AMetaItems,
+			const TetNestOptions& AOptions)
+		{
+			const auto Clearance = static_cast<libnest2d::Coord>(std::ceil(
+				static_cast<double>(NestUtils::ToNestCoord(std::max(0.0, AOptions.Spacing))) * 0.5));
+			for (std::size_t Index = 0; Index < AItems.size() && Index < AMetaItems.size(); ++Index) {
+				if (AMetaItems[Index].IsCluster) AItems[Index].inflation(Clearance);
+			}
+		}
+
+		static void ClearItemInflation(CetTNestItemVector& AItems)
+		{
+			for (CetNestItem& Item : AItems) Item.inflation(0);
 		}
 		static placers::NfpPConfig<CetPolygonImpl>::Alignment ToLibNestAlignment(MetNestAlignment AAlignment)
 		{
@@ -774,6 +837,203 @@ namespace ET {
 			return BoardFillImproved || LastBinImproved;
 		}
 
+		bool CetNest2DEngine::_TryLockedEnvelopeBoardRepair(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, const CetPolygonImpl& ABinPoly, double ABinWidth, double ABinHeight, const std::vector<std::size_t>& ALockedChildren, std::size_t& ALayers)
+		{
+			if (ANestItems.empty() || ALockedChildren.empty() || ALayers == 0) return false;
+			const CetTNestItemVector BeforeItems = ANestItems;
+			const std::size_t BeforeLayers = ALayers;
+			const TetTNestEvalResult BeforeEval = Nest2DUtils->Nest2DStrategy->EvaluateNestResult(BeforeItems, BeforeLayers);
+			CetPolygonBoardRepairer Repairer(ANestItems, AOptions, ABinPoly, ABinWidth, ABinHeight);
+			Repairer.RepairLockedEnvelope(ALayers, ALockedChildren);
+			const bool Preserved = PreservesLockedChildren(BeforeItems, ANestItems, ALockedChildren);
+			const bool Valid = Preserved && ValidatePlacedItemsSpacing(ANestItems, AOptions);
+			const TetTNestEvalResult AfterEval = Nest2DUtils->Nest2DStrategy->EvaluateNestResult(ANestItems, ALayers);
+			const bool Improved = Valid && Nest2DUtils->Nest2DStrategy->IsBetterNestResult(AfterEval, BeforeEval);
+			if (!Improved) {
+				ANestItems = BeforeItems;
+				ALayers = BeforeLayers;
+				std::cout << "[NEST][LOCKED ENVELOPE][BOARD REPAIR] Rollback Preserved=" << Preserved
+					<< " Valid=" << Valid << " Improved=" << Improved << std::endl;
+				return false;
+			}
+			std::cout << "[NEST][LOCKED ENVELOPE][BOARD REPAIR] Accepted Layers="
+				<< BeforeLayers << " -> " << ALayers << std::endl;
+			return true;
+		}
+
+		static bool BuildBoardPath(const std::vector<TetNestPoint>& AVertices, bool AOuter, CetPath& AOutPath)
+		{
+			AOutPath.clear();
+			for (const TetNestPoint& Point : AVertices) AOutPath.push_back({ NestUtils::ToNestCoord(Point.X), NestUtils::ToNestCoord(Point.Y) });
+			ClipperLib::CleanPolygon(AOutPath, 1.0);
+			if (AOutPath.size() < 3 || std::abs(ClipperLib::Area(AOutPath)) <= 0.0) return false;
+			if (ClipperLib::Orientation(AOutPath) != AOuter) std::reverse(AOutPath.begin(), AOutPath.end());
+			return true;
+		}
+
+		static bool BuildBoardSubjectContours(const TetNestOptions& AOptions, ClipperLib::Paths& AOutContours)
+		{
+			AOutContours.clear();
+			if (AOptions.Board.Enabled && AOptions.Board.Vertices.size() >= 3) {
+				CetPath Outer;
+				if (!BuildBoardPath(AOptions.Board.Vertices, true, Outer)) return false;
+				AOutContours.push_back(std::move(Outer));
+				for (const auto& HoleVertices : AOptions.Board.Holes) {
+					CetPath Hole;
+					if (!BuildBoardPath(HoleVertices, false, Hole)) return false;
+					AOutContours.push_back(std::move(Hole));
+				}
+				return true;
+			}
+			const double Width = AOptions.BinWidth;
+			const double Height = AOptions.BinHeight;
+			if (Width <= 0.0 || Height <= 0.0) return false;
+			std::vector<TetNestPoint> Rectangle{ { 0.0, 0.0 }, { Width, 0.0 }, { Width, Height }, { 0.0, Height } };
+			CetPath Outer;
+			if (!BuildBoardPath(Rectangle, true, Outer)) return false;
+			AOutContours.push_back(std::move(Outer));
+			return true;
+		}
+
+		static bool BuildPlacedReservedContours(const CetTNestItemVector& AItems, int ABinId, double ASpacing,
+			ClipperLib::Paths& AOutContours, libnest2d::Coord AExtraInflation = 0)
+		{
+			AOutContours.clear();
+			const auto HalfSpacing = static_cast<libnest2d::Coord>(std::ceil(static_cast<double>(NestUtils::ToNestCoord(std::max(0.0, ASpacing))) * 0.5));
+			for (const CetNestItem& SourceItem : AItems) {
+				if (SourceItem.binId() != ABinId) continue;
+				CetNestItem Item = SourceItem;
+				Item.inflation(HalfSpacing + std::max<libnest2d::Coord>(0, AExtraInflation));
+				CetPolygonImpl Shape = Item.transformedShape();
+				ClipperLib::CleanPolygon(Shape.Contour, 1.0);
+				if (Shape.Contour.size() < 3 || std::abs(ClipperLib::Area(Shape.Contour)) <= 0.0) return false;
+				if (!ClipperLib::Orientation(Shape.Contour)) std::reverse(Shape.Contour.begin(), Shape.Contour.end());
+				AOutContours.push_back(std::move(Shape.Contour));
+				for (CetPath Hole : Shape.Holes) {
+					ClipperLib::CleanPolygon(Hole, 1.0);
+					if (Hole.size() < 3 || std::abs(ClipperLib::Area(Hole)) <= 0.0) return false;
+					if (ClipperLib::Orientation(Hole)) std::reverse(Hole.begin(), Hole.end());
+					AOutContours.push_back(std::move(Hole));
+				}
+			}
+			return true;
+		}
+
+		static void AccumulateFreeRegions(const ClipperLib::PolyNode& ANode, std::size_t& AInOutCount, double& AInOutArea, double& AInOutLargest)
+		{
+			if (!ANode.IsHole() && ANode.Contour.size() >= 3) {
+				const double Area = std::abs(ClipperLib::Area(ANode.Contour));
+				if (Area > 0.0) {
+					++AInOutCount;
+					AInOutArea += Area;
+					AInOutLargest = std::max(AInOutLargest, Area);
+				}
+			}
+			for (const ClipperLib::PolyNode* Child : ANode.Childs) if (Child != nullptr) {
+				AccumulateFreeRegions(*Child, AInOutCount, AInOutArea, AInOutLargest);
+			}
+		}
+
+		static void EvaluateBoardFreeRegionMetrics(const CetTNestItemVector& AItems, const TetNestOptions& AOptions, TetTNestEvalResult& AInOutResult)
+		{
+			AInOutResult.HasBoardFreeRegionMetric = false;
+			AInOutResult.BoardFreeRegionCount = 0;
+			AInOutResult.LargestFreeRegionArea = 0.0;
+			AInOutResult.FragmentedFreeArea = 0.0;
+			ClipperLib::Paths Board;
+			if (!BuildBoardSubjectContours(AOptions, Board)) return;
+			for (std::size_t Bin = 0; Bin < AInOutResult.Layers; ++Bin) {
+				ClipperLib::Paths Reserved;
+				if (!BuildPlacedReservedContours(AItems, static_cast<int>(Bin), AOptions.Spacing, Reserved)) return;
+				ClipperLib::Clipper Difference;
+				if (!Difference.AddPaths(Board, ClipperLib::ptSubject, true) || (!Reserved.empty() && !Difference.AddPaths(Reserved, ClipperLib::ptClip, true))) return;
+				ClipperLib::PolyTree Tree;
+				if (!Difference.Execute(ClipperLib::ctDifference, Tree, ClipperLib::pftNonZero, ClipperLib::pftNonZero)) return;
+				std::size_t Count = 0;
+				double TotalArea = 0.0;
+				double LargestArea = 0.0;
+				for (const ClipperLib::PolyNode* Node : Tree.Childs) if (Node != nullptr) AccumulateFreeRegions(*Node, Count, TotalArea, LargestArea);
+				AInOutResult.HasBoardFreeRegionMetric = AInOutResult.HasBoardFreeRegionMetric || Count > 0;
+				AInOutResult.BoardFreeRegionCount += Count;
+				AInOutResult.LargestFreeRegionArea += LargestArea;
+				AInOutResult.FragmentedFreeArea += std::max(0.0, TotalArea - LargestArea);
+			}
+		}
+
+		static double GetMinimumPassableWidth(const CetTNestItemVector& AItems, const TetNestOptions& AOptions)
+		{
+			double MinimumWidth = std::numeric_limits<double>::infinity();
+			const std::vector<Radians> Rotations = CetRotationUtils::BuildAllowedLibRotations(AOptions.Rotations);
+			for (const CetNestItem& SourceItem : AItems) {
+				CetNestItem Item = SourceItem;
+				Item.translation(Point(0, 0));
+				Item.inflation(0);
+				for (const Radians Rotation : Rotations) {
+					Item.rotation(Rotation);
+					const auto Bounds = Item.boundingBox();
+					const double ShortSide = std::min(std::abs(static_cast<double>(Bounds.width())),
+						std::abs(static_cast<double>(Bounds.height())));
+					if (ShortSide > 1.0 && std::isfinite(ShortSide)) MinimumWidth = std::min(MinimumWidth, ShortSide);
+				}
+			}
+			return std::isfinite(MinimumWidth) ? MinimumWidth : 0.0;
+		}
+
+		static bool BuildInsetBoardContours(const ClipperLib::Paths& ABoard, libnest2d::Coord AInset,
+			ClipperLib::Paths& AOutContours)
+		{
+			AOutContours = ABoard;
+			if (AInset <= 0) return !AOutContours.empty();
+			ClipperLib::ClipperOffset Offset(2.0, std::max(1.0, static_cast<double>(AInset) * 0.02));
+			Offset.AddPaths(ABoard, ClipperLib::jtRound, ClipperLib::etClosedPolygon);
+			Offset.Execute(AOutContours, -static_cast<double>(AInset));
+			ClipperLib::CleanPolygons(AOutContours, 1.0);
+			return !AOutContours.empty();
+		}
+
+		static void EvaluatePassableFreeRegionMetrics(const CetTNestItemVector& AItems, const TetNestOptions& AOptions,
+			TetTNestEvalResult& AInOutResult)
+		{
+			AInOutResult.HasPassableFreeRegionMetric = false;
+			AInOutResult.PassableFreeRegionCount = 0;
+			AInOutResult.LargestPassableFreeRegionArea = 0.0;
+			AInOutResult.FragmentedPassableFreeArea = 0.0;
+			AInOutResult.MinimumPassableWidth = GetMinimumPassableWidth(AItems, AOptions);
+			if (AInOutResult.MinimumPassableWidth <= 0.0) return;
+			ClipperLib::Paths Board;
+			if (!BuildBoardSubjectContours(AOptions, Board)) return;
+			const auto SideAllowance = static_cast<libnest2d::Coord>(std::ceil(AInOutResult.MinimumPassableWidth * 0.5));
+			ClipperLib::Paths AvailableBoard;
+			if (!BuildInsetBoardContours(Board, SideAllowance, AvailableBoard)) return;
+			for (std::size_t Bin = 0; Bin < AInOutResult.Layers; ++Bin) {
+				ClipperLib::Paths Reserved;
+				if (!BuildPlacedReservedContours(AItems, static_cast<int>(Bin), AOptions.Spacing, Reserved, SideAllowance)) return;
+				ClipperLib::Clipper Difference;
+				if (!Difference.AddPaths(AvailableBoard, ClipperLib::ptSubject, true)
+					|| (!Reserved.empty() && !Difference.AddPaths(Reserved, ClipperLib::ptClip, true))) return;
+				ClipperLib::PolyTree Tree;
+				if (!Difference.Execute(ClipperLib::ctDifference, Tree, ClipperLib::pftNonZero, ClipperLib::pftNonZero)) return;
+				std::size_t Count = 0;
+				double TotalArea = 0.0;
+				double LargestArea = 0.0;
+				for (const ClipperLib::PolyNode* Node : Tree.Childs) if (Node != nullptr) AccumulateFreeRegions(*Node, Count, TotalArea, LargestArea);
+				AInOutResult.HasPassableFreeRegionMetric = AInOutResult.HasPassableFreeRegionMetric || Count > 0;
+				AInOutResult.PassableFreeRegionCount += Count;
+				AInOutResult.LargestPassableFreeRegionArea += LargestArea;
+				AInOutResult.FragmentedPassableFreeArea += std::max(0.0, TotalArea - LargestArea);
+			}
+		}
+
+		static bool PreservesPassableFreeSpace(const TetTNestEvalResult& ACandidate, const TetTNestEvalResult& ABaseline)
+		{
+			if (!ACandidate.HasPassableFreeRegionMetric || !ABaseline.HasPassableFreeRegionMetric) return true;
+			const double AreaTolerance = std::max({ 1.0, std::abs(ACandidate.LargestPassableFreeRegionArea),
+				std::abs(ABaseline.LargestPassableFreeRegionArea) }) * 1e-9;
+			if (ACandidate.FragmentedPassableFreeArea > ABaseline.FragmentedPassableFreeArea + AreaTolerance) return false;
+			if (ACandidate.LargestPassableFreeRegionArea + AreaTolerance < ABaseline.LargestPassableFreeRegionArea) return false;
+			return ACandidate.PassableFreeRegionCount <= ABaseline.PassableFreeRegionCount;
+		}
+
 		bool CetNest2DEngine::_TryBoardFeedbackNest(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker, std::size_t& ALayers)
 		{
 			if (ANestItems.empty() || ALayers <= 1 || ANestItems.size() > CET_BOARD_FEEDBACK_NEST_MAX_ITEM_COUNT) {
@@ -909,10 +1169,12 @@ namespace ET {
 				}
 
 				const bool LocalHasLockedEnvelope = HasLockedEnvelopeCluster(LocalResult.MetaItems);
-				const bool Better = !HasBest
-					|| (LocalHasLockedEnvelope != BestHasLockedEnvelope
-						? LocalHasLockedEnvelope
-						: ShoouldUpdateGlobalBest(LocalResult, HasBest, BestEval, BestLayers, BestHasCluster));
+				bool Better = ShoouldUpdateGlobalBest(LocalResult, HasBest, BestEval, BestLayers, BestHasCluster);
+				if (!Better && LocalHasLockedEnvelope && !BestHasLockedEnvelope) {
+					// A locked envelope protects its fixed outer contour during repair,
+					// but it must not displace a layout with better board utilization.
+					Better = !Nest2DUtils->Nest2DStrategy->IsBetterNestResult(BestEval, LocalResult.Eval);
+				}
 
 				if (Better){
 					HasBest = true;
@@ -1074,10 +1336,12 @@ namespace ET {
 					LocalResult = _TryLocalClusterSpacingFallback(ClusterResult, OriginalItems, AOptions, ATracker, SpacingFailure);
 				}
 				const bool LocalHasLockedEnvelope = HasLockedEnvelopeCluster(LocalResult.MetaItems);
-				const bool Better = !HasBest
-					|| (LocalHasLockedEnvelope != BestHasLockedEnvelope
-						? LocalHasLockedEnvelope
-						: ShoouldUpdateGlobalBest(LocalResult, HasBest, BestEval, BestLayers, BestHasCluster));
+				bool Better = ShoouldUpdateGlobalBest(LocalResult, HasBest, BestEval, BestLayers, BestHasCluster);
+				if (!Better && LocalHasLockedEnvelope && !BestHasLockedEnvelope) {
+					// Keep the fixed outline intact only when it does not regress the
+					// evaluated layout; the protection is not a selection score.
+					Better = !Nest2DUtils->Nest2DStrategy->IsBetterNestResult(BestEval, LocalResult.Eval);
+				}
 				
 				if (Better){
 					HasBest = true;
@@ -1156,16 +1420,19 @@ namespace ET {
 					const CetTNestItemVector BeforeEvacuation = ANestItems;
 					const std::size_t LayersBeforeEvacuation = BestLayers;
 					const std::vector<std::size_t> LockedChildren = CollectLockedEnvelopeChildren(BestMetaItems);
-					TetNestOptions EvacuationOptions = AOptions;
-					EvacuationOptions.EnableLastBinEvacuation = true;
-					if (_RunLastBinEvacuation(ANestItems, EvacuationOptions, BestLayers)
-						&& PreservesLockedChildren(BeforeEvacuation, ANestItems, LockedChildren)) {
-						std::cout << "[NEST][LOCKED ENVELOPE] Last-bin direct backfill accepted." << std::endl;
-					}
-					else {
-						ANestItems = BeforeEvacuation;
-						BestLayers = LayersBeforeEvacuation;
-						std::cout << "[NEST][LOCKED ENVELOPE] Skip expanded-item repair." << std::endl;
+					if (!_TryLockedEnvelopeBoardRepair(ANestItems, AOptions, RectBinPoly, AOptions.BinWidth,
+						AOptions.BinHeight, LockedChildren, BestLayers)) {
+						TetNestOptions EvacuationOptions = AOptions;
+						EvacuationOptions.EnableLastBinEvacuation = true;
+						if (_RunLastBinEvacuation(ANestItems, EvacuationOptions, BestLayers)
+							&& PreservesLockedChildren(BeforeEvacuation, ANestItems, LockedChildren)) {
+							std::cout << "[NEST][LOCKED ENVELOPE] Last-bin direct backfill accepted." << std::endl;
+						}
+						else {
+							ANestItems = BeforeEvacuation;
+							BestLayers = LayersBeforeEvacuation;
+							std::cout << "[NEST][LOCKED ENVELOPE] Board repair and direct backfill rejected." << std::endl;
+						}
 					}
 				}
 				TryCompactUniformRectangleHoles(ANestItems, AOptions);
@@ -1186,70 +1453,16 @@ namespace ET {
 			return BestLayers;
 		}
 
-		std::size_t CetNest2DEngine::RunRectangleNestOnce(CetTNestItemVector& ATestItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker)
+		std::size_t CetNest2DEngine::RunRectangleNestOnce(CetTNestItemVector& ATestItems,
+			const TetNestOptions& AOptions, TetNestProgressTracker& ATracker, bool AUseFillerSelector,
+			bool AAllowRotations)
 		{
-			double BinWidth = AOptions.BinWidth;
-			double BinHeight = AOptions.BinHeight;
-
-			auto Width = NestUtils::ToNestCoord(BinWidth);
-			auto Height = NestUtils::ToNestCoord(BinHeight);
-
-			Box Bin(Width, Height, { Width / 2, Height / 2 });
-			//Box Bin(width, height);
-
-			//using CetMyPlacer = placers::_NofitPolyPlacer<CetPolygonImpl, Box>;
-			using CetMyPlacer = placers::_BottomLeftPlacer<CetPolygonImpl>;
-			// Keep the primary ordering stable; expanded items are backfilled after nesting.
-			using CetMySelector = selections::_FirstFitSelection<CetPolygonImpl>;
-			//using CetMySelector = selections::_FillerSelection<CetPolygonImpl>;
-			//using CetMySelector = selections::_DJDHeuristic<CetPolygonImpl>;
-
-			NestConfig<CetMyPlacer, CetMySelector> cfg;
-			
-			//cfg.placer_config.accuracy = AOptions.Placer.Accuracy;
-			////cfg.placer_config.alignment = placers::NfpPConfig<CetPolygonImpl>::Alignment::DONT_ALIGN;
-			//cfg.placer_config.alignment = ToLibNestAlignment(AOptions.Placer.Alignment);
-			//cfg.placer_config.starting_point = ToLibNestAlignment(AOptions.Placer.StartingPoint);
-			//cfg.placer_config.parallel = AOptions.Placer.Parallel;
-			//cfg.placer_config.explore_holes = AOptions.Placer.Parallel;
-			//cfg.placer_config.rotations.clear();
-			//FillRotations(cfg.placer_config.rotations, AOptions.Rotations);
-
-			
-			cfg.placer_config.min_obj_distance = NestUtils::ToNestCoord(AOptions.Spacing);
-			cfg.placer_config.epsilon = 1;
-
-			
-			cfg.placer_config.allow_rotations = CetRotationUtils::IsAllowedRotation(CET_CLUSTER_HALF_PI, AOptions.Rotations, 1e-9);
-
-			
-			//cfg.selector_config.try_pairs = true;
-			//cfg.selector_config.try_triplets = false;
-			//cfg.selector_config.try_reverse_order = true;
-			//cfg.selector_config.initial_fill_proportion = 0.2f;
-			//cfg.selector_config.waste_increment = 0.1f;
-			//cfg.selector_config.allow_parallel = true;
-			//cfg.selector_config.force_parallel = false;
-
-			std::cout << "================ DEBUG INFO ================" << std::endl;
-			std::cout << "UsePolygonBoard: false" << std::endl;
-			std::cout << "Bin Width: " << Bin.width() << ", Height: " << Bin.height() << std::endl;
-			std::cout << "Spacing: " << NestUtils::ToNestCoord(AOptions.Spacing) << std::endl;
-			std::cout << "============================================" << std::endl;
-
-			std::size_t Layers = nest(ATestItems,Bin,NestUtils::ToNestCoord(AOptions.Spacing),cfg,ProgressFunction{ ATracker });
-
-			std::cout << "[NEST] Layers = " << Layers << std::endl;
-		/*	if (Layers > 0) {
-				CetPolygonImpl RectBinPoly = Nest2DUtils->Nest2DBord->BuildRectangleBinPolygon(BinWidth, BinHeight);
-
-				Nest2DUtils->Nest2DPolygonBord->SetContext(ATestItems, AOptions, RectBinPoly, BinWidth, BinHeight);
-				Nest2DUtils->Nest2DPolygonBord->Repair(Layers);
-			}*/
-
-			Nest2DUtils->Nest2DStrategy->PrintBinCount(ATestItems);
-
-			return Layers;
+			if (AUseFillerSelector) {
+				return RunRectangleNestWithSelector<selections::_FillerSelection<CetPolygonImpl>>(
+					ATestItems, AOptions, ATracker, AAllowRotations);
+			}
+			return RunRectangleNestWithSelector<selections::_FirstFitSelection<CetPolygonImpl>>(
+				ATestItems, AOptions, ATracker, AAllowRotations);
 		}
 
 		bool CetNest2DEngine::_HasClusterItems(const std::vector<TetMetaItem>& AMetaItems) const
@@ -1299,6 +1512,124 @@ namespace ET {
 			std::cout << "[NEST][LOCAL BEST UPDATE] HasCluster = " << ALocalBest.HasCluster << ", count = " << ALocalBest.Eval.FirstBinCount << ", area = " << ALocalBest.Eval.FirstBinArea << ", layers = " << ALocalBest.Eval.Layers << ", packedItems = " << ALocalBest.Items.size() << std::endl;
 		}
 
+		void CetNest2DEngine::_TryQuarterTurnCandidates(TetLocalBestResult& ALocalBest,
+			const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions,
+			TetNestProgressTracker& ATracker, bool AHasCluster)
+		{
+			if (!ALocalBest.HasBest || ALocalBest.Items.size() > CET_NEST_FULL_STRATEGY_ITEM_LIMIT
+				|| !CetRotationUtils::IsAllowedRotation(CET_CLUSTER_HALF_PI, AOptions.Rotations, 1e-9)) return;
+			const CetTNestItemVector BaselineItems = ALocalBest.Items;
+			const std::vector<TetMetaItem> BaselineMetaItems = ALocalBest.MetaItems;
+			const TetTNestEvalResult BaselineEval = ALocalBest.Eval;
+			std::vector<std::pair<double, std::size_t>> Targets;
+			for (std::size_t Index = 0; Index < BaselineItems.size(); ++Index) {
+				if (!BaselineMetaItems[Index].IsCluster || BaselineMetaItems[Index].TransformData.size() < 2) continue;
+				const auto Bounds = BaselineItems[Index].boundingBox();
+				const double Width = std::abs(static_cast<double>(Bounds.width()));
+				const double Height = std::abs(static_cast<double>(Bounds.height()));
+				if (Width <= 0.0 || Height <= 0.0) continue;
+				const double Aspect = std::max(Width, Height) / std::min(Width, Height);
+				if (Aspect > 1.1) Targets.emplace_back(Aspect, Index);
+			}
+			std::stable_sort(Targets.begin(), Targets.end(), std::greater<>());
+			if (Targets.size() > 3) Targets.resize(3);
+			std::vector<std::vector<std::size_t>> RotationSets;
+			for (const auto& Target : Targets) RotationSets.push_back({ Target.second });
+			for (const std::vector<std::size_t>& RotationSet : RotationSets) {
+				CetTNestItemVector TestItems = BaselineItems;
+				std::vector<TetMetaItem> TestMetaItems = BaselineMetaItems;
+				for (std::size_t Index = 0; Index < TestItems.size(); ++Index) {
+					TestItems[Index].binId(-1); TestItems[Index].translation(Point(0, 0)); TestItems[Index].inflation(0);
+					TestMetaItems[Index].PackedItemIndex = static_cast<int>(Index);
+				}
+				for (std::size_t TargetIndex : RotationSet) {
+					TestItems[TargetIndex].rotation(Radians(static_cast<double>(TestItems[TargetIndex].rotation()) + CET_CLUSTER_HALF_PI));
+				}
+				const std::size_t Layers = RunRectangleNestOnce(TestItems, AOptions, ATracker, false, false);
+				if (Layers == 0) continue;
+				TetExpandedSpacingFailure Failure;
+				if (AHasCluster && !Nest2DUtils->Nest2DCluster->ValidatePackedResultSpacing(
+					AOriginalItems, TestItems, TestMetaItems, AOptions, &Failure)) continue;
+				TetTNestEvalResult Eval = Nest2DUtils->Nest2DStrategy->EvaluatePackedResultWithMeta(
+					TestItems, TestMetaItems, AOriginalItems, AOptions, Layers);
+				CetTNestItemVector ExpandedItems;
+				Nest2DUtils->Nest2DCluster->ExpandClusterResultToOriginalItems(
+					AOriginalItems, TestItems, TestMetaItems, ExpandedItems, false);
+				EvaluateInternalGapMetrics(ExpandedItems, AOptions, Eval);
+				EvaluateBoardFreeRegionMetrics(ExpandedItems, AOptions, Eval);
+				EvaluatePassableFreeRegionMetrics(ExpandedItems, AOptions, Eval);
+				bool PreservesBoardUsage = Eval.BinAreas.size() == BaselineEval.BinAreas.size();
+				for (std::size_t Bin = 0; PreservesBoardUsage && Bin < Eval.BinAreas.size(); ++Bin) {
+					PreservesBoardUsage = Eval.BinAreas[Bin] + 1.0 >= BaselineEval.BinAreas[Bin];
+				}
+				if (!PreservesBoardUsage) {
+					std::cout << "[NEST][QUARTER TURN EVAL][REJECT] TargetCount=" << RotationSet.size()
+						<< ", reason=board usage regression" << std::endl;
+					continue;
+				}
+				if (!PreservesPassableFreeSpace(Eval, BaselineEval)) {
+					std::cout << "[NEST][QUARTER TURN EVAL][REJECT] TargetCount=" << RotationSet.size()
+						<< ", reason=passable free-space regression" << std::endl;
+					continue;
+				}
+				std::cout << "[NEST][QUARTER TURN EVAL] TargetCount=" << RotationSet.size()
+					<< ", FirstBinArea=" << Eval.FirstBinArea << ", Layers=" << Eval.Layers
+					<< ", PassableRegions=" << Eval.PassableFreeRegionCount << std::endl;
+				_UpdateLocalBest(ALocalBest, Eval, Layers, TestItems, TestMetaItems, AHasCluster);
+			}
+		}
+
+		void CetNest2DEngine::_TryOppositeEdgeCandidate(TetLocalBestResult& ALocalBest,
+			const TetClusterBuildResult& AClusterResult, const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions,
+			TetNestProgressTracker& ATracker, bool AHasCluster)
+		{
+			if (!ALocalBest.HasBest || AClusterResult.NestItems.size() > CET_NEST_FULL_STRATEGY_ITEM_LIMIT
+				|| AClusterResult.NestItems.size() != AClusterResult.MetaItems.size()) return;
+			const TetTNestEvalResult BaselineEval = ALocalBest.Eval;
+			const std::array<MetENestOrderStrategy, 2> Strategies{
+				MetENestOrderStrategy::LargeFirst, MetENestOrderStrategy::AreaDensityFirst };
+			for (const MetENestOrderStrategy Strategy : Strategies) {
+				CetTNestItemVector PriorityItems = AClusterResult.NestItems;
+				const std::vector<std::size_t> Order = _BuildPriorityOrder(PriorityItems, AOptions, Strategy);
+				CetTNestItemVector TestItems;
+				std::vector<TetMetaItem> TestMetaItems;
+				_BuildSortedTestData(PriorityItems, AClusterResult.MetaItems, Order, TestItems, TestMetaItems);
+				ApplyClusterEdgeClearance(TestItems, TestMetaItems, AOptions);
+				const std::size_t Layers = RunRectangleNestFromOppositeEdge(TestItems, AOptions, ATracker);
+				ClearItemInflation(TestItems);
+				if (Layers == 0) continue;
+				TetExpandedSpacingFailure Failure;
+				if (AHasCluster && !Nest2DUtils->Nest2DCluster->ValidatePackedResultSpacing(
+					AOriginalItems, TestItems, TestMetaItems, AOptions, &Failure)) {
+					std::cout << "[NEST][OPPOSITE EDGE EVAL][REJECT] Strategy=" << static_cast<int>(Strategy)
+						<< ", reason=expanded cluster spacing violation" << std::endl;
+					continue;
+				}
+				TetTNestEvalResult Eval = Nest2DUtils->Nest2DStrategy->EvaluatePackedResultWithMeta(
+					TestItems, TestMetaItems, AOriginalItems, AOptions, Layers);
+				CetTNestItemVector ExpandedItems;
+				Nest2DUtils->Nest2DCluster->ExpandClusterResultToOriginalItems(
+					AOriginalItems, TestItems, TestMetaItems, ExpandedItems, false);
+				EvaluateInternalGapMetrics(ExpandedItems, AOptions, Eval);
+				EvaluateBoardFreeRegionMetrics(ExpandedItems, AOptions, Eval);
+				EvaluatePassableFreeRegionMetrics(ExpandedItems, AOptions, Eval);
+				bool PreservesBoardUsage = Eval.BinAreas.size() == BaselineEval.BinAreas.size();
+				for (std::size_t Bin = 0; PreservesBoardUsage && Bin < Eval.BinAreas.size(); ++Bin) {
+					PreservesBoardUsage = Eval.BinAreas[Bin] + 1.0 >= BaselineEval.BinAreas[Bin];
+				}
+				const bool PreservesFreeSpace = PreservesPassableFreeSpace(Eval, BaselineEval);
+				if (!PreservesBoardUsage || !PreservesFreeSpace) {
+					std::cout << "[NEST][OPPOSITE EDGE EVAL][REJECT] Strategy=" << static_cast<int>(Strategy)
+						<< ", BoardUsage=" << PreservesBoardUsage << ", PassableFreeSpace=" << PreservesFreeSpace << std::endl;
+					continue;
+				}
+				std::cout << "[NEST][OPPOSITE EDGE EVAL] Strategy=" << static_cast<int>(Strategy)
+					<< ", FirstBinArea=" << Eval.FirstBinArea << ", Layers=" << Eval.Layers
+					<< ", PassableRegions=" << Eval.PassableFreeRegionCount << std::endl;
+				_UpdateLocalBest(ALocalBest, Eval, Layers, TestItems, TestMetaItems, AHasCluster);
+			}
+		}
+
 		TetLocalBestResult CetNest2DEngine::_EvaluateSingleSortingStrategy(const TetClusterBuildResult& AClusterResult, const CetTNestItemVector& AOriginalItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker, MetENestOrderStrategy AStrategy, TetExpandedSpacingFailure* AOutSpacingFailure)
 		{
 			TetLocalBestResult LocalBest;
@@ -1330,6 +1661,8 @@ namespace ET {
 			CetTNestItemVector ExpandedItems;
 			Nest2DUtils->Nest2DCluster->ExpandClusterResultToOriginalItems(AOriginalItems, TestItems, TestMetaItems, ExpandedItems, false);
 			EvaluateInternalGapMetrics(ExpandedItems, AOptions, Eval);
+			EvaluateBoardFreeRegionMetrics(ExpandedItems, AOptions, Eval);
+			EvaluatePassableFreeRegionMetrics(ExpandedItems, AOptions, Eval);
 			_UpdateLocalBest(LocalBest, Eval, Layers, TestItems, TestMetaItems, HasCluster);
 			return LocalBest;
 		}
@@ -1435,7 +1768,9 @@ namespace ET {
 				CetTNestItemVector ExpandedItems;
 				Nest2DUtils->Nest2DCluster->ExpandClusterResultToOriginalItems(AOriginalItems, TestItems, TestMetaItems, ExpandedItems, false);
 				EvaluateInternalGapMetrics(ExpandedItems, AOptions, Eval);
-				std::cout << "[NEST][EVAL] Strategy = " << static_cast<int>(Strategy) << ", HasCluster = " << CurrentHasCluster << ", Eval.FirstBinCount = " << Eval.FirstBinCount << ", Eval.FirstBinArea = " << Eval.FirstBinArea << ", Eval.Layers = " << Eval.Layers << ", Eval.InternalGapArea = " << Eval.InternalGapArea << ", Eval.InternalGapCount = " << Eval.InternalGapCount << ", Eval.RemnantArea = " << Eval.ReusableRemnantArea << ", Eval.RemnantShortSide = " << Eval.ReusableRemnantShortSide << ", Eval.SkylineWaste = " << Eval.SkylineWasteArea << ", Eval.RemnantDirection = " << (Eval.RemnantIsTopStrip ? "Top" : "Right") << ", LocalBest.FirstBinCount = " << LocalBest.Eval.FirstBinCount << ", LocalBest.FirstBinArea = " << LocalBest.Eval.FirstBinArea << ", LocalBest.Layers = " << LocalBest.Eval.Layers << std::endl;
+				EvaluateBoardFreeRegionMetrics(ExpandedItems, AOptions, Eval);
+				EvaluatePassableFreeRegionMetrics(ExpandedItems, AOptions, Eval);
+				std::cout << "[NEST][EVAL] Strategy = " << static_cast<int>(Strategy) << ", HasCluster = " << CurrentHasCluster << ", Eval.FirstBinCount = " << Eval.FirstBinCount << ", Eval.FirstBinArea = " << Eval.FirstBinArea << ", Eval.Layers = " << Eval.Layers << ", Eval.InternalGapArea = " << Eval.InternalGapArea << ", Eval.InternalGapCount = " << Eval.InternalGapCount << ", Eval.FreeRegions = " << Eval.BoardFreeRegionCount << ", Eval.FragmentedFreeArea = " << Eval.FragmentedFreeArea << ", Eval.LargestFreeArea = " << Eval.LargestFreeRegionArea << ", Eval.PassableRegions = " << Eval.PassableFreeRegionCount << ", Eval.PassableFragmentedArea = " << Eval.FragmentedPassableFreeArea << ", Eval.LargestPassableArea = " << Eval.LargestPassableFreeRegionArea << ", Eval.PassableWidth = " << Eval.MinimumPassableWidth << ", Eval.RemnantArea = " << Eval.ReusableRemnantArea << ", Eval.RemnantShortSide = " << Eval.ReusableRemnantShortSide << ", Eval.SkylineWaste = " << Eval.SkylineWasteArea << ", Eval.RemnantDirection = " << (Eval.RemnantIsTopStrip ? "Top" : "Right") << ", LocalBest.FirstBinCount = " << LocalBest.Eval.FirstBinCount << ", LocalBest.FirstBinArea = " << LocalBest.Eval.FirstBinArea << ", LocalBest.Layers = " << LocalBest.Eval.Layers << std::endl;
 				_UpdateLocalBest(LocalBest, Eval, Layers, TestItems, TestMetaItems, CurrentHasCluster);
 				if (AOriginalItems.size() > CET_NEST_FULL_STRATEGY_ITEM_LIMIT && LocalBest.HasBest && LocalBest.Layers == 1){
 					// One sheet is already the minimum possible. On large orders a
@@ -1445,6 +1780,10 @@ namespace ET {
 					std::cout << "[NEST][EVAL][SKIP REMAINING] OriginalCount=" << AOriginalItems.size() << ", PackedCount=" << AClusterResult.NestItems.size() << ", reason=one-sheet optimum at large-order limit" << std::endl;
 					break;
 				}
+			}
+			if (!UsePolygonBoard) {
+				_TryQuarterTurnCandidates(LocalBest, AOriginalItems, AOptions, ATracker, CurrentHasCluster);
+				_TryOppositeEdgeCandidate(LocalBest, AClusterResult, AOriginalItems, AOptions, ATracker, CurrentHasCluster);
 			}
 			return LocalBest;
 		}

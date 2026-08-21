@@ -45,7 +45,8 @@ namespace ET {
            // void _BuildProbePositions(const CetTNestItemVector& AOriginalItems, const std::vector<TetShapeFeature>& AFeatures, const TetClusterCandidate& ACandidate, int AFillerIndex, const CetPath& ARotatedFiller, double AFillerMinX, double AFillerMinY, double AFillerMaxX, double AFillerMaxY, double ARequiredGap, std::vector<std::pair<double, double>>& AOutPositions);
             bool _ContainsOriginalIndex(const TetClusterCandidate& ACandidate, int AOriginalIndex) const;
             double _GetFeatureArea(const CetNestItem& AItem, const TetShapeFeature& AFeature) const;
-            double _CalculatePlacementScore(const CetTNestItemVector& AOriginalItems, const TetClusterCandidate& ACandidate, double AFillerLeft, double AFillerTop, double AFillerRight, double AFillerBottom, double ARequiredGap) const;
+            double _CalculatePlacementScore(const CetTNestItemVector& AOriginalItems, const TetClusterCandidate& ACandidate, const CetPath& AFillerContour, const std::vector<TetClusterFreeRegion>& AFreeRegions, double AFillerLeft, double AFillerTop, double AFillerRight, double AFillerBottom, double ARequiredGap) const;
+            double _CalculateFreeRegionBoundaryContactScore(const CetPath& AFillerContour, const std::vector<TetClusterFreeRegion>& AFreeRegions, double ARequiredGap) const;
             void _AppendProbePosition(std::vector<std::pair<double, double>>& APositions, double AX, double AY, double AMaxX, double AMaxY) const;
 
             std::vector<int> _PrepareFillerIndices(const TetRectangleFillContext& ACtx, const TetClusterCandidate& ACandidate, double ABaseAvailableArea) const;
@@ -57,6 +58,10 @@ namespace ET {
 
             void _BuildCircleProbePositions(const TetProbeContext& ACtx, std::vector<std::pair<double, double>>& AOutPositions) const;
 
+            void _AppendFourCircleCenterProbes(const TetProbeContext& ACtx,
+                const std::vector<TetCircleCenter>& ACircleCenters,
+                std::vector<std::pair<double, double>>& AOutPositions) const;
+
             void _BuildEllipseProbePositions(const TetProbeContext& ACtx, std::vector<std::pair<double, double>>& AOutPositions) const;
 
             void _BuildEllipseNeighborLists(const std::vector<TetEllipseCenter>& ACenters,
@@ -65,6 +70,34 @@ namespace ET {
             void _BuildFreeRegionProbePositions(const TetProbeContext& ACtx,
                 const std::vector<TetClusterFreeRegion>& AFreeRegions,
                 std::vector<std::pair<double, double>>& AOutPositions) const;
+
+            void _AppendFreeRegionContourProbes(const TetProbeContext& ACtx, const CetPath& AContour,
+                std::vector<std::pair<double, double>>& AOutPositions) const;
+
+            void _AppendFreeRegionCenterProbes(const TetProbeContext& ACtx,
+                const std::vector<TetClusterFreeRegion>& AFreeRegions,
+                std::vector<std::pair<double, double>>& AOutPositions) const;
+
+            void _PrioritizeFreeRegionProbes(const TetProbeContext& ACtx,
+                const std::vector<TetClusterFreeRegion>& AFreeRegions,
+                bool AHasDenseEllipseSkeleton,
+                std::vector<std::pair<double, double>>& AInOutPositions) const;
+
+            void _BuildDenseCircleFreeRegionProbePositions(const TetProbeContext& ACtx,
+                const std::vector<TetClusterFreeRegion>& AFreeRegions,
+                std::vector<std::pair<double, double>>& AOutPositions) const;
+
+            bool _TryFindRotationPlacement(const CetTNestItemVector& AOriginalItems,
+                const std::vector<TetShapeFeature>& AFeatures, const TetClusterCandidate& ACurrentCandidate,
+                const std::vector<TetClusterFreeRegion>& AFreeRegions, int AFillerIndex,
+                const TetNestOptions& AOptions, double AEnvelopeWidth, double AEnvelopeHeight,
+                double ARotation, TetItemTransform& AOutTransform, double& AOutScore) const;
+
+            bool _TryFindBoundaryRotationPlacement(const CetTNestItemVector& AOriginalItems,
+                const std::vector<TetShapeFeature>& AFeatures, const TetClusterCandidate& ACurrentCandidate,
+                const std::vector<TetClusterFreeRegion>& AFreeRegions, int AFillerIndex,
+                const TetNestOptions& AOptions, double AEnvelopeWidth, double AEnvelopeHeight,
+                double ARotation, TetItemTransform& AOutTransform, double& AOutScore) const;
 
             void _BuildChildContourProbePositions(const TetProbeContext& ACtx, std::vector<std::pair<double, double>>& AOutPositions) const;
         };

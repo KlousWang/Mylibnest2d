@@ -32,6 +32,7 @@ namespace ET {
 		public:
 			void SetContext(CetTNestItemVector& ANestItems,const TetNestOptions& AOptions,const CetPolygonImpl& ABinPoly,double ABoardBinWidth,double ABoardBinHeight);
 			void Repair(std::size_t& ALayers);
+			bool RepairLockedEnvelope(std::size_t& ALayers, const std::vector<std::size_t>& ALockedItems);
 			bool HadBoardFillChanges() const { return _HadBoardFillChanges; }
 			bool EvacuateLastBin(std::size_t& ALayers, TetLastBinEvacuationStats& AStats);
 			
@@ -130,6 +131,7 @@ namespace ET {
 			long long m_PerItemPlacementCheckLimit = 0;
 			std::chrono::steady_clock::time_point m_SearchDeadline{};
 			bool m_SearchBudgetReached = false;
+			std::vector<std::size_t> m_LockedItemIndices;
 			static thread_local bool _HadBoardFillChanges;
 
 			std::vector<libnest2d::Radians> m_Rotations;
