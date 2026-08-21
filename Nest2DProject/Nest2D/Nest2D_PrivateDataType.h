@@ -41,6 +41,19 @@ constexpr std::size_t CET_CIRCLE_GAP_SEARCH_MAX_CANDIDATES = 8;
 constexpr std::size_t CET_CIRCLE_GAP_SEARCH_MAX_ATTEMPTS = 64;
 constexpr long long CET_CIRCLE_GAP_SEARCH_MAX_TIME_MS = 80;
 constexpr long long CET_CIRCLE_GAP_TOTAL_SEARCH_MAX_TIME_MS = 500;
+// A time-limited search still samples this many distinct shape families so a
+// slow failed contour check cannot starve all smaller compatible parts.
+constexpr std::size_t CET_CIRCLE_GAP_SEARCH_MIN_FAMILY_ATTEMPTS = 3;
+// Interior frame gaps need the full span between their surrounding members.
+// Exact free-region clipping still decides which part of that span is usable.
+constexpr double CET_CIRCLE_GAP_INTERIOR_WINDOW_SPAN_RATIO = 0.5;
+// Keep contour-contact probing bounded when a dense circular frame exposes an
+// internal free region that generic pair probes do not reach.
+constexpr std::size_t CET_CIRCLE_GAP_FREE_REGION_PROBE_COUNT = 16;
+// Generic free-region templates complement specialized circle and ellipse
+// searches. Keep the classification pass locally bounded for large orders.
+constexpr std::size_t CET_FREE_REGION_TEMPLATE_MAX_WINDOWS = 12;
+constexpr long long CET_FREE_REGION_TEMPLATE_TOTAL_SEARCH_MAX_MS = 250;
 constexpr std::size_t CET_CLUSTER_GLOBAL_REBALANCE_MAX_ATTEMPTS = 48;
 constexpr std::size_t CET_CLUSTER_GLOBAL_REBALANCE_MAX_UNASSIGNED_FILLERS = 12;
 constexpr std::size_t CET_CLUSTER_GLOBAL_REBALANCE_MAX_TRANSFERS = 6;

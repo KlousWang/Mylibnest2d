@@ -303,24 +303,37 @@ namespace ET {
                             && Transform.OriginalId < static_cast<int>(AFeatures.size())
                             && AFeatures[Transform.OriginalId].ShapeType == MetShapeType::EllipseLike;
                     }));
+                const std::size_t CircleCount = static_cast<std::size_t>(std::count_if(
+                    ACurrentCandidate.Transforms.begin(), ACurrentCandidate.Transforms.end(),
+                    [&](const TetItemTransform& Transform) {
+                        return Transform.OriginalId >= 0
+                            && Transform.OriginalId < static_cast<int>(AFeatures.size())
+                            && AFeatures[Transform.OriginalId].ShapeType == MetShapeType::CircleLike;
+                    }));
                 const bool HasDenseEllipseSkeleton = EllipseCount >= 8;
-                if (HasDenseEllipseSkeleton) {
+                const bool HasDenseCircleSkeleton = CircleCount >= 4;
+                if (HasDenseEllipseSkeleton || HasDenseCircleSkeleton) {
                     std::vector<std::pair<double, double>> FreeRegionPositions;
                     _BuildFreeRegionProbePositions(ProbeCtx, AFreeRegions, FreeRegionPositions);
-                    // Keep both generic and contour-contact probes. The exact
-                    // free-region vertices cover narrow pockets that a regular
-                    // ellipse grid cannot represent.
+                    const std::size_t FreeRegionLimit = HasDenseCircleSkeleton
+                        ? CET_CIRCLE_GAP_FREE_REGION_PROBE_COUNT
+                        : CET_ELLIPSE_GAP_FILL_FREE_REGION_PROBE_COUNT;
+                    if (FreeRegionPositions.size() > FreeRegionLimit) FreeRegionPositions.resize(FreeRegionLimit);
+                    // A dense frame's internal pockets are usually absent from
+                    // pair/grid probes. Try their exact boundaries first while
+                    // retaining the generic probes as a bounded fallback.
                     const std::size_t FillerCount = ACurrentCandidate.Transforms.size()
                         - std::min(ACurrentCandidate.SkeletonChildCount, ACurrentCandidate.Transforms.size());
-                    if (FillerCount >= CET_ELLIPSE_GAP_FILL_MAX_COMPOSITE_DEPTH) {
+                    if (HasDenseCircleSkeleton || FillerCount >= CET_ELLIPSE_GAP_FILL_MAX_COMPOSITE_DEPTH) {
                         FreeRegionPositions.insert(FreeRegionPositions.end(), ProbePositions.begin(), ProbePositions.end());
                         ProbePositions = std::move(FreeRegionPositions);
                     } else {
                         ProbePositions.insert(ProbePositions.end(), FreeRegionPositions.begin(), FreeRegionPositions.end());
                     }
                 }
-                const std::size_t ProbeLimit = HasDenseEllipseSkeleton
-                    ? CET_ELLIPSE_GAP_FILL_FREE_REGION_PROBE_COUNT
+                const std::size_t ProbeLimit = (HasDenseEllipseSkeleton || HasDenseCircleSkeleton)
+                    ? (HasDenseCircleSkeleton ? CET_CIRCLE_GAP_FREE_REGION_PROBE_COUNT
+                        : CET_ELLIPSE_GAP_FILL_FREE_REGION_PROBE_COUNT)
                     : (AOriginalItems.size() > CET_NEST_FULL_STRATEGY_ITEM_LIMIT
                         ? CET_RECTANGLE_FILL_LARGE_ORDER_MAX_PROBE_COUNT : ProbePositions.size());
                 const std::size_t ProbeCount = std::min(ProbePositions.size(), ProbeLimit);
@@ -451,6 +464,36 @@ namespace ET {
                     continue;
                 }
                 CircleCenters.push_back({ (MinX + ChildMaxX) * 0.5, (MinY + ChildMaxY) * 0.5, std::min(Width, Height) * 0.5 });
+            }
+
+            // A four-circle frame has a useful center that is not a pair
+            // tangent point. Add it before the bounded probe list can be
+            // truncated for large orders.
+            if (CircleCenters.size() == 4) {
+                double CenterX = 0.0;
+                double CenterY = 0.0;
+                double MinimumRadius = std::numeric_limits<double>::infinity();
+                for (const TetCircleCenter& Center : CircleCenters) {
+                    CenterX += Center.X;
+                    CenterY += Center.Y;
+                    MinimumRadius = std::min(MinimumRadius, Center.Radius);
+                }
+                CenterX *= 0.25;
+                CenterY *= 0.25;
+                const auto AddCenterProbe = [&](double AX, double AY) {
+                    _AppendProbePosition(AOutPositions, AX - ACtx.FillerWidth * 0.5,
+                        AY - ACtx.FillerHeight * 0.5, ACtx.MaxX, ACtx.MaxY);
+                };
+                AddCenterProbe(CenterX, CenterY);
+                const double Offset = std::min(MinimumRadius * 0.12,
+                    std::min(ACtx.FillerWidth, ACtx.FillerHeight) * 0.35);
+                for (const auto& Direction : { std::pair<double, double>{ 1.0, 0.0 },
+                    std::pair<double, double>{ -1.0, 0.0 },
+                    std::pair<double, double>{ 0.0, 1.0 },
+                    std::pair<double, double>{ 0.0, -1.0 } }) {
+                    AddCenterProbe(CenterX + Direction.first * Offset,
+                        CenterY + Direction.second * Offset);
+                }
             }
 
             // Probe the midpoint as well as both sides of every pair.  The
@@ -625,6 +668,13 @@ namespace ET {
                 }
                 AOutPositions.emplace_back(AX, AY);
             };
+            // The center of a real free region is a cheap, generic seed for
+            // symmetric internal voids before contour-contact probes explore
+            // its boundary. Exact containment remains the acceptance test.
+            for (const TetClusterFreeRegion& Region : AFreeRegions) {
+                Append(Region.MinX + (Region.Width - ACtx.FillerWidth) * 0.5,
+                    Region.MinY + (Region.Height - ACtx.FillerHeight) * 0.5);
+            }
             const auto AddContour = [&](const CetPath& AContour) {
                 if (AContour.empty()) return;
                 const std::size_t Step = std::max<std::size_t>(1, AContour.size() / 4);
