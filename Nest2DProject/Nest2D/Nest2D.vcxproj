@@ -183,7 +183,6 @@
     <ClInclude Include="Nest2D_ClusterBoundary.h" />
     <ClInclude Include="Nest2D_ClusterGeometryHelper.h" />
     <ClInclude Include="Nest2D_ClusterMathUtils.h" />
-    <ClInclude Include="Nest2D_ClusterInvokeFunctor.h" />
     <ClInclude Include="Nest2D_ClusterManager.h" />
     <ClInclude Include="Nest2D_CustomClusterBuilder.h" />
     <ClInclude Include="Nest2D_DataType.h" />

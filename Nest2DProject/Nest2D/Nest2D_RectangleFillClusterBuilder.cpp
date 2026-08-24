@@ -276,7 +276,11 @@ namespace ET {
                     BestScore = Score;
                     AOutTransform = Candidate;
                 }
-                if (HasDenseEllipseSkeleton) return true;
+                // Dense ellipse skeletons have many equivalent free regions.
+                // Do not accept the first feasible probe: it is often a
+                // corner/edge position that leaves a larger void elsewhere.
+                // Continue through the bounded probe budget and keep the
+                // highest-scoring placement instead.
             }
             return Found;
         }
@@ -335,7 +339,6 @@ namespace ET {
                 const CetPath Contour = Geometry.TransformContour(Rotated, 0.0, Transform.RelativeX, Transform.RelativeY);
                 if (!_IsContourInsideFreeRegions(Contour, AFreeRegions)
                     || !Geometry.CanAppendTransformWithSpacing(AOriginalItems, AOptions, ACurrentCandidate.Transforms, Transform)) continue;
-                if (HasDenseEllipseSkeleton) { AOutScore = 0.0; AOutTransform = Transform; return true; }
                 const double Score = _CalculatePlacementScore(AOriginalItems, ACurrentCandidate, Contour, NoBoundaryRegions,
                     Position.first, Position.second, Position.first + Width, Position.second + Height, Gap);
                 if (!Found || Score > AOutScore + 1e-9) { Found = true; AOutScore = Score; AOutTransform = Transform; }
@@ -828,12 +831,18 @@ namespace ET {
             double AFillerRight, double AFillerBottom, double ARequiredGap) const
         {
             const double ContactTolerance = ARequiredGap + CET_RECTANGLE_FILL_POSITION_TOLERANCE;
-            double Score = -(AFillerTop + AFillerLeft) / std::max(1.0, ACandidate.ClusterWidth + ACandidate.ClusterHeight);
+            // Prefer extending the current row from left to right.  The old
+            // equal X/Y weight could select an upper-right probe, which
+            // split the free area below the circular skeleton into two
+            // disconnected pockets.
+            const double PlacementScale = std::max(1.0, ACandidate.ClusterWidth + ACandidate.ClusterHeight);
+            double Score = -(AFillerLeft * 2.0 + AFillerTop) / PlacementScale;
             const double FillerCenterX = (AFillerLeft + AFillerRight) * 0.5;
             const double FillerCenterY = (AFillerTop + AFillerBottom) * 0.5;
             const double FillerSize = std::max(AFillerRight - AFillerLeft, AFillerBottom - AFillerTop);
             std::size_t NearbyCircleCount = 0;
             bool HasNonCircleFiller = false;
+            double NearestVerticalGap = std::numeric_limits<double>::infinity();
             CetClusterGeometryHelper Geometry;
             for (const TetItemTransform& Transform : ACandidate.Transforms){
                 if (Transform.OriginalId < 0 || Transform.OriginalId >= static_cast<int>(AOriginalItems.size())){
@@ -859,11 +868,24 @@ namespace ET {
                 const double HorizontalGap = std::max({ MinX - AFillerRight, AFillerLeft - MaxX, 0.0 });
                 const double VerticalGap = std::max({ MinY - AFillerBottom, AFillerTop - MaxY, 0.0 });
                 if (VerticalOverlap && HorizontalGap <= ContactTolerance){
-                    Score += 3.0;
+                    // Horizontal continuation is the preferred topology for
+                    // this fill pass: keep parts in one left-to-right band.
+                    Score += 8.0;
                 }
                 if (HorizontalOverlap && VerticalGap <= ContactTolerance){
-                    Score += 3.0;
+                    // Vertical stacking remains valid, but should lose to a
+                    // same-row continuation when both placements fit.
+                    Score += 2.0;
                 }
+
+                if (!VerticalOverlap) {
+                    NearestVerticalGap = std::min(NearestVerticalGap, VerticalGap);
+                }
+            }
+            // Apply the row-separation penalty once, using the nearest
+            // existing part rather than multiplying it by child count.
+            if (std::isfinite(NearestVerticalGap) && NearestVerticalGap > ContactTolerance) {
+                Score -= std::min(6.0, NearestVerticalGap / std::max(1.0, FillerSize));
             }
             if (NearbyCircleCount >= 3 && !HasNonCircleFiller) Score += 20.0;
             return Score;

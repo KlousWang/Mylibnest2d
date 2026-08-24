@@ -1,7 +1,7 @@
 #pragma once
 #include "EtTechCore_InvokeFunctorMacro.h"
 #include "Nest2D_InvokeFunctor.h"
-#include"Nest2D_ClusterInvokeFunctor.h"
+//#include"Nest2D_ClusterInvokeFunctor.h"
 #include"EtTechCore_LibConfig.h"
 
 

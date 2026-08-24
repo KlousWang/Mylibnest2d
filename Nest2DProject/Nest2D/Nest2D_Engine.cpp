@@ -1034,6 +1034,116 @@ namespace ET {
 			return ACandidate.PassableFreeRegionCount <= ABaseline.PassableFreeRegionCount;
 		}
 
+		struct TetAllBinRemnantMetric
+		{
+			bool Valid = false;
+			double ReusableStripArea = 0.0;
+			double SkylineWasteArea = 0.0;
+			double UsedEnvelopeArea = 0.0;
+			std::vector<double> BinReusableStripAreas;
+		};
+
+		static TetAllBinRemnantMetric EvaluateAllBinRemnantMetric(const CetTNestItemVector& AItems,
+			const TetNestOptions& AOptions, std::size_t ALayers)
+		{
+			TetAllBinRemnantMetric Result;
+			if ((AOptions.Board.Enabled && AOptions.Board.Vertices.size() >= 3) || ALayers == 0) return Result;
+			const double BinWidth = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth));
+			const double BinHeight = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinHeight));
+			if (BinWidth <= 0.0 || BinHeight <= 0.0) return Result;
+
+			std::vector<std::vector<TetRemnantPartBounds>> BoundsByBin(ALayers);
+			for (const CetNestItem& Item : AItems) {
+				const int BinId = Item.binId();
+				if (BinId < 0 || static_cast<std::size_t>(BinId) >= ALayers) continue;
+				const auto Bounds = Item.boundingBox();
+				TetRemnantPartBounds PartBounds;
+				PartBounds.MinX = static_cast<double>(getX(Bounds.minCorner()));
+				PartBounds.MinY = static_cast<double>(getY(Bounds.minCorner()));
+				PartBounds.MaxX = static_cast<double>(getX(Bounds.maxCorner()));
+				PartBounds.MaxY = static_cast<double>(getY(Bounds.maxCorner()));
+				if (PartBounds.MaxX > PartBounds.MinX && PartBounds.MaxY > PartBounds.MinY) {
+					BoundsByBin[static_cast<std::size_t>(BinId)].push_back(PartBounds);
+				}
+			}
+
+			Result.BinReusableStripAreas.resize(ALayers, 0.0);
+			for (std::size_t BinId = 0; BinId < BoundsByBin.size(); ++BinId) {
+				const std::vector<TetRemnantPartBounds>& BinBounds = BoundsByBin[BinId];
+				if (BinBounds.empty()) continue;
+				std::array<double, CET_REMNANT_SKYLINE_SAMPLES> HorizontalSkyline{};
+				std::array<double, CET_REMNANT_SKYLINE_SAMPLES> VerticalSkyline{};
+				double UsedMaxX = 0.0;
+				double UsedMaxY = 0.0;
+				for (const TetRemnantPartBounds& Bounds : BinBounds) {
+					const double MinX = std::clamp(Bounds.MinX, 0.0, BinWidth);
+					const double MaxX = std::clamp(Bounds.MaxX, 0.0, BinWidth);
+					const double MinY = std::clamp(Bounds.MinY, 0.0, BinHeight);
+					const double MaxY = std::clamp(Bounds.MaxY, 0.0, BinHeight);
+					UsedMaxX = std::max(UsedMaxX, MaxX);
+					UsedMaxY = std::max(UsedMaxY, MaxY);
+					const std::size_t StartX = std::min(CET_REMNANT_SKYLINE_SAMPLES - 1,
+						static_cast<std::size_t>(std::floor(MinX / BinWidth * CET_REMNANT_SKYLINE_SAMPLES)));
+					const std::size_t EndX = std::min(CET_REMNANT_SKYLINE_SAMPLES,
+						static_cast<std::size_t>(std::ceil(MaxX / BinWidth * CET_REMNANT_SKYLINE_SAMPLES)));
+					for (std::size_t Sample = StartX; Sample < EndX; ++Sample) {
+						HorizontalSkyline[Sample] = std::max(HorizontalSkyline[Sample], MaxY);
+					}
+					const std::size_t StartY = std::min(CET_REMNANT_SKYLINE_SAMPLES - 1,
+						static_cast<std::size_t>(std::floor(MinY / BinHeight * CET_REMNANT_SKYLINE_SAMPLES)));
+					const std::size_t EndY = std::min(CET_REMNANT_SKYLINE_SAMPLES,
+						static_cast<std::size_t>(std::ceil(MaxY / BinHeight * CET_REMNANT_SKYLINE_SAMPLES)));
+					for (std::size_t Sample = StartY; Sample < EndY; ++Sample) {
+						VerticalSkyline[Sample] = std::max(VerticalSkyline[Sample], MaxX);
+					}
+				}
+
+				const double HorizontalStep = BinWidth / static_cast<double>(CET_REMNANT_SKYLINE_SAMPLES);
+				const double VerticalStep = BinHeight / static_cast<double>(CET_REMNANT_SKYLINE_SAMPLES);
+				const std::size_t UsedHorizontalSamples = std::min(CET_REMNANT_SKYLINE_SAMPLES,
+					static_cast<std::size_t>(std::ceil(UsedMaxX / BinWidth * CET_REMNANT_SKYLINE_SAMPLES)));
+				const std::size_t UsedVerticalSamples = std::min(CET_REMNANT_SKYLINE_SAMPLES,
+					static_cast<std::size_t>(std::ceil(UsedMaxY / BinHeight * CET_REMNANT_SKYLINE_SAMPLES)));
+				double TopWaste = 0.0;
+				for (std::size_t Sample = 0; Sample < UsedHorizontalSamples; ++Sample) {
+					TopWaste += std::max(0.0, UsedMaxY - HorizontalSkyline[Sample]) * HorizontalStep;
+				}
+				double RightWaste = 0.0;
+				for (std::size_t Sample = 0; Sample < UsedVerticalSamples; ++Sample) {
+					RightWaste += std::max(0.0, UsedMaxX - VerticalSkyline[Sample]) * VerticalStep;
+				}
+				const double TopArea = BinWidth * std::max(0.0, BinHeight - UsedMaxY);
+				const double RightArea = BinHeight * std::max(0.0, BinWidth - UsedMaxX);
+				const bool PreferTop = TopArea > RightArea || (std::abs(TopArea - RightArea) <= 1.0 && TopWaste <= RightWaste);
+				const double ReusableArea = PreferTop ? TopArea : RightArea;
+				Result.BinReusableStripAreas[BinId] = ReusableArea;
+				Result.ReusableStripArea += ReusableArea;
+				Result.SkylineWasteArea += PreferTop ? TopWaste : RightWaste;
+				Result.UsedEnvelopeArea += UsedMaxX * UsedMaxY;
+				Result.Valid = true;
+			}
+			return Result;
+		}
+
+		static bool IsBetterAllBinRemnant(const TetAllBinRemnantMetric& ACandidate,
+			const TetAllBinRemnantMetric& ABaseline)
+		{
+			if (!ACandidate.Valid || !ABaseline.Valid) return false;
+			auto Different = [](double A, double B) {
+				return std::abs(A - B) > std::max({ 1.0, std::abs(A), std::abs(B) }) * 1e-9;
+			};
+			if (Different(ACandidate.ReusableStripArea, ABaseline.ReusableStripArea)) {
+				return ACandidate.ReusableStripArea > ABaseline.ReusableStripArea;
+			}
+			if (Different(ACandidate.SkylineWasteArea, ABaseline.SkylineWasteArea)) {
+				return ACandidate.SkylineWasteArea < ABaseline.SkylineWasteArea;
+			}
+			if (Different(ACandidate.UsedEnvelopeArea, ABaseline.UsedEnvelopeArea)) {
+				return ACandidate.UsedEnvelopeArea < ABaseline.UsedEnvelopeArea;
+			}
+			return false;
+		}
+
 		bool CetNest2DEngine::_TryBoardFeedbackNest(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker, std::size_t& ALayers)
 		{
 			if (ANestItems.empty() || ALayers <= 1 || ANestItems.size() > CET_BOARD_FEEDBACK_NEST_MAX_ITEM_COUNT) {
@@ -1517,14 +1627,55 @@ namespace ET {
 			TetNestProgressTracker& ATracker, bool AHasCluster)
 		{
 			if (!ALocalBest.HasBest || ALocalBest.Items.size() > CET_NEST_FULL_STRATEGY_ITEM_LIMIT
+				|| AOptions.Board.Enabled
 				|| !CetRotationUtils::IsAllowedRotation(CET_CLUSTER_HALF_PI, AOptions.Rotations, 1e-9)) return;
-			const CetTNestItemVector BaselineItems = ALocalBest.Items;
-			const std::vector<TetMetaItem> BaselineMetaItems = ALocalBest.MetaItems;
-			const TetTNestEvalResult BaselineEval = ALocalBest.Eval;
+			(void)ATracker;
+			constexpr std::size_t MaxTargets = 8;
+			// Keep the optimization local and conservative. A second accepted move can
+			// make an otherwise clean sheet worse for a marginal aggregate gain.
+			constexpr std::size_t MaxGreedyPasses = 1;
+			const auto BinWidth = NestUtils::ToNestCoord(AOptions.BinWidth);
+			const auto BinHeight = NestUtils::ToNestCoord(AOptions.BinHeight);
+			const auto Spacing = NestUtils::ToNestCoord(std::max(0.0, AOptions.Spacing));
+			const auto HalfSpacing = static_cast<libnest2d::Coord>(
+				std::ceil(static_cast<double>(Spacing) * 0.5));
+			if (BinWidth <= 0 || BinHeight <= 0) return;
+
+			auto AddCoordinate = [](std::vector<ClipperLib::cInt>& ACoordinates, double AValue,
+				double AMaximum) {
+				if (AValue < -1.0 || AValue > AMaximum + 1.0) return;
+				ACoordinates.push_back(static_cast<ClipperLib::cInt>(std::llround(
+					std::clamp(AValue, 0.0, AMaximum))));
+			};
+			auto CanPlaceTarget = [&](const CetTNestItemVector& AItems, std::size_t ATargetIndex) {
+				if (ATargetIndex >= AItems.size()) return false;
+				CetNestItem Target = AItems[ATargetIndex];
+				Target.inflation(0);
+				const auto RawBounds = Target.boundingBox();
+				if (getX(RawBounds.minCorner()) < 0 || getY(RawBounds.minCorner()) < 0
+					|| getX(RawBounds.maxCorner()) > BinWidth || getY(RawBounds.maxCorner()) > BinHeight) {
+					return false;
+				}
+				Target.inflation(HalfSpacing);
+				const auto TargetBounds = Target.boundingBox();
+				for (std::size_t Index = 0; Index < AItems.size(); ++Index) {
+					if (Index == ATargetIndex || AItems[Index].binId() != Target.binId()) continue;
+					CetNestItem Other = AItems[Index];
+					Other.inflation(HalfSpacing);
+					const auto OtherBounds = Other.boundingBox();
+					if (getX(TargetBounds.maxCorner()) < getX(OtherBounds.minCorner())
+						|| getX(TargetBounds.minCorner()) > getX(OtherBounds.maxCorner())
+						|| getY(TargetBounds.maxCorner()) < getY(OtherBounds.minCorner())
+						|| getY(TargetBounds.minCorner()) > getY(OtherBounds.maxCorner())) continue;
+					if (CetNestItem::intersects(Target, Other) && !CetNestItem::touches(Target, Other)) return false;
+				}
+				return true;
+			};
+
 			std::vector<std::pair<double, std::size_t>> Targets;
-			for (std::size_t Index = 0; Index < BaselineItems.size(); ++Index) {
-				if (!BaselineMetaItems[Index].IsCluster || BaselineMetaItems[Index].TransformData.size() < 2) continue;
-				const auto Bounds = BaselineItems[Index].boundingBox();
+			for (std::size_t Index = 0; Index < ALocalBest.Items.size(); ++Index) {
+				if (!ALocalBest.MetaItems[Index].IsCluster || ALocalBest.MetaItems[Index].TransformData.size() < 2) continue;
+				const auto Bounds = ALocalBest.Items[Index].boundingBox();
 				const double Width = std::abs(static_cast<double>(Bounds.width()));
 				const double Height = std::abs(static_cast<double>(Bounds.height()));
 				if (Width <= 0.0 || Height <= 0.0) continue;
@@ -1532,50 +1683,134 @@ namespace ET {
 				if (Aspect > 1.1) Targets.emplace_back(Aspect, Index);
 			}
 			std::stable_sort(Targets.begin(), Targets.end(), std::greater<>());
-			if (Targets.size() > 3) Targets.resize(3);
-			std::vector<std::vector<std::size_t>> RotationSets;
-			for (const auto& Target : Targets) RotationSets.push_back({ Target.second });
-			for (const std::vector<std::size_t>& RotationSet : RotationSets) {
-				CetTNestItemVector TestItems = BaselineItems;
-				std::vector<TetMetaItem> TestMetaItems = BaselineMetaItems;
-				for (std::size_t Index = 0; Index < TestItems.size(); ++Index) {
-					TestItems[Index].binId(-1); TestItems[Index].translation(Point(0, 0)); TestItems[Index].inflation(0);
-					TestMetaItems[Index].PackedItemIndex = static_cast<int>(Index);
-				}
-				for (std::size_t TargetIndex : RotationSet) {
-					TestItems[TargetIndex].rotation(Radians(static_cast<double>(TestItems[TargetIndex].rotation()) + CET_CLUSTER_HALF_PI));
-				}
-				const std::size_t Layers = RunRectangleNestOnce(TestItems, AOptions, ATracker, false, false);
-				if (Layers == 0) continue;
-				TetExpandedSpacingFailure Failure;
-				if (AHasCluster && !Nest2DUtils->Nest2DCluster->ValidatePackedResultSpacing(
-					AOriginalItems, TestItems, TestMetaItems, AOptions, &Failure)) continue;
-				TetTNestEvalResult Eval = Nest2DUtils->Nest2DStrategy->EvaluatePackedResultWithMeta(
-					TestItems, TestMetaItems, AOriginalItems, AOptions, Layers);
-				CetTNestItemVector ExpandedItems;
+			if (Targets.size() > MaxTargets) Targets.resize(MaxTargets);
+			std::set<std::size_t> AppliedTargets;
+
+			for (std::size_t Pass = 0; Pass < MaxGreedyPasses; ++Pass) {
+				const CetTNestItemVector PassBaseItems = ALocalBest.Items;
+				const std::vector<TetMetaItem> PassBaseMetaItems = ALocalBest.MetaItems;
+				const TetTNestEvalResult PassBaseEval = ALocalBest.Eval;
+				CetTNestItemVector ExpandedBaseline;
 				Nest2DUtils->Nest2DCluster->ExpandClusterResultToOriginalItems(
-					AOriginalItems, TestItems, TestMetaItems, ExpandedItems, false);
-				EvaluateInternalGapMetrics(ExpandedItems, AOptions, Eval);
-				EvaluateBoardFreeRegionMetrics(ExpandedItems, AOptions, Eval);
-				EvaluatePassableFreeRegionMetrics(ExpandedItems, AOptions, Eval);
-				bool PreservesBoardUsage = Eval.BinAreas.size() == BaselineEval.BinAreas.size();
-				for (std::size_t Bin = 0; PreservesBoardUsage && Bin < Eval.BinAreas.size(); ++Bin) {
-					PreservesBoardUsage = Eval.BinAreas[Bin] + 1.0 >= BaselineEval.BinAreas[Bin];
+					AOriginalItems, PassBaseItems, PassBaseMetaItems, ExpandedBaseline, false);
+				const TetAllBinRemnantMetric PassBaseRemnant = EvaluateAllBinRemnantMetric(
+					ExpandedBaseline, AOptions, PassBaseEval.Layers);
+
+				bool HasPassBest = false;
+				std::size_t PassBestTarget = 0;
+				std::size_t PassBestLayers = 0;
+				TetTNestEvalResult PassBestEval{};
+				TetAllBinRemnantMetric PassBestRemnant = PassBaseRemnant;
+				CetTNestItemVector PassBestItems;
+				std::vector<TetMetaItem> PassBestMetaItems;
+
+				for (const auto& Target : Targets) {
+					const std::size_t TargetIndex = Target.second;
+					if (AppliedTargets.find(TargetIndex) != AppliedTargets.end()) continue;
+					const std::string& ClusterType = PassBaseMetaItems[TargetIndex].ClusterType;
+					std::cout << "[NEST][QUARTER TURN CANDIDATE] Pass=" << Pass + 1
+						<< ", Index=" << TargetIndex << ", Type=" << ClusterType
+						<< ", Aspect=" << Target.first << std::endl;
+
+					CetNestItem RotatedTarget = PassBaseItems[TargetIndex];
+					RotatedTarget.inflation(0);
+					RotatedTarget.rotation(Radians(
+						static_cast<double>(RotatedTarget.rotation()) + CET_CLUSTER_HALF_PI));
+					const auto RotatedBounds = RotatedTarget.boundingBox();
+					const double RotatedWidth = static_cast<double>(RotatedBounds.width());
+					const double RotatedHeight = static_cast<double>(RotatedBounds.height());
+					if (RotatedWidth <= 0.0 || RotatedHeight <= 0.0
+						|| RotatedWidth > static_cast<double>(BinWidth) || RotatedHeight > static_cast<double>(BinHeight)) continue;
+
+					// Moving a cluster to another already-used sheet may improve an aggregate
+					// score while consuming a clean remnant there. Cross-sheet relocation is
+					// reserved for the separate sheet-elimination pass.
+					const int CandidateBin = PassBaseItems[TargetIndex].binId();
+					if (CandidateBin < 0) continue;
+					std::size_t CheckedPlacements = 0;
+					std::size_t ValidPlacements = 0;
+						std::vector<ClipperLib::cInt> XCoordinates;
+						std::vector<ClipperLib::cInt> YCoordinates;
+						const double MaxX = static_cast<double>(BinWidth) - RotatedWidth;
+						const double MaxY = static_cast<double>(BinHeight) - RotatedHeight;
+						AddCoordinate(XCoordinates, 0.0, MaxX);
+						AddCoordinate(XCoordinates, MaxX, MaxX);
+						AddCoordinate(YCoordinates, 0.0, MaxY);
+						AddCoordinate(YCoordinates, MaxY, MaxY);
+						for (std::size_t Index = 0; Index < PassBaseItems.size(); ++Index) {
+							if (Index == TargetIndex || PassBaseItems[Index].binId() != CandidateBin) continue;
+							CetNestItem Other = PassBaseItems[Index];
+							Other.inflation(0);
+							const auto Bounds = Other.boundingBox();
+							AddCoordinate(XCoordinates, static_cast<double>(getX(Bounds.maxCorner())) + Spacing, MaxX);
+							AddCoordinate(XCoordinates, static_cast<double>(getX(Bounds.minCorner())) - Spacing - RotatedWidth, MaxX);
+							AddCoordinate(YCoordinates, static_cast<double>(getY(Bounds.maxCorner())) + Spacing, MaxY);
+							AddCoordinate(YCoordinates, static_cast<double>(getY(Bounds.minCorner())) - Spacing - RotatedHeight, MaxY);
+						}
+						std::sort(XCoordinates.begin(), XCoordinates.end());
+						XCoordinates.erase(std::unique(XCoordinates.begin(), XCoordinates.end()), XCoordinates.end());
+						std::sort(YCoordinates.begin(), YCoordinates.end());
+						YCoordinates.erase(std::unique(YCoordinates.begin(), YCoordinates.end()), YCoordinates.end());
+
+						for (ClipperLib::cInt MinY : YCoordinates) {
+							for (ClipperLib::cInt MinX : XCoordinates) {
+								++CheckedPlacements;
+								CetTNestItemVector TestItems = PassBaseItems;
+								CetNestItem& TestTarget = TestItems[TargetIndex];
+								TestTarget.inflation(0);
+								TestTarget.rotation(RotatedTarget.rotation());
+								TestTarget.binId(CandidateBin);
+								const auto Bounds = TestTarget.boundingBox();
+								const Point Translation = TestTarget.translation();
+								TestTarget.translation(Point(
+									Translation.X + MinX - getX(Bounds.minCorner()),
+									Translation.Y + MinY - getY(Bounds.minCorner())));
+								if (!CanPlaceTarget(TestItems, TargetIndex)) continue;
+								++ValidPlacements;
+
+								CetTNestItemVector ExpandedItems;
+								Nest2DUtils->Nest2DCluster->ExpandClusterResultToOriginalItems(
+									AOriginalItems, TestItems, PassBaseMetaItems, ExpandedItems, false);
+								const TetAllBinRemnantMetric Remnant = EvaluateAllBinRemnantMetric(
+									ExpandedItems, AOptions, PassBaseEval.Layers);
+								const TetAllBinRemnantMetric& Comparison = HasPassBest ? PassBestRemnant : PassBaseRemnant;
+								if (!IsBetterAllBinRemnant(Remnant, Comparison)) continue;
+								TetExpandedSpacingFailure Failure;
+								if (AHasCluster && !Nest2DUtils->Nest2DCluster->ValidatePackedResultSpacing(
+									AOriginalItems, TestItems, PassBaseMetaItems, AOptions, &Failure)) continue;
+
+								TetTNestEvalResult Eval = Nest2DUtils->Nest2DStrategy->EvaluatePackedResultWithMeta(
+									TestItems, PassBaseMetaItems, AOriginalItems, AOptions, PassBaseEval.Layers);
+								EvaluateInternalGapMetrics(ExpandedItems, AOptions, Eval);
+								EvaluateBoardFreeRegionMetrics(ExpandedItems, AOptions, Eval);
+								EvaluatePassableFreeRegionMetrics(ExpandedItems, AOptions, Eval);
+								HasPassBest = true;
+								PassBestTarget = TargetIndex;
+								PassBestLayers = PassBaseEval.Layers;
+								PassBestEval = std::move(Eval);
+								PassBestRemnant = Remnant;
+								PassBestItems = std::move(TestItems);
+								PassBestMetaItems = PassBaseMetaItems;
+							}
+						}
+					std::cout << "[NEST][QUARTER TURN LOCAL EVAL] Type=" << ClusterType
+						<< ", Bin=" << CandidateBin << ", Checked=" << CheckedPlacements << ", Valid=" << ValidPlacements
+						<< ", Improved=" << (HasPassBest && PassBestTarget == TargetIndex ? 1 : 0) << std::endl;
 				}
-				if (!PreservesBoardUsage) {
-					std::cout << "[NEST][QUARTER TURN EVAL][REJECT] TargetCount=" << RotationSet.size()
-						<< ", reason=board usage regression" << std::endl;
-					continue;
-				}
-				if (!PreservesPassableFreeSpace(Eval, BaselineEval)) {
-					std::cout << "[NEST][QUARTER TURN EVAL][REJECT] TargetCount=" << RotationSet.size()
-						<< ", reason=passable free-space regression" << std::endl;
-					continue;
-				}
-				std::cout << "[NEST][QUARTER TURN EVAL] TargetCount=" << RotationSet.size()
-					<< ", FirstBinArea=" << Eval.FirstBinArea << ", Layers=" << Eval.Layers
-					<< ", PassableRegions=" << Eval.PassableFreeRegionCount << std::endl;
-				_UpdateLocalBest(ALocalBest, Eval, Layers, TestItems, TestMetaItems, AHasCluster);
+
+				if (!HasPassBest) break;
+				AppliedTargets.insert(PassBestTarget);
+				ALocalBest.HasBest = true;
+				ALocalBest.Eval = std::move(PassBestEval);
+				ALocalBest.Layers = PassBestLayers;
+				ALocalBest.Items = std::move(PassBestItems);
+				ALocalBest.MetaItems = std::move(PassBestMetaItems);
+				ALocalBest.HasCluster = AHasCluster;
+				std::cout << "[NEST][QUARTER TURN LOCAL ACCEPT] Pass=" << Pass + 1
+					<< ", Index=" << PassBestTarget
+					<< ", Type=" << ALocalBest.MetaItems[PassBestTarget].ClusterType
+					<< ", ReusableStrip=" << PassBestRemnant.ReusableStripArea
+					<< ", SkylineWaste=" << PassBestRemnant.SkylineWasteArea << std::endl;
 			}
 		}
 

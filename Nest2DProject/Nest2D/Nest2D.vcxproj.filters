@@ -84,9 +84,6 @@
     <ClInclude Include="Nest2D_TriangleClusterBuilder.h">
       <Filter>头文件\Cluster</Filter>
     </ClInclude>
-    <ClInclude Include="Nest2D_ClusterInvokeFunctor.h">
-      <Filter>头文件\Cluster</Filter>
-    </ClInclude>
     <ClInclude Include="Nest2D_CircleClusterBuilder.h">
       <Filter>头文件\Cluster</Filter>
     </ClInclude>
