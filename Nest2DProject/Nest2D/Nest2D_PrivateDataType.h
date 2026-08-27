@@ -1,17 +1,17 @@
 #pragma once
 #include "pch.h"
 #include "Nest2D_DataType.h"
-#include <vector>
-#include <string>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
-#include <utility>
-#include <limits>
-#include <array>
-#include <map>
 #include <libnest2d/backends/clipper/geometries.hpp>
 #include <libnest2d/libnest2d.hpp>
+#include <limits>
+#include <map>
+#include <string>
+#include <utility>
+#include <vector>
 
 using CetTNestItemVector = std::vector<libnest2d::Item>;
 using CetNestItem = CetTNestItemVector::value_type;
@@ -254,24 +254,48 @@ constexpr long long CET_LAST_BIN_MAX_PLACEMENT_CHECKS_PER_ITEM = 30000;
 constexpr long long CET_LAST_BIN_MAX_TOTAL_PLACEMENT_CHECKS = 240000;
 constexpr long long CET_LAST_BIN_MAX_SEARCH_TIME_MS = 15000;
 
-
 // ============================================================================
 // 第一层级：毫无依赖的底层枚举 (Enums)
 // ============================================================================
 
-enum class MetClusterStrategy { None = 0, RightTrianglePair, AutoPairCluster, TemplateCluster };
-enum class MetClusterProxyMode { Unknown = 0, ExactUnion, OffsetUnion, ConvexHull, RectangleFallback };
-inline const char* ToString(MetClusterProxyMode AMode)
+enum class MetClusterStrategy
+{
+    None = 0,
+    RightTrianglePair,
+    AutoPairCluster,
+    TemplateCluster
+};
+enum class MetClusterProxyMode
+{
+    Unknown = 0,
+    ExactUnion,
+    OffsetUnion,
+    ConvexHull,
+    RectangleFallback
+};
+inline const char *ToString(MetClusterProxyMode AMode)
 {
     switch (AMode) {
-    case MetClusterProxyMode::ExactUnion: return "ExactUnion";
-    case MetClusterProxyMode::OffsetUnion: return "OffsetUnion";
-    case MetClusterProxyMode::ConvexHull: return "ConvexHull";
-    case MetClusterProxyMode::RectangleFallback: return "RectangleFallback";
-    default: return "Unknown";
+    case MetClusterProxyMode::ExactUnion:
+        return "ExactUnion";
+    case MetClusterProxyMode::OffsetUnion:
+        return "OffsetUnion";
+    case MetClusterProxyMode::ConvexHull:
+        return "ConvexHull";
+    case MetClusterProxyMode::RectangleFallback:
+        return "RectangleFallback";
+    default:
+        return "Unknown";
     }
 }
-enum class MetENestOrderStrategy { LargeFirst = 0, SmallFirst, LongSideFirst, ThinFirst, AreaDensityFirst };
+enum class MetENestOrderStrategy
+{
+    LargeFirst = 0,
+    SmallFirst,
+    LongSideFirst,
+    ThinFirst,
+    AreaDensityFirst
+};
 
 enum class MetShapeType
 {
@@ -321,7 +345,8 @@ enum class MetArcSweepBucket
 // 第二层级：基础结构体 (Base Structs)
 // ============================================================================
 
-struct TetItemTransform {
+struct TetItemTransform
+{
     int OriginalId = -1;
     double RelativeX = 0.0;
     double RelativeY = 0.0;
@@ -339,7 +364,7 @@ struct TetCustomRotationPose
 
 struct TetCustomLayoutPattern
 {
-    const char* Name = "";
+    const char *Name = "";
     double ColumnPitchRatio = 1.0;
     double RowPitchRatio = 1.0;
     double RowStaggerRatio = 0.0;
@@ -384,7 +409,8 @@ struct TetAutoPairBuildInput
     double BOffsetY = 0.0;
 };
 
-struct TetThickArcTestInput {
+struct TetThickArcTestInput
+{
     double CenterX;
     double CenterY;
     double OuterRadius;
@@ -394,7 +420,6 @@ struct TetThickArcTestInput {
     CetInpoint ChordStart;
     CetInpoint ChordEnd;
 };
-
 
 // ============================================================================
 // 第三层级：复杂结构体 (Complex Structs)
@@ -464,26 +489,48 @@ struct TetShapeFeature
     std::size_t ShapeHash = 0;
 };
 
-struct TetMetaItem {
+struct TetMetaItem
+{
     int PackedItemIndex = -1;
     bool IsCluster = false;
     std::string ClusterType = "Single";
     std::vector<TetItemTransform> TransformData;
 };
 
-struct TetClusterCandidate {
-    bool Valid = false; std::string ClusterType; std::string BuilderName;
-    std::vector<int> OriginalIndices; std::vector<TetItemTransform> Transforms; CetPath ProxyContour;
+struct TetClusterCandidate
+{
+    bool Valid = false;
+    std::string ClusterType;
+    std::string BuilderName;
+    std::vector<int> OriginalIndices;
+    std::vector<TetItemTransform> Transforms;
+    CetPath ProxyContour;
     std::size_t SkeletonChildCount = 0;
-    bool ProxyContourNormalized = false; double ClusterWidth = 0.0; double ClusterHeight = 0.0;
-    double RealArea = 0.0; double ProxyArea = 0.0; double FillRatio = 0.0; MetClusterProxyMode ProxyMode = MetClusterProxyMode::Unknown;
-    double OccupiedArea = 0.0; double ReservedArea = 0.0; double ProxyWasteArea = 0.0; double ProxyWasteRatio = 0.0;
-    double BoundingBoxArea = 0.0; double BoundingFillRatio = 0.0; double CompactnessRatio = 0.0; double BoardSpanRatio = 0.0;
-    double SheetReuseScore = 0.0; double FragmentationRisk = 1.0; double BaselineArea = 0.0; double AreaSavingRatio = 0.0;
-    double Confidence = 1.0; double Score = 0.0;
+    bool ProxyContourNormalized = false;
+    double ClusterWidth = 0.0;
+    double ClusterHeight = 0.0;
+    double RealArea = 0.0;
+    double ProxyArea = 0.0;
+    double FillRatio = 0.0;
+    MetClusterProxyMode ProxyMode = MetClusterProxyMode::Unknown;
+    double OccupiedArea = 0.0;
+    double ReservedArea = 0.0;
+    double ProxyWasteArea = 0.0;
+    double ProxyWasteRatio = 0.0;
+    double BoundingBoxArea = 0.0;
+    double BoundingFillRatio = 0.0;
+    double CompactnessRatio = 0.0;
+    double BoardSpanRatio = 0.0;
+    double SheetReuseScore = 0.0;
+    double FragmentationRisk = 1.0;
+    double BaselineArea = 0.0;
+    double AreaSavingRatio = 0.0;
+    double Confidence = 1.0;
+    double Score = 0.0;
 };
 
-struct TetClusterFreeRegion {
+struct TetClusterFreeRegion
+{
     CetPath Contour;
     std::vector<CetPath> Holes;
     double Area = 0.0;
@@ -496,7 +543,8 @@ struct TetClusterFreeRegion {
     bool IsClosed = false;
 };
 
-struct TetCircleGapTemplateAnchor {
+struct TetCircleGapTemplateAnchor
+{
     double CenterX = 0.0;
     double CenterY = 0.0;
     double Angle = 0.0;
@@ -504,7 +552,8 @@ struct TetCircleGapTemplateAnchor {
     int NeighborCount = 0;
 };
 
-struct TetCircleGapWindow {
+struct TetCircleGapWindow
+{
     double CenterX = 0.0;
     double CenterY = 0.0;
     double Angle = 0.0;
@@ -513,42 +562,45 @@ struct TetCircleGapWindow {
     std::string ClassKey;
 };
 
-struct TetCircleGapTemplate {
+struct TetCircleGapTemplate
+{
     TetCircleGapWindow Source;
     std::vector<TetItemTransform> Transforms;
 };
 
 using TetCircleGapTemplateCache = std::map<std::string, std::map<std::string, TetCircleGapTemplate>>;
 
-struct TetEllipseGapTemplate {
-	double SourceAngle = 0.0;
-	double EnvelopeWidth = 0.0;
-	double EnvelopeHeight = 0.0;
-	std::size_t SkeletonChildCount = 0;
-	std::vector<TetItemTransform> Transforms;
+struct TetEllipseGapTemplate
+{
+    double SourceAngle = 0.0;
+    double EnvelopeWidth = 0.0;
+    double EnvelopeHeight = 0.0;
+    std::size_t SkeletonChildCount = 0;
+    std::vector<TetItemTransform> Transforms;
 };
 
 using TetEllipseGapTemplateCache = std::map<std::string, TetEllipseGapTemplate>;
 
-struct TetEllipseGapWindowTemplate {
+struct TetEllipseGapWindowTemplate
+{
     TetCircleGapWindow Source;
     std::vector<TetItemTransform> Transforms;
 };
 
 using TetEllipseGapWindowTemplateCache = std::map<std::string, TetEllipseGapWindowTemplate>;
 
-
 // ============================================================================
 // 第四层级：构建器所需参数对象及其他组件
 // ============================================================================
 
-struct CustomLayoutCandidateRequest {
-    const CetTNestItemVector& Items;
-    const std::vector<int>& Indices;
-    const TetNestOptions& Options;
-    const TetCustomLayoutPattern& Pattern;
-    const TetCustomRotationPose& BasePose;
-    const TetCustomRotationPose& HalfTurnPose;
+struct CustomLayoutCandidateRequest
+{
+    const CetTNestItemVector &Items;
+    const std::vector<int> &Indices;
+    const TetNestOptions &Options;
+    const TetCustomLayoutPattern &Pattern;
+    const TetCustomRotationPose &BasePose;
+    const TetCustomRotationPose &HalfTurnPose;
     std::size_t RowCount;
     std::size_t ColumnCount;
     double CellWidth;
@@ -557,26 +609,29 @@ struct CustomLayoutCandidateRequest {
     double RowPitch;
 };
 
-struct EllipseBuildRequest {
-    const CetTNestItemVector& Items;
-    const std::vector<TetShapeFeature>& Features;
-    const std::vector<int>& Indices;
-    const TetNestOptions& Options;
+struct EllipseBuildRequest
+{
+    const CetTNestItemVector &Items;
+    const std::vector<TetShapeFeature> &Features;
+    const std::vector<int> &Indices;
+    const TetNestOptions &Options;
 };
 
-struct TetRectangleFillContext {
-    const CetTNestItemVector& OriginalItems;
-    const std::vector<TetShapeFeature>& Features;
-    const TetNestOptions& Options;
-    const std::vector<bool>& Used;
+struct TetRectangleFillContext
+{
+    const CetTNestItemVector &OriginalItems;
+    const std::vector<TetShapeFeature> &Features;
+    const TetNestOptions &Options;
+    const std::vector<bool> &Used;
 };
 
-struct TetProbeContext {
-    const CetTNestItemVector& OriginalItems;
-    const std::vector<TetShapeFeature>& Features;
-    const TetClusterCandidate& Candidate;
+struct TetProbeContext
+{
+    const CetTNestItemVector &OriginalItems;
+    const std::vector<TetShapeFeature> &Features;
+    const TetClusterCandidate &Candidate;
     int FillerIndex;
-    const CetPath& RotatedFiller;
+    const CetPath &RotatedFiller;
     double FillerMinX;
     double FillerMinY;
     double FillerWidth;
@@ -586,11 +641,12 @@ struct TetProbeContext {
     double MaxY;
 };
 
-struct RightTriangleRectangleRequest {
-    const CetTNestItemVector& OriginalItems;
-    const std::vector<TetShapeFeature>& Features;
-    const std::vector<int>& Indices;
-    const TetNestOptions& Options;
+struct RightTriangleRectangleRequest
+{
+    const CetTNestItemVector &OriginalItems;
+    const std::vector<TetShapeFeature> &Features;
+    const std::vector<int> &Indices;
+    const TetNestOptions &Options;
     int PairCount;
     double CellWidth;
     double CellHeight;
@@ -599,18 +655,20 @@ struct RightTriangleRectangleRequest {
     double HalfTurn;
 };
 
-struct TriangleEdgePairRequest {
-    const CetTNestItemVector& OriginalItems;
-    const std::vector<TetShapeFeature>& Features;
+struct TriangleEdgePairRequest
+{
+    const CetTNestItemVector &OriginalItems;
+    const std::vector<TetShapeFeature> &Features;
     int AIndex;
     int BIndex;
     int AEdgeIndex;
     int BEdgeIndex;
-    const TetNestOptions& Options;
-    TetClusterCandidate& OutCandidate;
+    const TetNestOptions &Options;
+    TetClusterCandidate &OutCandidate;
 };
 
-struct TetTNestEvalResult {
+struct TetTNestEvalResult
+{
     int FirstBinCount = 0;
     double FirstBinArea = 0.0;
     // Actual original-part area for every used board.  Keeping this separate
@@ -643,7 +701,8 @@ struct TetTNestEvalResult {
     double MinimumPassableWidth = 0.0;
 };
 
-struct TetClusterBuildResult {
+struct TetClusterBuildResult
+{
     CetTNestItemVector NestItems;
     std::vector<TetMetaItem> MetaItems;
 };
@@ -652,7 +711,8 @@ struct TetClusterBuildResult {
 // expanded back into their original items.  The engine uses the packed-item
 // indices to selectively dissolve only the involved clusters before falling
 // back to a fully unclustered nesting pass.
-struct TetExpandedSpacingFailure {
+struct TetExpandedSpacingFailure
+{
     bool Valid = false;
     bool RawContoursIntersect = false;
     int FirstOriginalIndex = -1;
@@ -662,7 +722,8 @@ struct TetExpandedSpacingFailure {
     int BinId = -1;
 };
 
-struct TetLocalBestResult {
+struct TetLocalBestResult
+{
     bool HasBest = false;
     std::size_t Layers = 0;
     TetTNestEvalResult Eval{};
@@ -676,22 +737,20 @@ struct TetPairCandidateKey
     int First = -1;
     int Second = -1;
 
-    bool operator==(const TetPairCandidateKey& AOther) const
-    {
-        return First == AOther.First && Second == AOther.Second;
-    }
+    bool operator==(const TetPairCandidateKey &AOther) const { return First == AOther.First && Second == AOther.Second; }
 };
 
 struct TetPairCandidateKeyHash
 {
-    std::size_t operator()(const TetPairCandidateKey& AKey) const noexcept
+    std::size_t operator()(const TetPairCandidateKey &AKey) const noexcept
     {
         const std::size_t FirstHash = std::hash<int>{}(AKey.First);
         const std::size_t SecondHash = std::hash<int>{}(AKey.Second);
         return FirstHash ^ (SecondHash + static_cast<std::size_t>(0x9e3779b9) + (FirstHash << 6) + (FirstHash >> 2));
     }
 };
-struct TetAutoPairCandidate {
+struct TetAutoPairCandidate
+{
     bool Valid = false;
     int AIndex = -1;
     int BIndex = -1;
@@ -708,38 +767,43 @@ struct TetAutoPairCandidate {
     double Score = 0.0;
 };
 
-struct TetEdgePairContext {
-    const CetTNestItemVector& OriginalItems;
+struct TetEdgePairContext
+{
+    const CetTNestItemVector &OriginalItems;
     int AIndex;
     int BIndex;
-    const TetNestOptions& Options;
+    const TetNestOptions &Options;
     double RequiredGap;
     double RefLength;
     bool SimilarTrianglePair;
 };
 
-struct TetEdgeMatchState {
+struct TetEdgeMatchState
+{
     double BRotation;
     double LengthMatchRatio;
     double MinLength;
     std::vector<std::pair<double, double>> BaseOffsets;
 };
 
-struct TetAutoPairContext {
-    const CetTNestItemVector& OriginalItems;
+struct TetAutoPairContext
+{
+    const CetTNestItemVector &OriginalItems;
     int AIndex;
     int BIndex;
-    const TetNestOptions& Options;
+    const TetNestOptions &Options;
 };
 
-struct TetClusterBoundaryResult {
+struct TetClusterBoundaryResult
+{
     bool Success = false;
     CetPath Boundary;
     MetClusterProxyMode Mode = MetClusterProxyMode::Unknown;
     double BoundaryArea = 0.0;
 };
 
-struct TetCandidateGeometryStats {
+struct TetCandidateGeometryStats
+{
     double MinX = (std::numeric_limits<double>::max)();
     double MinY = (std::numeric_limits<double>::max)();
     double MaxX = (std::numeric_limits<double>::lowest)();
@@ -748,7 +812,8 @@ struct TetCandidateGeometryStats {
     double BaselineArea = 0.0;
 };
 
-struct TetEdgePairSearchContext {
+struct TetEdgePairSearchContext
+{
     int FirstIndex = -1;
     int SecondIndex = -1;
     CetPath FirstContour;
@@ -757,14 +822,16 @@ struct TetEdgePairSearchContext {
     double RequiredGap = 0.0;
 };
 
-struct TetEdgePairRequest {
-    const CetTNestItemVector& OriginalItems;
-    const std::vector<int>& Indices;
-    const TetNestOptions& Options;
-    TetClusterCandidate& OutCandidate;
+struct TetEdgePairRequest
+{
+    const CetTNestItemVector &OriginalItems;
+    const std::vector<int> &Indices;
+    const TetNestOptions &Options;
+    TetClusterCandidate &OutCandidate;
 };
 
-struct TetEdgePairPlacement {
+struct TetEdgePairPlacement
+{
     double SecondRotation = 0.0;
     double NormalX = 0.0;
     double NormalY = 0.0;
@@ -777,12 +844,14 @@ struct TetEdgePairPlacement {
     double LengthRatio = 0.0;
 };
 
-struct TetEdgePairSearchResult {
+struct TetEdgePairSearchResult
+{
     bool HasCandidate = false;
     TetClusterCandidate BestCandidate;
 };
 
-struct TriangleEdgePairGeometry {
+struct TriangleEdgePairGeometry
+{
     CetInpoint RotatedBThird;
     double ASide = 0.0;
     double RotationB = 0.0;
@@ -802,13 +871,15 @@ struct TriangleEdgePairGeometry {
     double LengthMatchRatio = 0.0;
 };
 
-struct TetCircleCenter {
+struct TetCircleCenter
+{
     double X = 0.0;
     double Y = 0.0;
     double Radius = 0.0;
 };
 
-struct TetEllipseCenter {
+struct TetEllipseCenter
+{
     double X = 0.0;
     double Y = 0.0;
     double HalfWidth = 0.0;
@@ -816,7 +887,8 @@ struct TetEllipseCenter {
     double Angle = 0.0;
 };
 
-struct TetNestProgressTracker {
+struct TetNestProgressTracker
+{
     int totalItems = 0;
     NestProgressCallback callback = nullptr;
 
@@ -827,7 +899,7 @@ struct TetNestProgressTracker {
         }
 #ifdef _WIN32
         MEMORY_BASIC_INFORMATION MemoryInfo{};
-        const SIZE_T QuerySize = VirtualQuery(reinterpret_cast<const void*>(Acb), &MemoryInfo, sizeof MemoryInfo);
+        const SIZE_T QuerySize = VirtualQuery(reinterpret_cast<const void *>(Acb), &MemoryInfo, sizeof MemoryInfo);
         if (QuerySize != sizeof MemoryInfo || MemoryInfo.State != MEM_COMMIT) {
             return nullptr;
         }
@@ -839,20 +911,18 @@ struct TetNestProgressTracker {
         return Acb;
     }
 
-    TetNestProgressTracker(int Atotal, NestProgressCallback Acb)
-        : totalItems(Atotal), callback(_NormalizeCallback(Acb)) {
-    }
-    void operator()(unsigned Acnt) const {
+    TetNestProgressTracker(int Atotal, NestProgressCallback Acb) : totalItems(Atotal), callback(_NormalizeCallback(Acb)) {}
+    void operator()(unsigned Acnt) const
+    {
         if (callback != nullptr) {
             callback(totalItems - static_cast<int>(Acnt), totalItems);
         }
     }
 };
 
-struct TetPlacementCandidate {
-    TetPlacementCandidate()
-        : ItemIndex(0), TargetBin(-1), Translation(libnest2d::Point(0, 0)), Rotation(libnest2d::Radians(0.0)) {
-    }
+struct TetPlacementCandidate
+{
+    TetPlacementCandidate() : ItemIndex(0), TargetBin(-1), Translation(libnest2d::Point(0, 0)), Rotation(libnest2d::Radians(0.0)) {}
     std::size_t ItemIndex;
     int TargetBin;
     libnest2d::Point Translation;
@@ -910,8 +980,8 @@ struct TetHoleFillCandidate
     std::size_t ItemIndex = 0;
     int OldBin = -1;
     int TargetBin = -1;
-    libnest2d::Point Translation{ 0, 0 };
-    libnest2d::Radians Rotation{ 0.0 };
+    libnest2d::Point Translation{0, 0};
+    libnest2d::Radians Rotation{0.0};
     double Score = 0.0;
 };
 
@@ -990,7 +1060,8 @@ struct TetLastBinEvacuationStats
     double TimeMs = 0.0;
 };
 
-struct TetAutoPairGridConfig {
+struct TetAutoPairGridConfig
+{
     double ARot = 0.0;
     double BRot = 0.0;
     double RotWA = 0.0;
@@ -1029,7 +1100,7 @@ struct TetCustomShapeKey
     std::vector<long long> OuterSignature;
     std::vector<std::vector<long long>> HoleSignatures;
 
-    bool operator<(const TetCustomShapeKey& AOther) const
+    bool operator<(const TetCustomShapeKey &AOther) const
     {
         if (ShapeType != AOther.ShapeType) {
             return static_cast<int>(ShapeType) < static_cast<int>(AOther.ShapeType);
@@ -1044,15 +1115,19 @@ struct TetCustomShapeKey
     }
 };
 
-struct TetShapeBucketKey {
+struct TetShapeBucketKey
+{
     MetShapeType Type = MetShapeType::Unknown;
     long long ShortSideBucket = 0;
     long long LongSideBucket = 0;
-    bool operator<(const TetShapeBucketKey& AOther) const {
+    bool operator<(const TetShapeBucketKey &AOther) const
+    {
         const int LeftType = static_cast<int>(Type);
         const int RightType = static_cast<int>(AOther.Type);
-        if (LeftType != RightType) return LeftType < RightType;
-        if (ShortSideBucket != AOther.ShortSideBucket) return ShortSideBucket < AOther.ShortSideBucket;
+        if (LeftType != RightType)
+            return LeftType < RightType;
+        if (ShortSideBucket != AOther.ShortSideBucket)
+            return ShortSideBucket < AOther.ShortSideBucket;
         return LongSideBucket < AOther.LongSideBucket;
     }
 };

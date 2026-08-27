@@ -1,6 +1,6 @@
 #include "SvgExporter.h"
 
-bool CetSvgExporter::Prepare(TetNestOptions& AOptions)
+bool CetSvgExporter::Prepare(TetNestOptions &AOptions)
 {
     char ExportSvg = 'n';
 

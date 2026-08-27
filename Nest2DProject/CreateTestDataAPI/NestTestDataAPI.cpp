@@ -2,18 +2,17 @@
 #include "NestTestDataAPI.h"
 #include "NestGeometryUtils.h"
 #include <algorithm>
-#include <fstream>
-#include <sstream>
 #include <cmath>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 constexpr double PI = 3.14159265358979323846;
 namespace ET {
     namespace NESTTESTDATALIB {
-        static const char* _NestAlignmentIntToString(int AValue)
+        static const char *_NestAlignmentIntToString(int AValue)
         {
-            switch (AValue)
-            {
+            switch (AValue) {
             case 0:
                 return "DONT_ALIGN";
 
@@ -22,17 +21,12 @@ namespace ET {
                 return "BOTTOM_LEFT";
             }
         }
-        CetNestTestDataAPI::CetNestTestDataAPI():CetCoreObject()
-        {
-            std::cout << "CetNestTestDataAPI Constructor" << std::endl;
-        }
+        CetNestTestDataAPI::CetNestTestDataAPI() : CetCoreObject() { std::cout << "CetNestTestDataAPI Constructor" << std::endl; }
 
-        CetNestTestDataAPI::~CetNestTestDataAPI()
+        CetNestTestDataAPI::~CetNestTestDataAPI() {}
+        int CetNestTestDataAPI::Init(const TetNestDataOptions &opt)
         {
-        }
-        int CetNestTestDataAPI::Init(const TetNestDataOptions&opt )
-        {
-            
+
             m_BinWidth = opt.BinWidth;
             m_BinHeight = opt.BinHeight;
             m_Bpacing = opt.Spacing;
@@ -44,21 +38,19 @@ namespace ET {
             m_PlacerParallel = opt.PlacerParallel;
             m_PlacerExploreHoles = opt.PlacerExploreHoles;
 
-            std::cout << "[DLL] Init called. Bin = "<< m_BinWidth<< " x "<< m_BinHeight<< ", spacing = "<< m_Bpacing<< ", rotations = "<< m_Rotations<< std::endl;
+            std::cout << "[DLL] Init called. Bin = " << m_BinWidth << " x " << m_BinHeight << ", spacing = " << m_Bpacing << ", rotations = " << m_Rotations << std::endl;
 
             return 0;
         }
 
-        void CetNestTestDataAPI::AddPolygon( const TetPolygonData& APoly)
+        void CetNestTestDataAPI::AddPolygon(const TetPolygonData &APoly)
         {
             m_Polygons.push_back(APoly);
 
-            std::cout << "[DLL] AddPolygon called. Current polygon count = "
-                << m_Polygons.size()
-                << std::endl;
+            std::cout << "[DLL] AddPolygon called. Current polygon count = " << m_Polygons.size() << std::endl;
         }
 
-        void CetNestTestDataAPI::AddPolygon(int AId,const std::string& AName,CetVertices&& AVertices)
+        void CetNestTestDataAPI::AddPolygon(int AId, const std::string &AName, CetVertices &&AVertices)
         {
             TetPolygonData Poly;
 
@@ -66,48 +58,26 @@ namespace ET {
             Poly.Name = AName;
             Poly.Vertices = std::move(AVertices);
 
-            
             m_Polygons.emplace_back(std::move(Poly));
 
-            std::cout << "[DLL] AddPolygon move called. Current polygon count = "
-                << m_Polygons.size()
-                << std::endl;
+            std::cout << "[DLL] AddPolygon move called. Current polygon count = " << m_Polygons.size() << std::endl;
         }
 
-        void CetNestTestDataAPI::AddRectangle( int AId,double AW,double AH)
+        void CetNestTestDataAPI::AddRectangle(int AId, double AW, double AH)
         {
-            std::cout << "[DLL] AddRectangle called. Id = " << AId<< ", width = " << AW<< ", height = " << AH<< std::endl;
+            std::cout << "[DLL] AddRectangle called. Id = " << AId << ", width = " << AW << ", height = " << AH << std::endl;
 
-            AddPolygon( AId, "Rectangle",
-                {
-                    {0, 0},
-                    {AW, 0},
-                    {AW, AH},
-                    {0, AH}
-                }
-            );
+            AddPolygon(AId, "Rectangle", {{0, 0}, {AW, 0}, {AW, AH}, {0, AH}});
         }
 
-        void CetNestTestDataAPI::AddTriangle( int AId,double ABase,double AHeight, bool ARightAngle )
+        void CetNestTestDataAPI::AddTriangle(int AId, double ABase, double AHeight, bool ARightAngle)
         {
-            std::cout << "[DLL] AddTriangle called. Id = " << AId << ", base = " << ABase << ", height = " << AHeight << ", rightAngle = " << ARightAngle<< std::endl;
+            std::cout << "[DLL] AddTriangle called. Id = " << AId << ", base = " << ABase << ", height = " << AHeight << ", rightAngle = " << ARightAngle << std::endl;
 
             if (ARightAngle) {
-                AddPolygon( AId, "Triangle",
-                    {
-                        {0, 0},
-                        {ABase, 0},
-                        {0, AHeight}
-                    }
-                );
-            }
-            else {
-                AddPolygon( AId, "Triangle",
-                    {
-                        {0, 0},
-                        {ABase, 0},
-                        {ABase / 2.0, AHeight}
-                    });
+                AddPolygon(AId, "Triangle", {{0, 0}, {ABase, 0}, {0, AHeight}});
+            } else {
+                AddPolygon(AId, "Triangle", {{0, 0}, {ABase, 0}, {ABase / 2.0, AHeight}});
             }
 
             std::cout << "[DLL] After AddTriangle, real polygon count = " << m_Polygons.size() << std::endl;
@@ -120,55 +90,47 @@ namespace ET {
             double b = ASideB;
             double c = ASideC;
 
-            if (a <= 0.0 || b <= 0.0 || c <= 0.0)return;
-            if (a + b <= c +EPS|| a + c <= b +EPS|| b + c <= a+EPS)return;
+            if (a <= 0.0 || b <= 0.0 || c <= 0.0)
+                return;
+            if (a + b <= c + EPS || a + c <= b + EPS || b + c <= a + EPS)
+                return;
             double x = (b * b + c * c - a * a) / (2.0 * c);
             double y2 = b * b - x * x;
             if (y2 < 0.0 && y2 > -EPS) {
                 y2 = 0.0;
             }
-            if (y2 <= 0.0)return;
+            if (y2 <= 0.0)
+                return;
 
             double y = std::sqrt(y2);
 
-            CetVertices Verts = {
-                {0.0,0.0},
-                {c,0.0},
-                {x,y}
-            };
-            double minX = std::min({ Verts[0].first, Verts[1].first, Verts[2].first });
-            double minY = std::min({ Verts[0].second, Verts[1].second, Verts[2].second });
+            CetVertices Verts = {{0.0, 0.0}, {c, 0.0}, {x, y}};
+            double minX = std::min({Verts[0].first, Verts[1].first, Verts[2].first});
+            double minY = std::min({Verts[0].second, Verts[1].second, Verts[2].second});
             if (minX < 0.0 || minY < 0.0) {
-                for (auto& V : Verts) {
+                for (auto &V : Verts) {
                     V.first -= minX;
                     V.second -= minY;
                 }
             }
             AddPolygon(AId, "Triangle", std::move(Verts));
-
         }
 
-        void CetNestTestDataAPI::AddCircle(int AId,double ARadius,bool AHasOtherItems,double AMinOtherItemSize, double AToleranceRatio)
+        void CetNestTestDataAPI::AddCircle(int AId, double ARadius, bool AHasOtherItems, double AMinOtherItemSize, double AToleranceRatio)
         {
             if (ARadius <= 0.0) {
                 return;
             }
 
             // ASegments <= 0 表示自动计算
-           
-             int  ASegments = m_GeometryUtils.CalcCircleSegmentsAuto(  ARadius,AHasOtherItems, AMinOtherItemSize , AToleranceRatio);
-           
+
+            int ASegments = m_GeometryUtils.CalcCircleSegmentsAuto(ARadius, AHasOtherItems, AMinOtherItemSize, AToleranceRatio);
+
             if (ASegments < 4) {
                 ASegments = 4;
             }
 
-            std::cout << "[DLL] AddCircle called. Id = "
-                << AId
-                << ", radius = "
-                << ARadius
-                << ", segments = "
-                << ASegments
-                << std::endl;
+            std::cout << "[DLL] AddCircle called. Id = " << AId << ", radius = " << ARadius << ", segments = " << ASegments << std::endl;
 
             std::vector<std::pair<double, double>> Verts;
             Verts.reserve(ASegments);
@@ -179,7 +141,7 @@ namespace ET {
             for (int i = 0; i < ASegments; ++i) {
                 double Angle = 2.0 * PI * i / ASegments;
 
-                Verts.emplace_back( vertexRadius * std::cos(Angle), vertexRadius * std::sin(Angle) );
+                Verts.emplace_back(vertexRadius * std::cos(Angle), vertexRadius * std::sin(Angle));
             }
 
             AddPolygon(AId, "Circle", std::move(Verts));
@@ -187,14 +149,14 @@ namespace ET {
 
         void CetNestTestDataAPI::AddCustomPolygon(int AId, CetVertices AVertices)
         {
-            std::cout << "[DLL] AddCustomPolygon called. Id = "<< AId<< ", point count = "<< AVertices.size()<< std::endl;
+            std::cout << "[DLL] AddCustomPolygon called. Id = " << AId << ", point count = " << AVertices.size() << std::endl;
             if (AVertices.size() < 3) {
-                std::cout << "[DLL] Invalid custom polygon. point count must be >= 3."<< std::endl;
+                std::cout << "[DLL] Invalid custom polygon. point count must be >= 3." << std::endl;
                 return;
             }
             double Area = m_GeometryUtils.CalcSignedArea(AVertices);
             if (std::abs(Area) < 1e-9) {
-                std::cout << "[DLL] Invalid custom polygon. polygon area is zero."<< std::endl;
+                std::cout << "[DLL] Invalid custom polygon. polygon area is zero." << std::endl;
                 return;
             }
             // 外轮廓按正常多边形处理，不是孔洞，所以 AIsHole = false
@@ -203,80 +165,75 @@ namespace ET {
             AddPolygon(AId, "Polygon", std::move(AVertices));
         }
 
-		void CetNestTestDataAPI::AddArc(int AId, const TetArcData& AArcData)
-		{
-			std::cout << "[DLL] AddArc called. Id = "<< AId<< ", center = ("<< AArcData.CenterX<< ", "<< AArcData.CenterY<< "), radius = "
-				<< AArcData.Radius<< ", thickness = "<< AArcData.Thickness<< ", start angle = "<< AArcData.StartAngle<< ", end angle = "
-                << AArcData.EndAngle<< ", segments = "<< AArcData.Segments<< std::endl;
+        void CetNestTestDataAPI::AddArc(int AId, const TetArcData &AArcData)
+        {
+            std::cout << "[DLL] AddArc called. Id = " << AId << ", center = (" << AArcData.CenterX << ", " << AArcData.CenterY << "), radius = " << AArcData.Radius << ", thickness = " << AArcData.Thickness << ", start angle = " << AArcData.StartAngle << ", end angle = " << AArcData.EndAngle << ", segments = " << AArcData.Segments << std::endl;
 
-			if (AArcData.Radius <= 0.0) {
-				std::cout << "[DLL] Invalid arc. radius must be > 0." << std::endl;
-				return;
-			}
-			if (AArcData.Thickness <= 0.0) {
-				std::cout << "[DLL] Invalid arc. thickness must be > 0." << std::endl;
-				return;
-			}
-			double OuterRadius = AArcData.Radius + AArcData.Thickness * 0.5;
-			double InnerRadius = AArcData.Radius - AArcData.Thickness * 0.5;
-			if (InnerRadius <= 0.0) {
-				std::cout << "[DLL] Invalid arc. inner radius must be > 0." << std::endl;
-				return;
-			}
-			TetArcData OuterArcData = AArcData;
-			OuterArcData.Radius = OuterRadius;
+            if (AArcData.Radius <= 0.0) {
+                std::cout << "[DLL] Invalid arc. radius must be > 0." << std::endl;
+                return;
+            }
+            if (AArcData.Thickness <= 0.0) {
+                std::cout << "[DLL] Invalid arc. thickness must be > 0." << std::endl;
+                return;
+            }
+            double OuterRadius = AArcData.Radius + AArcData.Thickness * 0.5;
+            double InnerRadius = AArcData.Radius - AArcData.Thickness * 0.5;
+            if (InnerRadius <= 0.0) {
+                std::cout << "[DLL] Invalid arc. inner radius must be > 0." << std::endl;
+                return;
+            }
+            TetArcData OuterArcData = AArcData;
+            OuterArcData.Radius = OuterRadius;
 
-			TetArcData InnerArcData = AArcData;
-			InnerArcData.Radius = InnerRadius;
+            TetArcData InnerArcData = AArcData;
+            InnerArcData.Radius = InnerRadius;
 
-			CetVertices OuterArc = m_GeometryUtils.MakeArcVertices(OuterArcData);
-			CetVertices InnerArc = m_GeometryUtils.MakeArcVertices(InnerArcData);
+            CetVertices OuterArc = m_GeometryUtils.MakeArcVertices(OuterArcData);
+            CetVertices InnerArc = m_GeometryUtils.MakeArcVertices(InnerArcData);
 
-			if (OuterArc.size() < 2 || InnerArc.size() < 2) {
-				std::cout << "[DLL] Invalid arc vertices." << std::endl;
-				return;
-			}
+            if (OuterArc.size() < 2 || InnerArc.size() < 2) {
+                std::cout << "[DLL] Invalid arc vertices." << std::endl;
+                return;
+            }
 
-			CetVertices Verts;
-			Verts.reserve(OuterArc.size() + InnerArc.size());
+            CetVertices Verts;
+            Verts.reserve(OuterArc.size() + InnerArc.size());
 
-			// 1. 外圆弧：StartAngle -> EndAngle
-			for (const auto& P : OuterArc) {
-				Verts.emplace_back(P);
-			}
+            // 1. 外圆弧：StartAngle -> EndAngle
+            for (const auto &P : OuterArc) {
+                Verts.emplace_back(P);
+            }
 
-			// 2. 内圆弧：EndAngle -> StartAngle
-			// 这里反向加入，才能形成闭合的弧形区域
-			for (auto It = InnerArc.rbegin(); It != InnerArc.rend(); ++It) {
-				Verts.emplace_back(*It);
-			}
+            // 2. 内圆弧：EndAngle -> StartAngle
+            // 这里反向加入，才能形成闭合的弧形区域
+            for (auto It = InnerArc.rbegin(); It != InnerArc.rend(); ++It) {
+                Verts.emplace_back(*It);
+            }
 
-			if (Verts.size() < 3) {
-				std::cout << "[DLL] Invalid arc polygon." << std::endl;
-				return;
-			}
+            if (Verts.size() < 3) {
+                std::cout << "[DLL] Invalid arc polygon." << std::endl;
+                return;
+            }
 
-			m_GeometryUtils.NormalizeContourDirection(Verts, false);
+            m_GeometryUtils.NormalizeContourDirection(Verts, false);
 
-			AddPolygon(AId, "Arc", std::move(Verts));
-		}
+            AddPolygon(AId, "Arc", std::move(Verts));
+        }
 
         void CetNestTestDataAPI::AddEllipse(int AId, double ARadiusX, double ARadiusY, int ASegments, double ARotationAngle)
         {
             if (ARadiusX <= 0.0 || ARadiusY <= 0.0) {
-                std::cout
-                    << "[DLL] Invalid ellipse. RadiusX and RadiusY must be > 0."
-                    << std::endl;
+                std::cout << "[DLL] Invalid ellipse. RadiusX and RadiusY must be > 0." << std::endl;
                 return;
             }
             if (ASegments < 4) {
                 ASegments = 4;
             }
-            std::cout<< "[DLL] AddEllipse called. Id = "<< AId<< ", radiusX = "<< ARadiusX<< ", radiusY = "<< ARadiusY
-                << ", segments = "<< ASegments<< ", rotation = "<< ARotationAngle<< std::endl;
-           CetVertices Verts =m_GeometryUtils.MakeEllipseVertices(0.0,0.0,ARadiusX,ARadiusY,ASegments,false,ARotationAngle);
+            std::cout << "[DLL] AddEllipse called. Id = " << AId << ", radiusX = " << ARadiusX << ", radiusY = " << ARadiusY << ", segments = " << ASegments << ", rotation = " << ARotationAngle << std::endl;
+            CetVertices Verts = m_GeometryUtils.MakeEllipseVertices(0.0, 0.0, ARadiusX, ARadiusY, ASegments, false, ARotationAngle);
             if (Verts.size() < 3) {
-                std::cout<< "[DLL] Failed to create ellipse vertices."<< std::endl;
+                std::cout << "[DLL] Failed to create ellipse vertices." << std::endl;
                 return;
             }
             m_GeometryUtils.NormalizeContourDirection(Verts, false);
@@ -284,24 +241,14 @@ namespace ET {
             AddPolygon(AId, "Ellipse", std::move(Verts));
         }
 
-        void CetNestTestDataAPI::AddLShape( int AId,double AW,double AH, double ACutW,double ACutH )
+        void CetNestTestDataAPI::AddLShape(int AId, double AW, double AH, double ACutW, double ACutH)
         {
-            std::cout << "[DLL] AddLShape called. Id = "
-                << AId
-                << std::endl;
+            std::cout << "[DLL] AddLShape called. Id = " << AId << std::endl;
 
-            AddPolygon( AId, "LShape",{
-                    {0, 0},
-                    {AW, 0},
-                    {AW, ACutH},
-                    {ACutW, ACutH},
-                    {ACutW, AH},
-                    {0, AH}
-                }
-            );
+            AddPolygon(AId, "LShape", {{0, 0}, {AW, 0}, {AW, ACutH}, {ACutW, ACutH}, {ACutW, AH}, {0, AH}});
         }
 
-        void CetNestTestDataAPI::AddPolygonWithHoles(int AId, const std::string& AName, CetVertices&& AOuter, std::vector<CetVertices>&& AHoles)
+        void CetNestTestDataAPI::AddPolygonWithHoles(int AId, const std::string &AName, CetVertices &&AOuter, std::vector<CetVertices> &&AHoles)
         {
             if (AOuter.size() < 3) {
                 return;
@@ -313,10 +260,10 @@ namespace ET {
             Poly.Name = AName;
             Poly.Vertices = std::move(AOuter);
             Poly.Holes = std::move(AHoles);
- 
+
             m_Polygons.emplace_back(std::move(Poly));
 
-            std::cout << "[DLL] AddPolygonWithHoles called. Current polygon count = "<< m_Polygons.size()<< std::endl;
+            std::cout << "[DLL] AddPolygonWithHoles called. Current polygon count = " << m_Polygons.size() << std::endl;
         }
 
         void CetNestTestDataAPI::AddCustomShapeWithHolesByInput(int AId)
@@ -339,7 +286,7 @@ namespace ET {
 
             std::vector<CetVertices> Holes;
             std::vector<std::string> HoleNames;
-            
+
             Holes.reserve(HoleCount);
             HoleNames.reserve(HoleCount);
 
@@ -359,19 +306,12 @@ namespace ET {
                 HoleNames.push_back(HoleName);
             }
 
-            AddPolygonWithHoles(
-                AId,
-                OuterName,
-                std::move(Outer),
-                std::move(Holes)
-            );
+            AddPolygonWithHoles(AId, OuterName, std::move(Outer), std::move(Holes));
         }
 
-        void CetNestTestDataAPI::AddBoard(CetVertices&& AVertices)
+        void CetNestTestDataAPI::AddBoard(CetVertices &&AVertices)
         {
-            std::cout << "[DLL] AddBoard called. point count = "
-                << AVertices.size()
-                << std::endl;
+            std::cout << "[DLL] AddBoard called. point count = " << AVertices.size() << std::endl;
 
             if (AVertices.size() < 3) {
                 std::cout << "[DLL] Invalid board. point count must be >= 3." << std::endl;
@@ -385,13 +325,9 @@ namespace ET {
             m_Board.Holes.clear();
         }
 
-        void CetNestTestDataAPI::AddBoardWithHoles(CetVertices&& AOuter, std::vector<CetVertices>&& AHoles)
+        void CetNestTestDataAPI::AddBoardWithHoles(CetVertices &&AOuter, std::vector<CetVertices> &&AHoles)
         {
-            std::cout << "[DLL] AddBoardWithHoles called. outer point count = "
-                << AOuter.size()
-                << ", hole count = "
-                << AHoles.size()
-                << std::endl;
+            std::cout << "[DLL] AddBoardWithHoles called. outer point count = " << AOuter.size() << ", hole count = " << AHoles.size() << std::endl;
 
             if (AOuter.size() < 3) {
                 std::cout << "[DLL] Invalid board outer. point count must be >= 3." << std::endl;
@@ -400,7 +336,7 @@ namespace ET {
 
             m_GeometryUtils.NormalizeContourDirection(AOuter, false);
 
-            for (auto& Hole : AHoles) {
+            for (auto &Hole : AHoles) {
                 if (Hole.size() >= 3) {
                     m_GeometryUtils.NormalizeContourDirection(Hole, true);
                 }
@@ -422,7 +358,7 @@ namespace ET {
 
         size_t CetNestTestDataAPI::PolygonCount() const
         {
-            std::cout << "[DLL] PolygonCount called. real count = "<< m_Polygons.size() << std::endl;
+            std::cout << "[DLL] PolygonCount called. real count = " << m_Polygons.size() << std::endl;
 
             return m_Polygons.size();
         }
@@ -441,18 +377,18 @@ namespace ET {
 
             Oss << std::fixed << std::setprecision(4);
 
-            Oss << "BIN " << m_BinWidth<< " " << m_BinHeight<< "\n";
+            Oss << "BIN " << m_BinWidth << " " << m_BinHeight << "\n";
             if (m_Board.Enabled && m_Board.Vertices.size() >= 3) {
                 Oss << "BOARD " << m_Board.Vertices.size() << "\n";
-                for (const auto& P : m_Board.Vertices) {
+                for (const auto &P : m_Board.Vertices) {
                     Oss << P.first << " " << P.second << "\n";
                 }
-                for (const auto& Hole : m_Board.Holes) {
+                for (const auto &Hole : m_Board.Holes) {
                     if (Hole.size() < 3) {
                         continue;
                     }
                     Oss << "BOARD_HOLE " << Hole.size() << "\n";
-                    for (const auto& P : Hole) {
+                    for (const auto &P : Hole) {
                         Oss << P.first << " " << P.second << "\n";
                     }
                 }
@@ -465,49 +401,48 @@ namespace ET {
             Oss << "EnableLastBin " << (m_EnableLastBin ? 1 : 0) << "\n";
             Oss << "PLACER_PARALLEL " << (m_PlacerParallel ? 1 : 0) << "\n";
             Oss << "PLACER_EXPLORE_HOLES " << (m_PlacerExploreHoles ? 1 : 0) << "\n";
-            for (const auto& Poly : m_Polygons) {
+            for (const auto &Poly : m_Polygons) {
                 if (Poly.Vertices.empty()) {
                     continue;
                 }
 
-                Oss << "\nPOLY "<< Poly.Id << " "<< Poly.Vertices.size()<< " "<< Poly.Name<< "\n";
+                Oss << "\nPOLY " << Poly.Id << " " << Poly.Vertices.size() << " " << Poly.Name << "\n";
 
-                for (const auto& V : Poly.Vertices) {
-                    Oss << V.first<< " "<< V.second << "\n";
+                for (const auto &V : Poly.Vertices) {
+                    Oss << V.first << " " << V.second << "\n";
                 }
                 for (std::size_t i = 0; i < Poly.Holes.size(); ++i) {
-                    const auto& Hole = Poly.Holes[i];
+                    const auto &Hole = Poly.Holes[i];
 
                     if (Hole.size() < 3) {
                         continue;
                     }
 
-                    //std::string HoleName = "Polygon";
+                    // std::string HoleName = "Polygon";
 
-                    //if (i < Poly.HoleNames.size()) {
-                    //    HoleName = Poly.HoleNames[i];
-                    //}
+                    // if (i < Poly.HoleNames.size()) {
+                    //     HoleName = Poly.HoleNames[i];
+                    // }
 
-                    Oss << "HOLE " << Hole.size()  << "\n";
+                    Oss << "HOLE " << Hole.size() << "\n";
 
-                    for (const auto& V : Hole) {
+                    for (const auto &V : Hole) {
                         Oss << V.first << " " << V.second << "\n";
                     }
                 }
-
             }
 
             return Oss.str();
         }
 
-        bool CetNestTestDataAPI::SaveToFile(const std::string& AFilePath) const
+        bool CetNestTestDataAPI::SaveToFile(const std::string &AFilePath) const
         {
-            std::cout << "[DLL] SaveToFile called. File = "<< AFilePath<< ", polygon count = "<< m_Polygons.size()<< std::endl;
+            std::cout << "[DLL] SaveToFile called. File = " << AFilePath << ", polygon count = " << m_Polygons.size() << std::endl;
 
             std::ofstream Out(AFilePath.c_str());
 
             if (!Out.is_open()) {
-                std::cout << "[DLL] Failed to open output file: " << AFilePath<< std::endl;
+                std::cout << "[DLL] Failed to open output file: " << AFilePath << std::endl;
 
                 return false;
             }
@@ -517,17 +452,17 @@ namespace ET {
             Out << Content;
 
             if (!Out.good()) {
-                std::cout << "[DLL] Write file failed: "<< AFilePath<< std::endl;
+                std::cout << "[DLL] Write file failed: " << AFilePath << std::endl;
 
                 return false;
             }
 
-            std::cout << "[DLL] Save file success: "<< AFilePath<< std::endl;
+            std::cout << "[DLL] Save file success: " << AFilePath << std::endl;
 
             return true;
         }
 
-        static void _ConvexHull(CetVertices& APoints, CetVertices& AHull )
+        static void _ConvexHull(CetVertices &APoints, CetVertices &AHull)
         {
             AHull.clear();
             if (APoints.size() <= 2) {
@@ -537,19 +472,16 @@ namespace ET {
             std::sort(APoints.begin(), APoints.end());
             AHull.reserve(APoints.size() + 1);
 
-            for (const auto& Point : APoints) {
+            for (const auto &Point : APoints) {
                 while (AHull.size() >= 2) {
-                    auto& A = AHull[AHull.size() - 2];
-                    auto& B = AHull.back();
+                    auto &A = AHull[AHull.size() - 2];
+                    auto &B = AHull.back();
 
-                    double Cross =
-                        (B.first - A.first) * (Point.second - A.second)
-                        - (B.second - A.second) * (Point.first - A.first);
+                    double Cross = (B.first - A.first) * (Point.second - A.second) - (B.second - A.second) * (Point.first - A.first);
 
                     if (Cross <= 0) {
                         AHull.pop_back();
-                    }
-                    else {
+                    } else {
                         break;
                     }
                 }
@@ -558,20 +490,17 @@ namespace ET {
             }
             size_t LowerSize = AHull.size();
             for (int i = static_cast<int>(APoints.size()) - 2; i >= 0; --i) {
-                const auto& Point = APoints[i];
+                const auto &Point = APoints[i];
 
                 while (AHull.size() > LowerSize) {
-                    auto& A = AHull[AHull.size() - 2];
-                    auto& B = AHull.back();
+                    auto &A = AHull[AHull.size() - 2];
+                    auto &B = AHull.back();
 
-                    double Cross =
-                        (B.first - A.first) * (Point.second - A.second)
-                        - (B.second - A.second) * (Point.first - A.first);
+                    double Cross = (B.first - A.first) * (Point.second - A.second) - (B.second - A.second) * (Point.first - A.first);
 
                     if (Cross <= 0) {
                         AHull.pop_back();
-                    }
-                    else {
+                    } else {
                         break;
                     }
                 }
@@ -584,15 +513,15 @@ namespace ET {
             }
         }
 
-        void CetNestTestDataAPI::GenerateRandomConvexPolygons(int ACount, int AMinVertices,int AMaxVertices,double AMaxWidth,double AMaxHeight,unsigned ASeed )
+        void CetNestTestDataAPI::GenerateRandomConvexPolygons(int ACount, int AMinVertices, int AMaxVertices, double AMaxWidth, double AMaxHeight, unsigned ASeed)
         {
             std::mt19937 Rng(ASeed);
 
             std::uniform_int_distribution<int> VertDist(AMinVertices, AMaxVertices);
 
-            std::uniform_real_distribution<double> CoordX( 0.0,AMaxWidth );
+            std::uniform_real_distribution<double> CoordX(0.0, AMaxWidth);
 
-            std::uniform_real_distribution<double> CoordY(0.0,AMaxHeight);
+            std::uniform_real_distribution<double> CoordY(0.0, AMaxHeight);
 
             int NextId = static_cast<int>(m_Polygons.size()) + 1;
             // 很重要：提前给最终结果容器预留空间
@@ -614,38 +543,34 @@ namespace ET {
                     int GenCount = TargetVerts * 2 + 2;
 
                     for (int j = 0; j < GenCount; ++j) {
-                        Points.emplace_back( CoordX(Rng), CoordY(Rng) );
+                        Points.emplace_back(CoordX(Rng), CoordY(Rng));
                     }
 
-                    _ConvexHull( Points, Vertices );
+                    _ConvexHull(Points, Vertices);
 
-                    if (Vertices.size() >= static_cast<size_t>(AMinVertices) &&Vertices.size() <= static_cast<size_t>(AMaxVertices)) {
+                    if (Vertices.size() >= static_cast<size_t>(AMinVertices) && Vertices.size() <= static_cast<size_t>(AMaxVertices)) {
                         break;
                     }
                 }
 
-                AddPolygon( NextId++, "ConvexPolygon",std::move(Vertices) );
+                AddPolygon(NextId++, "ConvexPolygon", std::move(Vertices));
             }
         }
 
-        void CetNestTestDataAPI::GenerateRandomTriangles(int ACount, double AMaxWidth,double AMaxHeight,unsigned ASeed)
+        void CetNestTestDataAPI::GenerateRandomTriangles(int ACount, double AMaxWidth, double AMaxHeight, unsigned ASeed)
         {
             std::mt19937 Rng(ASeed);
 
-            std::uniform_real_distribution<double> CoordX( 0.0, AMaxWidth);
+            std::uniform_real_distribution<double> CoordX(0.0, AMaxWidth);
 
-            std::uniform_real_distribution<double> CoordY( 0.0, AMaxHeight);
+            std::uniform_real_distribution<double> CoordY(0.0, AMaxHeight);
 
             int NextId = static_cast<int>(m_Polygons.size()) + 1;
 
             for (int i = 0; i < ACount; ++i) {
-                AddPolygon( NextId++,"Triangle", {
-                        {CoordX(Rng), CoordY(Rng)},
-                        {CoordX(Rng), CoordY(Rng)},
-                        {CoordX(Rng), CoordY(Rng)}
-                    } );
+                AddPolygon(NextId++, "Triangle", {{CoordX(Rng), CoordY(Rng)}, {CoordX(Rng), CoordY(Rng)}, {CoordX(Rng), CoordY(Rng)}});
             }
         }
 
-    }
-}
+    } // namespace NESTTESTDATALIB
+} // namespace ET

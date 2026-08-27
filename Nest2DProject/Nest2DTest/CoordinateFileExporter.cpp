@@ -3,9 +3,8 @@
 #include "Nest2D_DataType.h"
 namespace ET {
     namespace NEST2DTESTAPP {
-        int CetCoordinateFileExporter::Export(const TetNestOptions& AOptions, const std::vector<TetNestPolygon>& AItems, const TetNestResult& AResult)
+        int CetCoordinateFileExporter::Export(const TetNestOptions &AOptions, const std::vector<TetNestPolygon> &AItems, const TetNestResult &AResult)
         {
-            {
                 char ExportFile = 'n';
 
                 std::cout << "Export coordinate file? y/n: ";
@@ -25,20 +24,11 @@ namespace ET {
                     return -1;
                 }
 
-                int SaveCode =
-                    Nest2DTestUtils->SaveCoordinatesFile(
-                        FilePath,
-                        AOptions,
-                        AItems,
-                        AResult.UsedBins
-                    );
+                int SaveCode = Nest2DTestUtils->SaveCoordinatesFile(FilePath, AOptions, AItems, AResult.UsedBins);
 
-                std::cout << "SaveCoordinatesFile result = "
-                    << SaveCode
-                    << std::endl;
+                std::cout << "SaveCoordinatesFile result = " << SaveCode << std::endl;
 
                 return SaveCode;
-            }
         }
-    }
-}
+    } // namespace NEST2DTESTAPP
+} // namespace ET

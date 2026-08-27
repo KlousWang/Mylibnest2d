@@ -2,32 +2,24 @@
 #include "NestProfileInputUtils.h"
 #include <iostream>
 
-CetNestProfileInputUtils::CetNestProfileInputUtils()
-{
-    _InitProfileMenu();
-}
-CetNestProfileInputUtils::~CetNestProfileInputUtils()
-{
-}
+CetNestProfileInputUtils::CetNestProfileInputUtils() { _InitProfileMenu(); }
+CetNestProfileInputUtils::~CetNestProfileInputUtils() {}
 void CetNestProfileInputUtils::_InitProfileMenu()
 {
-    m_ProfileMenuItems[PROFILE_TRIANGLE_BY_3_SIDES] = {"Triangle by 3 sides",&CetNestProfileInputUtils::ReadTriangleProfile};
-    m_ProfileMenuItems[PROFILE_CIRCLE_BY_RADIUS] = {"Circle by radius",&CetNestProfileInputUtils::ReadCircleProfile};
+    m_ProfileMenuItems[PROFILE_TRIANGLE_BY_3_SIDES] = {"Triangle by 3 sides", &CetNestProfileInputUtils::ReadTriangleProfile};
+    m_ProfileMenuItems[PROFILE_CIRCLE_BY_RADIUS] = {"Circle by radius", &CetNestProfileInputUtils::ReadCircleProfile};
 
-    m_ProfileMenuItems[PROFILE_CUSTOM_POLYGON] = {"Custom polygon by vertices",&CetNestProfileInputUtils::ReadCustomPolygonProfile};
+    m_ProfileMenuItems[PROFILE_CUSTOM_POLYGON] = {"Custom polygon by vertices", &CetNestProfileInputUtils::ReadCustomPolygonProfile};
 
-    m_ProfileMenuItems[PROFILE_REGULAR_POLYGON] = {"Regular polygon by side length",&CetNestProfileInputUtils::ReadRegularPolygonProfile};
+    m_ProfileMenuItems[PROFILE_REGULAR_POLYGON] = {"Regular polygon by side length", &CetNestProfileInputUtils::ReadRegularPolygonProfile};
 }
 void CetNestProfileInputUtils::_PrintProfileMenu() const
 {
     std::cout << std::endl;
     std::cout << "Please select profile type:" << std::endl;
 
-    for (const auto& Item : m_ProfileMenuItems) {
-        std::cout << Item.first
-            << ". "
-            << Item.second.Description
-            << std::endl;
+    for (const auto &Item : m_ProfileMenuItems) {
+        std::cout << Item.first << ". " << Item.second.Description << std::endl;
     }
 
     std::cout << "Please enter: ";
@@ -38,7 +30,7 @@ int CetNestProfileInputUtils::_ReadChoice() const
     std::cin >> Choice;
     return Choice;
 }
-CetVertices CetNestProfileInputUtils::_ExecuteProfileMenuItem(int AChoice,bool AIsHole,std::string* AProfileName)
+CetVertices CetNestProfileInputUtils::_ExecuteProfileMenuItem(int AChoice, bool AIsHole, std::string *AProfileName)
 {
     auto It = m_ProfileMenuItems.find(AChoice);
 
@@ -52,9 +44,9 @@ CetVertices CetNestProfileInputUtils::_ExecuteProfileMenuItem(int AChoice,bool A
         return CetVertices();
     }
 
-    return (this->*(It->second.Func))(AIsHole,AProfileName);
+    return (this->*(It->second.Func))(AIsHole, AProfileName);
 }
-CetVertices CetNestProfileInputUtils::ReadProfileVertices(bool AIsHole,std::string* AProfileName)
+CetVertices CetNestProfileInputUtils::ReadProfileVertices(bool AIsHole, std::string *AProfileName)
 {
     if (AProfileName) {
         *AProfileName = "Polygon";
@@ -64,9 +56,9 @@ CetVertices CetNestProfileInputUtils::ReadProfileVertices(bool AIsHole,std::stri
 
     int ShapeType = _ReadChoice();
 
-    return _ExecuteProfileMenuItem(ShapeType,AIsHole,AProfileName);
+    return _ExecuteProfileMenuItem(ShapeType, AIsHole, AProfileName);
 }
-CetVertices CetNestProfileInputUtils::ReadTriangleProfile(bool AIsHole,std::string* AProfileName)
+CetVertices CetNestProfileInputUtils::ReadTriangleProfile(bool AIsHole, std::string *AProfileName)
 {
     if (AProfileName) {
         *AProfileName = "Triangle";
@@ -93,15 +85,14 @@ CetVertices CetNestProfileInputUtils::ReadTriangleProfile(bool AIsHole,std::stri
     std::cout << "Please enter offset Y: ";
     std::cin >> OffsetY;
 
-    CetVertices Verts =
-        m_GeometryUtils.MakeTriangleBySidesVertices(A, B, C);
+    CetVertices Verts = m_GeometryUtils.MakeTriangleBySidesVertices(A, B, C);
 
     m_GeometryUtils.OffsetVertices(Verts, OffsetX, OffsetY);
     m_GeometryUtils.NormalizeContourDirection(Verts, AIsHole);
 
     return Verts;
 }
-CetVertices CetNestProfileInputUtils::ReadCircleProfile(bool AIsHole,std::string* AProfileName)
+CetVertices CetNestProfileInputUtils::ReadCircleProfile(bool AIsHole, std::string *AProfileName)
 {
     if (AProfileName) {
         *AProfileName = "Circle";
@@ -124,20 +115,13 @@ CetVertices CetNestProfileInputUtils::ReadCircleProfile(bool AIsHole,std::string
     std::cout << "Please enter segments, for example 32: ";
     std::cin >> Segments;
 
-    CetVertices Verts =
-        m_GeometryUtils.MakeCircleVertices(
-            CX,
-            CY,
-            Radius,
-            Segments,
-            AIsHole
-        );
+    CetVertices Verts = m_GeometryUtils.MakeCircleVertices(CX, CY, Radius, Segments, AIsHole);
 
     m_GeometryUtils.NormalizeContourDirection(Verts, AIsHole);
 
     return Verts;
 }
-CetVertices CetNestProfileInputUtils::ReadCustomPolygonProfile(bool AIsHole,std::string* AProfileName)
+CetVertices CetNestProfileInputUtils::ReadCustomPolygonProfile(bool AIsHole, std::string *AProfileName)
 {
     if (AProfileName) {
         *AProfileName = "Polygon";
@@ -173,7 +157,7 @@ CetVertices CetNestProfileInputUtils::ReadCustomPolygonProfile(bool AIsHole,std:
 
     return Verts;
 }
-CetVertices CetNestProfileInputUtils::ReadRegularPolygonProfile(bool AIsHole,std::string* AProfileName)
+CetVertices CetNestProfileInputUtils::ReadRegularPolygonProfile(bool AIsHole, std::string *AProfileName)
 {
     if (AProfileName) {
         *AProfileName = "RegularPolygon";
@@ -196,14 +180,7 @@ CetVertices CetNestProfileInputUtils::ReadRegularPolygonProfile(bool AIsHole,std
     std::cout << "Please enter center Y: ";
     std::cin >> CY;
 
-    CetVertices Verts =
-        m_GeometryUtils.MakeRegularPolygonVertices(
-            CX,
-            CY,
-            SideCount,
-            SideLength,
-            AIsHole
-        );
+    CetVertices Verts = m_GeometryUtils.MakeRegularPolygonVertices(CX, CY, SideCount, SideLength, AIsHole);
 
     m_GeometryUtils.NormalizeContourDirection(Verts, AIsHole);
 

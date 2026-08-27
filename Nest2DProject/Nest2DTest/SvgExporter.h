@@ -1,9 +1,8 @@
 #pragma once
-#include"NestExporterBase.h"
-#include<iostream>
+#include "NestExporterBase.h"
+#include <iostream>
 class CetSvgExporter : public CetNestExporterBase
 {
 public:
-    bool Prepare(TetNestOptions& AOptions) override;
+    bool Prepare(TetNestOptions &AOptions) override;
 };
-

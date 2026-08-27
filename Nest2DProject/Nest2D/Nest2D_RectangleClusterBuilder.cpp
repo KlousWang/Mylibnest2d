@@ -2,9 +2,9 @@
 #include "Nest2D_RectangleClusterBuilder.h"
 #include "Nest2D_ClusterGeometryHelper.h"
 #include "Nest2D_ClusterMathUtils.h"
+#include "Nest2D_PrivateDataType.h"
 #include "Nest2D_RotationUtils.h"
 #include "NestUtils.h"
-#include "Nest2D_PrivateDataType.h"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -13,108 +13,119 @@
 namespace ET {
     namespace NEST2DMANAGERLIB {
         namespace {
-            void GetCanonicalSides(const TetShapeFeature& AFeature, double& AOutShortSide, double& AOutLongSide)
+            void GetCanonicalSides(const TetShapeFeature &AFeature, double &AOutShortSide, double &AOutLongSide)
             {
                 AOutShortSide = std::min(AFeature.OrientedWidth, AFeature.OrientedHeight);
                 AOutLongSide = std::max(AFeature.OrientedWidth, AFeature.OrientedHeight);
             }
-            bool _MakePose(const CetNestItem& AItem, const TetShapeFeature& AFeature, bool ARotate90, const TetNestOptions& AOptions, const CetClusterGeometryHelper& AGeometry, TetRectanglePose& AOutPose)
+            bool _MakePose(const CetNestItem &AItem, const TetShapeFeature &AFeature, bool ARotate90, const TetNestOptions &AOptions, const CetClusterGeometryHelper &AGeometry, TetRectanglePose &AOutPose)
             {
                 AOutPose = TetRectanglePose{};
                 const double TargetRotation = -AFeature.OrientedAngle + (ARotate90 ? CET_CLUSTER_HALF_PI : 0.0);
-                if (!CetRotationUtils::SnapToNearestAllowedRotation(TargetRotation, AOptions.Rotations, AOutPose.Rotation)){
+                if (!CetRotationUtils::SnapToNearestAllowedRotation(TargetRotation, AOptions.Rotations, AOutPose.Rotation)) {
                     return false;
                 }
                 const CetPath Contour = AGeometry.TransformContour(AGeometry.GetIdentityContour(AItem), AOutPose.Rotation, 0.0, 0.0);
                 double MaxX = 0.0;
                 double MaxY = 0.0;
-                if (!AGeometry.GetBounds(Contour, AOutPose.MinX, AOutPose.MinY, MaxX, MaxY)){ return false; }
+                if (!AGeometry.GetBounds(Contour, AOutPose.MinX, AOutPose.MinY, MaxX, MaxY)) {
+                    return false;
+                }
                 AOutPose.Width = MaxX - AOutPose.MinX;
                 AOutPose.Height = MaxY - AOutPose.MinY;
                 return AOutPose.Width > 0.0 && AOutPose.Height > 0.0;
             }
-        }
+        } // namespace
         CetRectangleClusterBuilder::CetRectangleClusterBuilder() : CetCoreObject() {}
         CetRectangleClusterBuilder::~CetRectangleClusterBuilder() {}
-        void CetRectangleClusterBuilder::BuildCandidates(const CetTNestItemVector& AItems, const std::vector<TetShapeFeature>& AFeatures, const std::vector<int>& AIndices, const TetNestOptions& AOptions, std::vector<TetClusterCandidate>& AOut)
+        void CetRectangleClusterBuilder::BuildCandidates(const CetTNestItemVector &AItems, const std::vector<TetShapeFeature> &AFeatures, const std::vector<int> &AIndices, const TetNestOptions &AOptions, std::vector<TetClusterCandidate> &AOut)
         {
-            if (AItems.size() != AFeatures.size()){
+            if (AItems.size() != AFeatures.size()) {
                 std::cout << "[RECTANGLE][ERROR] " << "Feature count mismatch. Items=" << AItems.size() << ", Features=" << AFeatures.size() << std::endl;
                 return;
             }
-            if (AIndices.size() < 2){ return; }
+            if (AIndices.size() < 2) {
+                return;
+            }
             std::vector<int> ValidIndices;
             ValidIndices.reserve(AIndices.size());
-            for (int Index : AIndices){
-                if (Index < 0 || Index >= static_cast<int>(AFeatures.size())){ continue; }
-                if (_IsValidRectangle(AFeatures[Index])){
+            for (int Index : AIndices) {
+                if (Index < 0 || Index >= static_cast<int>(AFeatures.size())) {
+                    continue;
+                }
+                if (_IsValidRectangle(AFeatures[Index])) {
                     ValidIndices.push_back(Index);
                 }
             }
             std::sort(ValidIndices.begin(), ValidIndices.end());
             ValidIndices.erase(std::unique(ValidIndices.begin(), ValidIndices.end()), ValidIndices.end());
-            if (ValidIndices.size() < 2){ return; }
+            if (ValidIndices.size() < 2) {
+                return;
+            }
             const std::size_t OldCandidateCount = AOut.size();
             std::vector<std::vector<int>> Groups;
-            for (int Index : ValidIndices){
+            for (int Index : ValidIndices) {
                 bool AddedToGroup = false;
-                for (std::vector<int>& Group : Groups){
-                    if (!Group.empty() && _AreCompatible(AFeatures[Group.front()], AFeatures[Index])){
+                for (std::vector<int> &Group : Groups) {
+                    if (!Group.empty() && _AreCompatible(AFeatures[Group.front()], AFeatures[Index])) {
                         Group.push_back(Index);
                         AddedToGroup = true;
                         break;
                     }
                 }
-                if (!AddedToGroup){
-                    Groups.push_back({ Index });
+                if (!AddedToGroup) {
+                    Groups.push_back({Index});
                 }
             }
-            for (const std::vector<int>& Group : Groups){
+            for (const std::vector<int> &Group : Groups) {
                 _BuildGroupCandidates(AItems, AFeatures, Group, AOptions, AOut);
             }
             std::cout << "[RECTANGLE][BUILD CANDIDATES] " << "IndexCount=" << ValidIndices.size() << ", GroupCount=" << Groups.size() << ", NewCandidateCount=" << AOut.size() - OldCandidateCount << std::endl;
         }
-        void CetRectangleClusterBuilder::_BuildGroupCandidates(const CetTNestItemVector& AItems, const std::vector<TetShapeFeature>& AFeatures, const std::vector<int>& AGroup, const TetNestOptions& AOptions, std::vector<TetClusterCandidate>& AOut)
+        void CetRectangleClusterBuilder::_BuildGroupCandidates(const CetTNestItemVector &AItems, const std::vector<TetShapeFeature> &AFeatures, const std::vector<int> &AGroup, const TetNestOptions &AOptions, std::vector<TetClusterCandidate> &AOut)
         {
-            if (AGroup.size() < 2){ return; }
+            if (AGroup.size() < 2) {
+                return;
+            }
             CetClusterGeometryHelper Geometry;
             const std::size_t MaxChildCount = std::min(AGroup.size(), CET_RECT_MAX_CLUSTER_CHILDREN);
             std::size_t PreferredChildCount = 0;
             TetClusterCandidate FirstCandidate;
-            for (std::size_t TrialChildCount = MaxChildCount; TrialChildCount >= 2; --TrialChildCount){
+            for (std::size_t TrialChildCount = MaxChildCount; TrialChildCount >= 2; --TrialChildCount) {
                 std::vector<int> ClusterIndices(AGroup.begin(), AGroup.begin() + static_cast<std::vector<int>::difference_type>(TrialChildCount));
                 TetClusterCandidate Candidate;
                 const std::size_t RequiredCopies = std::min(CET_CLUSTER_TARGET_COPIES_PER_BOARD, AGroup.size() / TrialChildCount);
-                if (_MakeGridCandidate(AItems, AFeatures, ClusterIndices, AOptions, Candidate) && Geometry.CanPlaceCandidateCopiesOnBoard(Candidate, AOptions, RequiredCopies)){
+                if (_MakeGridCandidate(AItems, AFeatures, ClusterIndices, AOptions, Candidate) && Geometry.CanPlaceCandidateCopiesOnBoard(Candidate, AOptions, RequiredCopies)) {
                     PreferredChildCount = TrialChildCount;
                     FirstCandidate = std::move(Candidate);
                     break;
                 }
             }
-            for (std::size_t GroupOffset = 0; PreferredChildCount >= 2 && GroupOffset + 1 < AGroup.size(); ){
+            for (std::size_t GroupOffset = 0; PreferredChildCount >= 2 && GroupOffset + 1 < AGroup.size();) {
                 const std::size_t RemainingCount = AGroup.size() - GroupOffset;
                 std::size_t TrialChildCount = std::min(RemainingCount, PreferredChildCount);
                 TetClusterCandidate BestCandidate;
-                while (TrialChildCount >= 2){
-                    if (GroupOffset == 0 && TrialChildCount == PreferredChildCount){
+                while (TrialChildCount >= 2) {
+                    if (GroupOffset == 0 && TrialChildCount == PreferredChildCount) {
                         BestCandidate = std::move(FirstCandidate);
                         break;
                     }
                     std::vector<int> ClusterIndices(AGroup.begin() + static_cast<std::vector<int>::difference_type>(GroupOffset), AGroup.begin() + static_cast<std::vector<int>::difference_type>(GroupOffset + TrialChildCount));
-                    if (_MakeGridCandidate(AItems, AFeatures, ClusterIndices, AOptions, BestCandidate)){ break; }
+                    if (_MakeGridCandidate(AItems, AFeatures, ClusterIndices, AOptions, BestCandidate)) {
+                        break;
+                    }
                     --TrialChildCount;
                 }
-                if (TrialChildCount < 2){ break; }
+                if (TrialChildCount < 2) {
+                    break;
+                }
                 GroupOffset += TrialChildCount;
                 std::cout << "[RECTANGLE][CANDIDATE] ChildCount=" << BestCandidate.OriginalIndices.size() << ", Type=" << BestCandidate.ClusterType << ", Score=" << BestCandidate.Score << std::endl;
                 AOut.push_back(std::move(BestCandidate));
             }
         }
-        bool CetRectangleClusterBuilder::_IsValidRectangle(const TetShapeFeature& AFeature)
-        {
-            return AFeature.ShapeType == MetShapeType::RectangleLike && AFeature.IsRotatedRectangle && !AFeature.HasHoles && AFeature.Area > 0.0 && AFeature.OrientedWidth > 0.0 && AFeature.OrientedHeight > 0.0;
-        }
-        bool CetRectangleClusterBuilder::_AreCompatible(const TetShapeFeature& AFeatureA, const TetShapeFeature& AFeatureB)
+        bool CetRectangleClusterBuilder::_IsValidRectangle(const TetShapeFeature &AFeature) { return AFeature.ShapeType == MetShapeType::RectangleLike && AFeature.IsRotatedRectangle && !AFeature.HasHoles && AFeature.Area > 0.0 && AFeature.OrientedWidth > 0.0 && AFeature.OrientedHeight > 0.0; }
+        bool CetRectangleClusterBuilder::_AreCompatible(const TetShapeFeature &AFeatureA, const TetShapeFeature &AFeatureB)
         {
             double ShortA = 0.0;
             double LongA = 0.0;
@@ -124,26 +135,29 @@ namespace ET {
             GetCanonicalSides(AFeatureB, ShortB, LongB);
             return CetClusterMathUtils::NearlyEqual(ShortA, ShortB, CET_RECT_SIZE_TOLERANCE) && CetClusterMathUtils::NearlyEqual(LongA, LongB, CET_RECT_SIZE_TOLERANCE);
         }
-        bool CetRectangleClusterBuilder::_IsSquareLike(const TetShapeFeature& AFeature)
-        {
-            return CetClusterMathUtils::NearlyEqual(AFeature.OrientedWidth, AFeature.OrientedHeight, CET_RECT_SQUARE_TOLERANCE);
-        }
-        bool CetRectangleClusterBuilder::_IsQuarterTurnAllowed(const TetNestOptions& AOptions)
+        bool CetRectangleClusterBuilder::_IsSquareLike(const TetShapeFeature &AFeature) { return CetClusterMathUtils::NearlyEqual(AFeature.OrientedWidth, AFeature.OrientedHeight, CET_RECT_SQUARE_TOLERANCE); }
+        bool CetRectangleClusterBuilder::_IsQuarterTurnAllowed(const TetNestOptions &AOptions)
         {
             constexpr double RotationTolerance = 1e-9;
             return CetRotationUtils::IsAllowedRotation(CET_CLUSTER_HALF_PI, AOptions.Rotations, RotationTolerance);
         }
-        bool CetRectangleClusterBuilder::_MakePairCandidate(const CetTNestItemVector& AItems, const std::vector<TetShapeFeature>& AFeatures, int AIndexA, int AIndexB, bool AHorizontal, bool ARotateB90, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate)
+        bool CetRectangleClusterBuilder::_MakePairCandidate(const CetTNestItemVector &AItems, const std::vector<TetShapeFeature> &AFeatures, int AIndexA, int AIndexB, bool AHorizontal, bool ARotateB90, const TetNestOptions &AOptions, TetClusterCandidate &AOutCandidate)
         {
             AOutCandidate = TetClusterCandidate{};
-            if (AIndexA < 0 || AIndexB < 0 || AIndexA == AIndexB || AIndexA >= static_cast<int>(AItems.size()) || AIndexB >= static_cast<int>(AItems.size()) || AIndexA >= static_cast<int>(AFeatures.size()) || AIndexB >= static_cast<int>(AFeatures.size())){ return false; }
-            const TetShapeFeature& FeatureA = AFeatures[AIndexA];
-            const TetShapeFeature& FeatureB = AFeatures[AIndexB];
-            if (!_IsValidRectangle(FeatureA) || !_IsValidRectangle(FeatureB) || !_AreCompatible(FeatureA, FeatureB)){ return false; }
+            if (AIndexA < 0 || AIndexB < 0 || AIndexA == AIndexB || AIndexA >= static_cast<int>(AItems.size()) || AIndexB >= static_cast<int>(AItems.size()) || AIndexA >= static_cast<int>(AFeatures.size()) || AIndexB >= static_cast<int>(AFeatures.size())) {
+                return false;
+            }
+            const TetShapeFeature &FeatureA = AFeatures[AIndexA];
+            const TetShapeFeature &FeatureB = AFeatures[AIndexB];
+            if (!_IsValidRectangle(FeatureA) || !_IsValidRectangle(FeatureB) || !_AreCompatible(FeatureA, FeatureB)) {
+                return false;
+            }
             CetClusterGeometryHelper Geometry;
             TetRectanglePose PoseA;
             TetRectanglePose PoseB;
-            if (!_MakePose(AItems[AIndexA], FeatureA, false, AOptions, Geometry, PoseA) || !_MakePose(AItems[AIndexB], FeatureB, ARotateB90, AOptions, Geometry, PoseB)){ return false; }
+            if (!_MakePose(AItems[AIndexA], FeatureA, false, AOptions, Geometry, PoseA) || !_MakePose(AItems[AIndexB], FeatureB, ARotateB90, AOptions, Geometry, PoseB)) {
+                return false;
+            }
             const double Gap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
             TetItemTransform TransformA;
             TransformA.OriginalId = AIndexA;
@@ -153,47 +167,54 @@ namespace ET {
             TetItemTransform TransformB;
             TransformB.OriginalId = AIndexB;
             TransformB.RelativeRotation = PoseB.Rotation;
-            if (AHorizontal){
+            if (AHorizontal) {
                 TransformB.RelativeX = PoseA.Width + Gap - PoseB.MinX;
                 TransformB.RelativeY = -PoseB.MinY;
-            }
-            else {
+            } else {
                 TransformB.RelativeX = -PoseB.MinX;
                 TransformB.RelativeY = PoseA.Height + Gap - PoseB.MinY;
             }
             AOutCandidate.BuilderName = "RectangleBuilder";
             AOutCandidate.ClusterType = AHorizontal ? "RectanglePairHorizontal" : "RectanglePairVertical";
-            if (ARotateB90){
+            if (ARotateB90) {
                 AOutCandidate.ClusterType += "RotatedB90";
             }
-            AOutCandidate.OriginalIndices = { AIndexA, AIndexB };
-            AOutCandidate.Transforms = { TransformA, TransformB };
+            AOutCandidate.OriginalIndices = {AIndexA, AIndexB};
+            AOutCandidate.Transforms = {TransformA, TransformB};
             AOutCandidate.Confidence = 0.60;
-            if (!Geometry.FinalizeCandidate(AItems, AOptions, AOutCandidate)){ return false; }
-            if (AOutCandidate.AreaSavingRatio < -CET_RECT_MAX_AREA_LOSS_RATIO){ return false; }
+            if (!Geometry.FinalizeCandidate(AItems, AOptions, AOutCandidate)) {
+                return false;
+            }
+            if (AOutCandidate.AreaSavingRatio < -CET_RECT_MAX_AREA_LOSS_RATIO) {
+                return false;
+            }
             return true;
         }
-        bool CetRectangleClusterBuilder::_MakeGridCandidate(const CetTNestItemVector& AItems, const std::vector<TetShapeFeature>& AFeatures, const std::vector<int>& AIndices, const TetNestOptions& AOptions, TetClusterCandidate& AOutCandidate)
+        bool CetRectangleClusterBuilder::_MakeGridCandidate(const CetTNestItemVector &AItems, const std::vector<TetShapeFeature> &AFeatures, const std::vector<int> &AIndices, const TetNestOptions &AOptions, TetClusterCandidate &AOutCandidate)
         {
             AOutCandidate = TetClusterCandidate{};
-            if (AItems.size() != AFeatures.size() || AIndices.size() < 2 || AIndices.size() > CET_RECT_MAX_CLUSTER_CHILDREN){ return false; }
+            if (AItems.size() != AFeatures.size() || AIndices.size() < 2 || AIndices.size() > CET_RECT_MAX_CLUSTER_CHILDREN) {
+                return false;
+            }
             const int FirstIndex = AIndices.front();
-            if (FirstIndex < 0 || FirstIndex >= static_cast<int>(AFeatures.size()) || !_IsValidRectangle(AFeatures[FirstIndex])){ return false; }
+            if (FirstIndex < 0 || FirstIndex >= static_cast<int>(AFeatures.size()) || !_IsValidRectangle(AFeatures[FirstIndex])) {
+                return false;
+            }
             CetClusterGeometryHelper Geometry;
             const bool AllowQuarterTurn = _IsQuarterTurnAllowed(AOptions);
             std::vector<TetRectanglePose> Poses;
             Poses.reserve(AIndices.size());
             double CellWidth = 0.0;
             double CellHeight = 0.0;
-            for (int Index : AIndices){
-                if (Index < 0 || Index >= static_cast<int>(AFeatures.size()) ||!_IsValidRectangle(AFeatures[Index]) ||!_AreCompatible(AFeatures[FirstIndex], AFeatures[Index])){
+            for (int Index : AIndices) {
+                if (Index < 0 || Index >= static_cast<int>(AFeatures.size()) || !_IsValidRectangle(AFeatures[Index]) || !_AreCompatible(AFeatures[FirstIndex], AFeatures[Index])) {
                     return false;
                 }
-                const TetShapeFeature& Feature = AFeatures[Index];
+                const TetShapeFeature &Feature = AFeatures[Index];
                 const bool RotateLongSideHorizontal = AllowQuarterTurn && Feature.OrientedWidth < Feature.OrientedHeight;
                 TetRectanglePose Pose;
-                if (!_MakePose(AItems[Index], Feature, RotateLongSideHorizontal, AOptions, Geometry, Pose)){
-                    if (!RotateLongSideHorizontal || !_MakePose(AItems[Index], Feature, false, AOptions, Geometry, Pose)){
+                if (!_MakePose(AItems[Index], Feature, RotateLongSideHorizontal, AOptions, Geometry, Pose)) {
+                    if (!RotateLongSideHorizontal || !_MakePose(AItems[Index], Feature, false, AOptions, Geometry, Pose)) {
                         return false;
                     }
                 }
@@ -201,7 +222,9 @@ namespace ET {
                 CellHeight = std::max(CellHeight, Pose.Height);
                 Poses.push_back(Pose);
             }
-            if (CellWidth <= 0.0 || CellHeight <= 0.0){ return false; }
+            if (CellWidth <= 0.0 || CellHeight <= 0.0) {
+                return false;
+            }
             const double RequiredGap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
             const double SafetyGap = RequiredGap > 0.0 ? std::max(CET_CLUSTER_MIN_SAFETY_GAP, RequiredGap * 0.001) : 0.0;
             const double CellGap = RequiredGap + SafetyGap;
@@ -210,41 +233,41 @@ namespace ET {
             const int ItemCount = static_cast<int>(AIndices.size());
             std::vector<TetRectangleGridLayout> Layouts;
             Layouts.reserve(AIndices.size());
-            for (int Rows = 1; Rows <= ItemCount; ++Rows){
+            for (int Rows = 1; Rows <= ItemCount; ++Rows) {
                 const int Cols = (ItemCount + Rows - 1) / Rows;
                 const double Width = static_cast<double>(Cols) * CellWidth + static_cast<double>(std::max(0, Cols - 1)) * CellGap;
                 const double Height = static_cast<double>(Rows) * CellHeight + static_cast<double>(std::max(0, Rows - 1)) * CellGap;
                 const bool FitsNormally = Width <= BinWidth && Height <= BinHeight;
                 const bool FitsRotated = AllowQuarterTurn && Height <= BinWidth && Width <= BinHeight;
-                if (!FitsNormally && !FitsRotated){
+                if (!FitsNormally && !FitsRotated) {
                     continue;
                 }
                 const double LongSide = std::max(Width, Height);
                 const double ShortSide = std::min(Width, Height);
-                Layouts.push_back({Rows,Cols,Width,Height,Width * Height,LongSide / std::max(1.0, ShortSide)});
+                Layouts.push_back({Rows, Cols, Width, Height, Width * Height, LongSide / std::max(1.0, ShortSide)});
             }
-            std::stable_sort(Layouts.begin(), Layouts.end(), [](const TetRectangleGridLayout& A, const TetRectangleGridLayout& AB) {
-                if (std::abs(A.Area - AB.Area) > 1e-6){
+            std::stable_sort(Layouts.begin(), Layouts.end(), [](const TetRectangleGridLayout &A, const TetRectangleGridLayout &AB) {
+                if (std::abs(A.Area - AB.Area) > 1e-6) {
                     return A.Area < AB.Area;
                 }
-                if (std::abs(A.AspectPenalty - AB.AspectPenalty) > 1e-6){
+                if (std::abs(A.AspectPenalty - AB.AspectPenalty) > 1e-6) {
                     return A.AspectPenalty < AB.AspectPenalty;
                 }
                 return A.Rows < AB.Rows;
-                });
+            });
             const std::size_t MaxLayoutChecks = std::min<std::size_t>(Layouts.size(), 3);
-            for (std::size_t LayoutIndex = 0; LayoutIndex < MaxLayoutChecks; ++LayoutIndex){
-                const TetRectangleGridLayout& Layout = Layouts[LayoutIndex];
+            for (std::size_t LayoutIndex = 0; LayoutIndex < MaxLayoutChecks; ++LayoutIndex) {
+                const TetRectangleGridLayout &Layout = Layouts[LayoutIndex];
                 TetClusterCandidate Candidate;
                 Candidate.BuilderName = "RectangleBuilder";
                 Candidate.ClusterType = "RectangleGrid_" + std::to_string(AIndices.size()) + "_R" + std::to_string(Layout.Rows);
                 Candidate.OriginalIndices = AIndices;
                 Candidate.Confidence = 0.75;
                 Candidate.Transforms.reserve(AIndices.size());
-                for (int ItemOffset = 0; ItemOffset < ItemCount; ++ItemOffset){
+                for (int ItemOffset = 0; ItemOffset < ItemCount; ++ItemOffset) {
                     const int Row = ItemOffset / Layout.Cols;
                     const int Col = ItemOffset % Layout.Cols;
-                    const TetRectanglePose& Pose = Poses[static_cast<std::size_t>(ItemOffset)];
+                    const TetRectanglePose &Pose = Poses[static_cast<std::size_t>(ItemOffset)];
                     const double BaseX = static_cast<double>(Col) * (CellWidth + CellGap) + (CellWidth - Pose.Width) * 0.5;
                     const double BaseY = static_cast<double>(Row) * (CellHeight + CellGap) + (CellHeight - Pose.Height) * 0.5;
                     TetItemTransform Transform;
@@ -254,7 +277,7 @@ namespace ET {
                     Transform.RelativeY = BaseY - Pose.MinY;
                     Candidate.Transforms.push_back(Transform);
                 }
-                if (!Geometry.FinalizeCandidate(AItems, AOptions, Candidate) ||Candidate.AreaSavingRatio < -CET_RECT_MAX_AREA_LOSS_RATIO){
+                if (!Geometry.FinalizeCandidate(AItems, AOptions, Candidate) || Candidate.AreaSavingRatio < -CET_RECT_MAX_AREA_LOSS_RATIO) {
                     continue;
                 }
                 Candidate.Score += 1800.0 + static_cast<double>(Candidate.OriginalIndices.size()) * 100.0;
@@ -263,5 +286,5 @@ namespace ET {
             }
             return false;
         }
-    }
-}
+    } // namespace NEST2DMANAGERLIB
+} // namespace ET

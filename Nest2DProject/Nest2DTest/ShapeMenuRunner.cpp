@@ -4,15 +4,11 @@
 namespace ET {
     namespace NEST2DTESTAPP {
 
-        CetShapeMenuRunner::CetShapeMenuRunner()
-        {
-        }
+        CetShapeMenuRunner::CetShapeMenuRunner() {}
 
-        CetShapeMenuRunner::~CetShapeMenuRunner()
-        {
-        }
+        CetShapeMenuRunner::~CetShapeMenuRunner() {}
 
-        int CetShapeMenuRunner::SetTestApp(CetTestApp* ATestApp)
+        int CetShapeMenuRunner::SetTestApp(CetTestApp *ATestApp)
         {
             if (!ATestApp) {
                 std::cout << "TestApp is null." << std::endl;
@@ -25,26 +21,23 @@ namespace ET {
 
         void CetShapeMenuRunner::_BindMenuItems()
         {
-			m_MenuItems.clear();
-			_AddMenuItem(SHAPE_FINISH, "Finish adding shapes", std::bind(&CetShapeMenuRunner::_FinishAction, this));
-			_AddMenuItem(SHAPE_TRIANGLE, "Triangle", std::bind(&CetTestApp::_InputTriangle, m_pTestApp));
-			_AddMenuItem(SHAPE_RECTANGLE, "Rectangle", std::bind(&CetTestApp::_InputRectangle, m_pTestApp));
-			_AddMenuItem(SHAPE_CIRCLE, "Circle", std::bind(&CetTestApp::_InputCircle, m_pTestApp));
-			_AddMenuItem(SHAPE_CUSTOM_POLYGON, "Custom_Polygon", std::bind(&CetTestApp::_InputCustomPolygon, m_pTestApp));
-			_AddMenuItem(SHAPE_ARC, "Arc", std::bind(&CetTestApp::_InputArc, m_pTestApp));
-			_AddMenuItem(SHAPE_ELLIPSE, "Ellipse", std::bind(&CetTestApp::_InputEllipse, m_pTestApp));
-			_AddMenuItem(SHAPE_WITH_HOLES,"With Holes",std::bind(&CetTestApp::_InputShapeWithHoles, m_pTestApp));
+            m_MenuItems.clear();
+            _AddMenuItem(SHAPE_FINISH, "Finish adding shapes", std::bind(&CetShapeMenuRunner::_FinishAction, this));
+            _AddMenuItem(SHAPE_TRIANGLE, "Triangle", std::bind(&CetTestApp::_InputTriangle, m_pTestApp));
+            _AddMenuItem(SHAPE_RECTANGLE, "Rectangle", std::bind(&CetTestApp::_InputRectangle, m_pTestApp));
+            _AddMenuItem(SHAPE_CIRCLE, "Circle", std::bind(&CetTestApp::_InputCircle, m_pTestApp));
+            _AddMenuItem(SHAPE_CUSTOM_POLYGON, "Custom_Polygon", std::bind(&CetTestApp::_InputCustomPolygon, m_pTestApp));
+            _AddMenuItem(SHAPE_ARC, "Arc", std::bind(&CetTestApp::_InputArc, m_pTestApp));
+            _AddMenuItem(SHAPE_ELLIPSE, "Ellipse", std::bind(&CetTestApp::_InputEllipse, m_pTestApp));
+            _AddMenuItem(SHAPE_WITH_HOLES, "With Holes", std::bind(&CetTestApp::_InputShapeWithHoles, m_pTestApp));
         }
 
-        std::string CetShapeMenuRunner::_GetMenuTitle() const
-        {
-            return "Please select shape type:";
-        }
+        std::string CetShapeMenuRunner::_GetMenuTitle() const { return "Please select shape type:"; }
 
         int CetShapeMenuRunner::_FinishAction()
         {
             _Stop();
             return 0;
         }
-    }
-}
+    } // namespace NEST2DTESTAPP
+} // namespace ET

@@ -2,16 +2,14 @@
 
 CetMainMenuRunner::CetMainMenuRunner()
 {
-    _AddMenuItem(MENU_EXIT,"Exit App",std::bind(&CetMainMenuRunner::_ExitAction, this));
-    _AddMenuItem(MENU_GENERATE_AND_RUN,"Generate and format test graphics",std::bind(&CetMainMenuRunner::_GenerateAndRunAction, this));
-    _AddMenuItem(MENU_READ_AND_RUN,"Read and format an existing file",std::bind(&CetMainMenuRunner::_ReadAndRunAction, this));
+    _AddMenuItem(MENU_EXIT, "Exit App", std::bind(&CetMainMenuRunner::_ExitAction, this));
+    _AddMenuItem(MENU_GENERATE_AND_RUN, "Generate and format test graphics", std::bind(&CetMainMenuRunner::_GenerateAndRunAction, this));
+    _AddMenuItem(MENU_READ_AND_RUN, "Read and format an existing file", std::bind(&CetMainMenuRunner::_ReadAndRunAction, this));
 }
 
-CetMainMenuRunner::~CetMainMenuRunner()
-{
-}
+CetMainMenuRunner::~CetMainMenuRunner() {}
 
-int CetMainMenuRunner::SetTestApp(ET::NEST2DTESTAPP::CetTestApp* ATestApp)
+int CetMainMenuRunner::SetTestApp(ET::NEST2DTESTAPP::CetTestApp *ATestApp)
 {
     if (!ATestApp) {
         std::cout << "TestApp is null." << std::endl;
@@ -22,10 +20,7 @@ int CetMainMenuRunner::SetTestApp(ET::NEST2DTESTAPP::CetTestApp* ATestApp)
     return 0;
 }
 
-std::string CetMainMenuRunner::_GetMenuTitle() const
-{
-    return "Please select mode:";
-}
+std::string CetMainMenuRunner::_GetMenuTitle() const { return "Please select mode:"; }
 
 int CetMainMenuRunner::_ExitAction()
 {
@@ -47,9 +42,7 @@ int CetMainMenuRunner::_GenerateAndRunAction()
 
     int Result = m_pTestApp->RunNestProcess(InputFile);
 
-    std::cout << "RunNestProcess result = "
-        << Result
-        << std::endl;
+    std::cout << "RunNestProcess result = " << Result << std::endl;
 
     return Result;
 }
@@ -62,6 +55,6 @@ int CetMainMenuRunner::_ReadAndRunAction()
         return -1;
     }
     int Result = m_pTestApp->RunNestProcess(InputFile);
-    std::cout << "RunNestProcess result = "<< Result<< std::endl;
+    std::cout << "RunNestProcess result = " << Result << std::endl;
     return Result;
 }

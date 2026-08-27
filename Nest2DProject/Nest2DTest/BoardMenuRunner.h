@@ -10,7 +10,7 @@ namespace ET {
         public:
             explicit CetBoardMenuRunner();
             virtual ~CetBoardMenuRunner();
-            int SetTestApp(CetTestApp* ATestApp);
+            int SetTestApp(CetTestApp *ATestApp);
             int Run() override;
 
         protected:
@@ -18,7 +18,7 @@ namespace ET {
             void _BindMenuItems();
 
         private:
-            CetTestApp* m_pTestApp = nullptr;
+            CetTestApp *m_pTestApp = nullptr;
 
             enum MetBoardMenuChoice
             {
@@ -28,5 +28,5 @@ namespace ET {
             };
         };
 
-    }
-}
+    } // namespace NEST2DTESTAPP
+} // namespace ET
