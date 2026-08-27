@@ -765,9 +765,10 @@ namespace ET {
             return AOutLength > CET_SHAPE_EPSILON;
         }
 
-        bool CetShapeAnalyzer::_AnalyzeSolidArcFeature(const CetPath &AContour, TetShapeFeature &AFeature)
+        bool CetShapeAnalyzer::TryFitSemiCircle(const CetPath &AContour, double AArea, TetSemiCircleFit &AOutFit)
         {
-            if (AFeature.HasHoles || !AFeature.IsConvex || AContour.size() < 5)
+            AOutFit = TetSemiCircleFit{};
+            if (AContour.size() < 5)
                 return false;
 
             const std::size_t Count = AContour.size();
@@ -852,20 +853,42 @@ namespace ET {
             if (ExpectedArea <= CET_SHAPE_EPSILON)
                 return false;
 
-            const double AreaError = std::abs(AFeature.Area - ExpectedArea) / std::max(1.0, ExpectedArea);
+            const double AreaError = std::abs(AArea - ExpectedArea) / std::max(1.0, ExpectedArea);
             if (AreaError > 0.25)
                 return false;
 
+            AOutFit.Valid = true;
+            AOutFit.ChordStart = ChordStart;
+            AOutFit.ChordEnd = ChordEnd;
+            AOutFit.CenterX = CenterX;
+            AOutFit.CenterY = CenterY;
+            AOutFit.ChordLength = ChordLength;
+            AOutFit.Radius = Radius;
+            AOutFit.ChordAngle = std::atan2(ChordDY, ChordDX);
+            AOutFit.BulgeSign = BulgeSign;
+            AOutFit.AverageRadiusError = std::max(AverageRadiusError, AreaError);
+            return true;
+        }
+
+        bool CetShapeAnalyzer::_AnalyzeSolidArcFeature(const CetPath &AContour, TetShapeFeature &AFeature)
+        {
+            if (AFeature.HasHoles || !AFeature.IsConvex)
+                return false;
+
+            TetSemiCircleFit Fit;
+            if (!TryFitSemiCircle(AContour, AFeature.Area, Fit))
+                return false;
+
             AFeature.ArcType = MetArcType::SemiCircleLike;
-            AFeature.ArcChordStart = ChordStart;
-            AFeature.ArcChordEnd = ChordEnd;
-            AFeature.ArcCenter = ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(CenterX)), static_cast<ClipperLib::cInt>(std::llround(CenterY)));
-            AFeature.ArcChordLength = ChordLength;
-            AFeature.ArcRadius = Radius;
-            AFeature.ArcChordAngle = std::atan2(ChordDY, ChordDX);
+            AFeature.ArcChordStart = Fit.ChordStart;
+            AFeature.ArcChordEnd = Fit.ChordEnd;
+            AFeature.ArcCenter = ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(Fit.CenterX)), static_cast<ClipperLib::cInt>(std::llround(Fit.CenterY)));
+            AFeature.ArcChordLength = Fit.ChordLength;
+            AFeature.ArcRadius = Fit.Radius;
+            AFeature.ArcChordAngle = Fit.ChordAngle;
             AFeature.ArcSweepAngle = CET_CLUSTER_PI;
-            AFeature.ArcBulgeSign = BulgeSign;
-            AFeature.ArcFitError = std::max(AverageRadiusError, AreaError);
+            AFeature.ArcBulgeSign = Fit.BulgeSign;
+            AFeature.ArcFitError = Fit.AverageRadiusError;
 
             std::cout << "[SHAPE][ARC] Index=" << AFeature.OriginalIndex << " Radius=" << AFeature.ArcRadius << " Chord=" << AFeature.ArcChordLength << " FitError=" << AFeature.ArcFitError << " BulgeSign=" << AFeature.ArcBulgeSign << std::endl;
 

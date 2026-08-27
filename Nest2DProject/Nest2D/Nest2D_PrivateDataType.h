@@ -10,6 +10,7 @@
 #include <limits>
 #include <map>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -1264,4 +1265,250 @@ struct TetCircleIndexInfo
 {
     int Index = -1;
     double SizeKey = 0.0;
+};
+
+struct TetArcLayoutRequest
+{
+    std::size_t ArcCount = 0;
+    int RowCount = 0;
+    const TetArcOrientationBounds &ForwardBounds;
+    const TetArcOrientationBounds &ReverseBounds;
+    double Gap = 0.0;
+    bool VerticalStack = false;
+    bool AlternateDirection = false;
+    const std::string &StyleName;
+};
+
+struct TetArcCandidateBuildRequest
+{
+    const CetTNestItemVector &OriginalItems;
+    const std::vector<TetShapeFeature> &Features;
+    const std::vector<int> &Indices;
+    const TetNestOptions &Options;
+    const TetArcIndexInfo &BaseInfo;
+    const TetArcLayout &Layout;
+};
+
+struct TetEllipseOrientationBounds
+{
+    double Rotation = 0.0;
+    double MinX = 0.0;
+    double MinY = 0.0;
+    double Width = 0.0;
+    double Height = 0.0;
+};
+
+struct TetEllipseLayoutRequest
+{
+    std::size_t Count = 0;
+    int RowCount = 0;
+    double HorizontalWidth = 0.0;
+    double HorizontalHeight = 0.0;
+    double VerticalWidth = 0.0;
+    double VerticalHeight = 0.0;
+    double Gap = 0.0;
+    bool VerticalStack = false;
+    bool AlternateRotation = false;
+};
+
+// Shared input for internal rectangle-envelope filler operations.  Keeping
+// this together prevents the search phases from drifting in their view of the
+// base, envelope and current candidate.
+struct TetRectangleFillRequest
+{
+    const CetTNestItemVector &OriginalItems;
+    const std::vector<TetShapeFeature> &Features;
+    const TetNestOptions &Options;
+    const TetClusterCandidate &BaseCandidate;
+    const TetClusterCandidate &EnvelopeCandidate;
+    const TetClusterCandidate &CurrentCandidate;
+    const std::vector<TetClusterFreeRegion> *FreeRegions = nullptr;
+    int FillerIndex = -1;
+    double EnvelopeWidth = 0.0;
+    double EnvelopeHeight = 0.0;
+};
+
+struct TetPlacementScoreRequest
+{
+    const CetTNestItemVector &OriginalItems;
+    const TetClusterCandidate &Candidate;
+    const CetPath &FillerContour;
+    const std::vector<TetClusterFreeRegion> &FreeRegions;
+    double FillerLeft = 0.0;
+    double FillerTop = 0.0;
+    double FillerRight = 0.0;
+    double FillerBottom = 0.0;
+    double RequiredGap = 0.0;
+};
+
+constexpr int CET_CLUSTER_FILL_MAX_SWAP_ROUNDS = 2;
+constexpr int CET_CLUSTER_FILL_MAX_SWAP_CLUSTERS = 64;
+constexpr double CET_CLUSTER_FILL_MIN_SWAP_GAIN_RATIO = 0.05;
+
+struct TetClusterFillSearchConfig
+{
+    std::size_t BeamWidth = CET_CLUSTER_FILL_BEAM_WIDTH;
+    std::size_t MaxDepth = CET_CLUSTER_FILL_MAX_DEPTH;
+    std::size_t MaxCandidateFillers = CET_CLUSTER_FILL_MAX_CANDIDATE_FILLERS;
+    std::size_t MaxPlacementAttempts = CET_CLUSTER_FILL_MAX_PLACEMENT_ATTEMPTS;
+    std::size_t MinDepthBeforeTimeout = 0;
+    long long MaxElapsedMs = 0;
+};
+
+struct TetClusterFillSearchState
+{
+    TetClusterCandidate Candidate;
+    std::size_t FillerCount = 0;
+};
+
+struct TetClusterFillSearchStats
+{
+    std::size_t GeneratedVariantCount = 0;
+    std::size_t DeduplicatedVariantCount = 0;
+    std::size_t SearchAttempts = 0;
+    std::size_t FreeRegionCount = 0;
+    std::size_t EnvelopeGeneratedVariantCount = 0;
+    std::size_t EnvelopeDeduplicatedVariantCount = 0;
+    std::size_t EnvelopeSearchAttempts = 0;
+    std::size_t EnvelopeFreeRegionCount = 0;
+    std::size_t EnvelopeTimeLimitHits = 0;
+    std::size_t EnvelopeMaxDepthReached = 0;
+    std::size_t EnvelopeBestFillerCount = 0;
+    double EnvelopeSearchMs = 0.0;
+    double EnvelopeTrueContourMs = 0.0;
+    double BaseFillRatioSum = 0.0;
+    double FilledFillRatioSum = 0.0;
+    double BestFillRatioGain = 0.0;
+    double BestEnvelopeFillRatioGain = 0.0;
+    double BestEnvelopeRectangleFillRatio = 0.0;
+};
+
+struct TetAxisAlignedRectangle
+{
+    std::size_t ItemIndex = 0;
+    int BinId = -1;
+    double MinX = 0.0;
+    double MinY = 0.0;
+    double Width = 0.0;
+    double Height = 0.0;
+};
+
+struct TetRectangleGridKey
+{
+    int BinId = -1;
+    long long WidthKey = 0;
+    long long HeightKey = 0;
+    bool operator<(const TetRectangleGridKey &AOther) const { return std::tie(BinId, WidthKey, HeightKey) < std::tie(AOther.BinId, AOther.WidthKey, AOther.HeightKey); }
+};
+
+struct TetRectangleFamilyKey
+{
+    int BinId = -1;
+    long long ShortSideKey = 0;
+    long long LongSideKey = 0;
+    bool operator<(const TetRectangleFamilyKey &AOther) const { return std::tie(BinId, ShortSideKey, LongSideKey) < std::tie(AOther.BinId, AOther.ShortSideKey, AOther.LongSideKey); }
+};
+
+struct TetRectangleGridGroup
+{
+    std::vector<TetAxisAlignedRectangle> Items;
+    double OriginX = 0.0;
+    double OriginY = 0.0;
+    double PitchX = 0.0;
+    double PitchY = 0.0;
+    std::size_t ColumnCapacity = 0;
+    std::map<long long, double> RowCoordinates;
+    std::size_t InternalGapCount = 0;
+    double InternalGapArea = 0.0;
+};
+
+struct TetLocalCompactEnvelope
+{
+    bool Valid = false;
+    double MinX = 0.0;
+    double MinY = 0.0;
+    double MaxX = 0.0;
+    double MaxY = 0.0;
+    double Width = 0.0;
+    double Height = 0.0;
+    double Area = 0.0;
+    double LongSide = 0.0;
+};
+
+struct TetLocalCompactTarget
+{
+    std::vector<std::size_t> Indices;
+    std::vector<TetItemTransform> Transforms;
+    std::string Type = "Single";
+    bool IsCluster = false;
+    double CurrentRotation = 0.0;
+    double CurrentAnchorX = 0.0;
+    double CurrentAnchorY = 0.0;
+};
+
+struct TetLocalCompactCandidate
+{
+    bool Valid = false;
+    double Rotation = 0.0;
+    double AnchorX = 0.0;
+    double AnchorY = 0.0;
+    TetLocalCompactEnvelope Envelope;
+    int ContactScore = 0;
+    double TranslationDistance = 0.0;
+    double RotationDelta = 0.0;
+};
+
+struct TetLocalCompactFreeSpaceMetric
+{
+    bool Valid = false;
+    std::size_t RegionCount = 0;
+    double LargestArea = 0.0;
+    double FragmentedArea = 0.0;
+};
+
+constexpr std::size_t CET_LOCAL_COMPACT_MAX_FREE_REGIONS = 8;
+constexpr std::size_t CET_LOCAL_COMPACT_MAX_CONTACT_VERTICES = 4;
+constexpr std::size_t CET_LOCAL_COMPACT_MAX_HOLE_CONTACTS = 8;
+constexpr std::size_t CET_LOCAL_COMPACT_MAX_FREE_SPACE_EVALUATIONS = 8;
+constexpr std::size_t CET_LOCAL_COMPACT_MAX_TARGETS = 8;
+constexpr std::size_t CET_LOCAL_COMPACT_MAX_ANCHORS_PER_ROTATION = 96;
+constexpr long long CET_LOCAL_COMPACT_MAX_TIME_MS = 300;
+
+struct TetLocalCompactFixedItem
+{
+    CetNestItem Raw;
+    CetNestItem Spaced;
+    double RawMinX = 0.0, RawMinY = 0.0, RawMaxX = 0.0, RawMaxY = 0.0;
+    double SpacedMinX = 0.0, SpacedMinY = 0.0, SpacedMaxX = 0.0, SpacedMaxY = 0.0;
+};
+
+struct TetAllBinRemnantMetric
+{
+    bool Valid = false;
+    double ReusableStripArea = 0.0;
+    double SkylineWasteArea = 0.0;
+    double UsedEnvelopeArea = 0.0;
+    std::vector<double> BinReusableStripAreas;
+};
+
+struct TetAreaDensityMetric
+{
+    double Area = 0.0;
+    double Density = 0.0;
+    double LongSide = 0.0;
+    int AreaBand = 0;
+};
+
+struct TetSemiCircleFit
+{
+    bool Valid = false;
+    CetInpoint ChordStart;
+    CetInpoint ChordEnd;
+    double CenterX = 0.0;
+    double CenterY = 0.0;
+    double ChordLength = 0.0;
+    double Radius = 0.0;
+    double ChordAngle = 0.0;
+    int BulgeSign = 0;
+    double AverageRadiusError = 0.0;
 };

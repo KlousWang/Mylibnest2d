@@ -19,6 +19,7 @@ namespace ET {
             ~CetShapeAnalyzer();
         public:
             std::vector<TetShapeFeature> AnalyzeALL(const CetTNestItemVector& AItems);
+            bool TryFitSemiCircle(const CetPath &AContour, double AArea, TetSemiCircleFit &AOutFit);
         protected:
             TetShapeFeature _AnalyzeOne(const CetNestItem& AItem, int AOriginalIndex);
             void _AnalyzeTriangleFeature(const CetPath& AContour, TetShapeFeature& AFeature);
@@ -34,7 +35,7 @@ namespace ET {
             bool _AnalyzeThickArcFeature(const CetPath& AContour,TetShapeFeature& AFeature);
             bool _AnalyzeSolidArcFeature(const CetPath& AContour,TetShapeFeature& AFeature);
             bool _FindLongestContourEdge(const CetPath& AContour, std::size_t& AOutStartIndex, std::size_t& AOutEndIndex, double& AOutLength);
-            void _EvaluateThickArcCandidate(const CetPath& AContour, const TetShapeFeature& AFeature, const TetThickArcTestInput& AInput, TetArcCandidateLocal& AInOutBestCandidate);
+            void _EvaluateThickArcCandidate(const CetPath& AContour, const TetShapeFeature& AFeature, const TetThickArcTestInput& AInput, TetArcCandidateLocal& AInOutBestCandidate);    
         };
 
     }

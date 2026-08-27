@@ -78,24 +78,26 @@ namespace ET {
                 }
                 return Groups;
             }
-            bool GetOrientedBounds(const CetNestItem &AItem, const TetShapeFeature &AFeature, bool ARotateToVertical, const TetNestOptions &AOptions, const CetClusterGeometryHelper &AGeometry, double &AOutRotation, double &AOutMinX, double &AOutMinY, double &AOutWidth, double &AOutHeight)
+            bool GetOrientedBounds(const CetNestItem &AItem, const TetShapeFeature &AFeature, bool ARotateToVertical, const TetNestOptions &AOptions, const CetClusterGeometryHelper &AGeometry, TetEllipseOrientationBounds &AOutBounds)
             {
+                AOutBounds = TetEllipseOrientationBounds{};
                 const double TargetAngle = ARotateToVertical ? CET_CLUSTER_HALF_PI : 0.0;
-                if (!CetRotationUtils::SnapToNearestAllowedRotation(TargetAngle - AFeature.EllipseAngle, AOptions.Rotations, AOutRotation)) {
+                if (!CetRotationUtils::SnapToNearestAllowedRotation(TargetAngle - AFeature.EllipseAngle, AOptions.Rotations, AOutBounds.Rotation)) {
                     return false;
                 }
-                const CetPath Contour = AGeometry.TransformContour(AGeometry.GetIdentityContour(AItem), AOutRotation, 0.0, 0.0);
+                const CetPath Contour = AGeometry.TransformContour(AGeometry.GetIdentityContour(AItem), AOutBounds.Rotation, 0.0, 0.0);
                 double MaxX = 0.0;
                 double MaxY = 0.0;
-                if (!AGeometry.GetBounds(Contour, AOutMinX, AOutMinY, MaxX, MaxY)) {
+                if (!AGeometry.GetBounds(Contour, AOutBounds.MinX, AOutBounds.MinY, MaxX, MaxY)) {
                     return false;
                 }
-                AOutWidth = MaxX - AOutMinX;
-                AOutHeight = MaxY - AOutMinY;
-                return AOutWidth > 0.0 && AOutHeight > 0.0;
+                AOutBounds.Width = MaxX - AOutBounds.MinX;
+                AOutBounds.Height = MaxY - AOutBounds.MinY;
+                return AOutBounds.Width > 0.0 && AOutBounds.Height > 0.0;
             }
-            TetEllipseLayout MakeLineLayout(std::size_t ACount, double AHorizontalWidth, double AHorizontalHeight, double AVerticalWidth, double AVerticalHeight, double AGap, bool AVerticalStack, bool AAlternateRotation)
+            TetEllipseLayout MakeLineLayout(const TetEllipseLayoutRequest &ARequest)
             {
+                const std::size_t ACount = ARequest.Count; const double AHorizontalWidth = ARequest.HorizontalWidth; const double AHorizontalHeight = ARequest.HorizontalHeight; const double AVerticalWidth = ARequest.VerticalWidth; const double AVerticalHeight = ARequest.VerticalHeight; const double AGap = ARequest.Gap; const bool AVerticalStack = ARequest.VerticalStack; const bool AAlternateRotation = ARequest.AlternateRotation;
                 TetEllipseLayout Layout;
                 if (ACount < 2) {
                     return Layout;
@@ -132,8 +134,9 @@ namespace ET {
                 Layout.ClusterType += std::to_string(ACount);
                 return Layout;
             }
-            TetEllipseLayout MakeGridLayout(std::size_t ACount, int ARows, double AHorizontalWidth, double AHorizontalHeight, double AVerticalWidth, double AVerticalHeight, double AGap, bool AAlternateRotation)
+            TetEllipseLayout MakeGridLayout(const TetEllipseLayoutRequest &ARequest)
             {
+                const std::size_t ACount = ARequest.Count; const int ARows = ARequest.RowCount; const double AHorizontalWidth = ARequest.HorizontalWidth; const double AHorizontalHeight = ARequest.HorizontalHeight; const double AVerticalWidth = ARequest.VerticalWidth; const double AVerticalHeight = ARequest.VerticalHeight; const double AGap = ARequest.Gap; const bool AAlternateRotation = ARequest.AlternateRotation;
                 TetEllipseLayout Layout;
                 if (ACount < 2 || ARows < 1 || ARows > static_cast<int>(ACount)) {
                     return Layout;
@@ -280,18 +283,14 @@ namespace ET {
             for (std::size_t I = 0; I < ARequest.Indices.size(); ++I) {
                 const int Index = ARequest.Indices[I];
                 const TetEllipseLayoutSlot &Slot = Layout.Slots[I];
-                double Rotation = 0.0;
-                double MinX = 0.0;
-                double MinY = 0.0;
-                double Width = 0.0;
-                double Height = 0.0;
-                if (!GetOrientedBounds(ARequest.Items[Index], ARequest.Features[Index], Slot.RotateToVertical, ARequest.Options, Geometry, Rotation, MinX, MinY, Width, Height))
+                TetEllipseOrientationBounds Bounds;
+                if (!GetOrientedBounds(ARequest.Items[Index], ARequest.Features[Index], Slot.RotateToVertical, ARequest.Options, Geometry, Bounds))
                     return false;
                 TetItemTransform Transform;
                 Transform.OriginalId = Index;
-                Transform.RelativeRotation = Rotation;
-                Transform.RelativeX = Slot.X - MinX;
-                Transform.RelativeY = Slot.Y - MinY;
+                Transform.RelativeRotation = Bounds.Rotation;
+                Transform.RelativeX = Slot.X - Bounds.MinX;
+                Transform.RelativeY = Slot.Y - Bounds.MinY;
                 AOutCandidate.Transforms.push_back(Transform);
             }
             if (!Geometry.FinalizeCandidate(ARequest.Items, ARequest.Options, AOutCandidate))
@@ -320,22 +319,22 @@ namespace ET {
                 if (!AreSameSizeEllipses(BaseFeature, AFeatures[Index]))
                     return false;
             CetClusterGeometryHelper Geometry;
-            double HR = 0.0, HMinX = 0.0, HMinY = 0.0, HWidth = 0.0, HHeight = 0.0;
-            if (!GetOrientedBounds(AItems[Indices.front()], BaseFeature, false, AOptions, Geometry, HR, HMinX, HMinY, HWidth, HHeight))
+            TetEllipseOrientationBounds HorizontalBounds;
+            if (!GetOrientedBounds(AItems[Indices.front()], BaseFeature, false, AOptions, Geometry, HorizontalBounds))
                 return false;
-            double VR = 0.0, VMinX = 0.0, VMinY = 0.0, VWidth = 0.0, VHeight = 0.0;
-            if (!GetOrientedBounds(AItems[Indices.front()], BaseFeature, true, AOptions, Geometry, VR, VMinX, VMinY, VWidth, VHeight))
+            TetEllipseOrientationBounds VerticalBounds;
+            if (!GetOrientedBounds(AItems[Indices.front()], BaseFeature, true, AOptions, Geometry, VerticalBounds))
                 return false;
             const double RequiredGap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
             const double Gap = RequiredGap + (RequiredGap > 0.0 ? std::max(CET_CLUSTER_MIN_SAFETY_GAP, RequiredGap * 0.001) : 0.0);
             std::vector<TetEllipseLayout> Layouts;
-            Layouts.push_back(MakeLineLayout(Indices.size(), HWidth, HHeight, VWidth, VHeight, Gap, false, false));
-            Layouts.push_back(MakeLineLayout(Indices.size(), HWidth, HHeight, VWidth, VHeight, Gap, true, false));
-            Layouts.push_back(MakeLineLayout(Indices.size(), HWidth, HHeight, VWidth, VHeight, Gap, false, true));
+            Layouts.push_back(MakeLineLayout({Indices.size(), 0, HorizontalBounds.Width, HorizontalBounds.Height, VerticalBounds.Width, VerticalBounds.Height, Gap, false, false}));
+            Layouts.push_back(MakeLineLayout({Indices.size(), 0, HorizontalBounds.Width, HorizontalBounds.Height, VerticalBounds.Width, VerticalBounds.Height, Gap, true, false}));
+            Layouts.push_back(MakeLineLayout({Indices.size(), 0, HorizontalBounds.Width, HorizontalBounds.Height, VerticalBounds.Width, VerticalBounds.Height, Gap, false, true}));
             for (int Rows = 2; Rows <= static_cast<int>(Indices.size()); ++Rows) {
-                Layouts.push_back(MakeGridLayout(Indices.size(), Rows, HWidth, HHeight, VWidth, VHeight, Gap, false));
-                Layouts.push_back(MakeGridLayout(Indices.size(), Rows, HWidth, HHeight, VWidth, VHeight, Gap, true));
-                Layouts.push_back(MakeHoneycombLayout(Indices.size(), Rows, HWidth, HHeight, Gap));
+                Layouts.push_back(MakeGridLayout({Indices.size(), Rows, HorizontalBounds.Width, HorizontalBounds.Height, VerticalBounds.Width, VerticalBounds.Height, Gap, false, false}));
+                Layouts.push_back(MakeGridLayout({Indices.size(), Rows, HorizontalBounds.Width, HorizontalBounds.Height, VerticalBounds.Width, VerticalBounds.Height, Gap, false, true}));
+                Layouts.push_back(MakeHoneycombLayout(Indices.size(), Rows, HorizontalBounds.Width, HorizontalBounds.Height, Gap));
             }
             EllipseBuildRequest Request{AItems, AFeatures, Indices, AOptions};
             bool HasBest = false;

@@ -1147,7 +1147,7 @@ namespace ET {
                     for (int Filler : AFillers) {
                         std::vector<TetClusterFreeRegion> InnerRegions;
                         TetClusterCandidate Candidate;
-                        if (Geometry.ExtractCandidateFreeRegions(*_Items, *_Options, State, InnerRegions) && Builder.TryAppendFillerInRectangleEnvelope(*_Items, AFeatures, ASkeleton, ASkeleton, State, InnerRegions, Filler, *_Options, Candidate))
+                        if (Geometry.ExtractCandidateFreeRegions(*_Items, *_Options, State, InnerRegions) && Builder.TryAppendFillerInRectangleEnvelope({*_Items, AFeatures, *_Options, ASkeleton, ASkeleton, State, &InnerRegions, Filler, ASkeleton.ClusterWidth, ASkeleton.ClusterHeight}, Candidate))
                             Next.push_back(std::move(Candidate));
                     }
                 if (Next.empty())
@@ -1262,7 +1262,7 @@ namespace ET {
             _TranslateFreeRegions(EnvelopeRegions, -static_cast<double>(getX(Bounds.minCorner())), -static_cast<double>(getY(Bounds.minCorner())));
             CetRectangleFillClusterBuilder Builder;
             TetClusterCandidate Cluster;
-            if (!Builder.TryAppendFillerInRectangleEnvelope(*_Items, AFeatures, ASkeleton, ASkeleton, ASkeleton, EnvelopeRegions, AFillerIndex, *_Options, Cluster)) {
+            if (!Builder.TryAppendFillerInRectangleEnvelope({*_Items, AFeatures, *_Options, ASkeleton, ASkeleton, ASkeleton, &EnvelopeRegions, AFillerIndex, ASkeleton.ClusterWidth, ASkeleton.ClusterHeight}, Cluster)) {
                 std::cout << "[BOARD COMPOSITE][CANDIDATE] Bin=" << ATargetBin << " Skeleton=" << ASkeletonIndex << " Filler=" << AFillerIndex << " Stage=" << (GridFound ? "GridFinalizeMiss" : "GridAndEnvelopeMiss") << " Regions=" << EnvelopeRegions.size() << std::endl;
                 return false;
             }

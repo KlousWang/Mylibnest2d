@@ -160,8 +160,9 @@ namespace ET {
                 AOutBounds.Height = MaxY - AOutBounds.MinY;
                 return AOutBounds.Width > 0.0 && AOutBounds.Height > 0.0;
             }
-            TetArcLayout MakeLineLayout(std::size_t AArcCount, const TetArcOrientationBounds &AForwardBounds, const TetArcOrientationBounds &AReverseBounds, double AGap, bool AVerticalStack, bool AAlternateDirection, const std::string &AStyleName)
+            TetArcLayout MakeLineLayout(const TetArcLayoutRequest &ARequest)
             {
+                const std::size_t AArcCount = ARequest.ArcCount; const auto &AForwardBounds = ARequest.ForwardBounds; const auto &AReverseBounds = ARequest.ReverseBounds; const double AGap = ARequest.Gap; const bool AVerticalStack = ARequest.VerticalStack; const bool AAlternateDirection = ARequest.AlternateDirection; const auto &AStyleName = ARequest.StyleName;
                 TetArcLayout Layout;
                 if (AArcCount < 2) {
                     return Layout;
@@ -205,8 +206,9 @@ namespace ET {
                 Layout.ClusterType += std::to_string(AArcCount) + "_" + AStyleName;
                 return Layout;
             }
-            TetArcLayout MakeGridLayout(std::size_t AArcCount, int ARowCount, const TetArcOrientationBounds &AForwardBounds, const TetArcOrientationBounds &AReverseBounds, double AGap, bool AAlternateDirection, const std::string &AStyleName)
+            TetArcLayout MakeGridLayout(const TetArcLayoutRequest &ARequest)
             {
+                const std::size_t AArcCount = ARequest.ArcCount; const int ARowCount = ARequest.RowCount; const auto &AForwardBounds = ARequest.ForwardBounds; const auto &AReverseBounds = ARequest.ReverseBounds; const double AGap = ARequest.Gap; const bool AAlternateDirection = ARequest.AlternateDirection; const auto &AStyleName = ARequest.StyleName;
                 TetArcLayout Layout;
                 if (AArcCount < 3 || ARowCount < 2 || ARowCount > static_cast<int>(AArcCount)) {
                     return Layout;
@@ -233,8 +235,9 @@ namespace ET {
                 Layout.ClusterType += std::to_string(AArcCount) + "_R" + std::to_string(ARowCount) + "_" + AStyleName;
                 return Layout;
             }
-            bool TryBuildArcCandidateFromLayout(const CetTNestItemVector &AOriginalItems, const std::vector<TetShapeFeature> &AFeatures, const std::vector<int> &AIndices, const TetNestOptions &AOptions, const TetArcIndexInfo &ABaseInfo, const TetArcLayout &ALayout, CetClusterGeometryHelper &AGeometry, TetClusterCandidate &AOutCandidate)
+            bool TryBuildArcCandidateFromLayout(const TetArcCandidateBuildRequest &ARequest, CetClusterGeometryHelper &AGeometry, TetClusterCandidate &AOutCandidate)
             {
+                const auto &AOriginalItems = ARequest.OriginalItems; const auto &AFeatures = ARequest.Features; const auto &AIndices = ARequest.Indices; const auto &AOptions = ARequest.Options; const auto &ABaseInfo = ARequest.BaseInfo; const auto &ALayout = ARequest.Layout;
                 AOutCandidate = TetClusterCandidate{};
                 if (ALayout.Slots.size() != AIndices.size() || ALayout.Width <= 0.0 || ALayout.Height <= 0.0) {
                     return false;
@@ -385,14 +388,14 @@ namespace ET {
             const double Gap = RequiredGap + SafetyGap;
             const std::string StyleName = GetSweepBucketName(BaseInfo.SweepBucket);
             std::vector<TetArcLayout> Layouts;
-            Layouts.push_back(MakeLineLayout(Indices.size(), ForwardBounds, ReverseBounds, Gap, false, false, StyleName));
-            Layouts.push_back(MakeLineLayout(Indices.size(), ForwardBounds, ReverseBounds, Gap, true, false, StyleName));
-            Layouts.push_back(MakeLineLayout(Indices.size(), ForwardBounds, ReverseBounds, Gap, false, true, StyleName));
-            Layouts.push_back(MakeLineLayout(Indices.size(), ForwardBounds, ReverseBounds, Gap, true, true, StyleName));
+            Layouts.push_back(MakeLineLayout({Indices.size(), 0, ForwardBounds, ReverseBounds, Gap, false, false, StyleName}));
+            Layouts.push_back(MakeLineLayout({Indices.size(), 0, ForwardBounds, ReverseBounds, Gap, true, false, StyleName}));
+            Layouts.push_back(MakeLineLayout({Indices.size(), 0, ForwardBounds, ReverseBounds, Gap, false, true, StyleName}));
+            Layouts.push_back(MakeLineLayout({Indices.size(), 0, ForwardBounds, ReverseBounds, Gap, true, true, StyleName}));
             const int MaxGridRowCount = static_cast<int>((Indices.size() + 1) / 2);
             for (int RowCount = 2; RowCount <= MaxGridRowCount; ++RowCount) {
-                Layouts.push_back(MakeGridLayout(Indices.size(), RowCount, ForwardBounds, ReverseBounds, Gap, false, StyleName));
-                Layouts.push_back(MakeGridLayout(Indices.size(), RowCount, ForwardBounds, ReverseBounds, Gap, true, StyleName));
+                Layouts.push_back(MakeGridLayout({Indices.size(), RowCount, ForwardBounds, ReverseBounds, Gap, false, false, StyleName}));
+                Layouts.push_back(MakeGridLayout({Indices.size(), RowCount, ForwardBounds, ReverseBounds, Gap, false, true, StyleName}));
             }
             bool HasBestCandidate = false;
             TetClusterCandidate BestCandidate;
@@ -401,7 +404,7 @@ namespace ET {
                     continue;
                 }
                 TetClusterCandidate Candidate;
-                if (!TryBuildArcCandidateFromLayout(AOriginalItems, AFeatures, Indices, AOptions, BaseInfo, Layout, Geometry, Candidate)) {
+                if (!TryBuildArcCandidateFromLayout({AOriginalItems, AFeatures, Indices, AOptions, BaseInfo, Layout}, Geometry, Candidate)) {
                     continue;
                 }
                 Candidate.Score = _CalculateScore(Candidate, AOptions);

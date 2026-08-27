@@ -123,41 +123,6 @@ namespace ET {
             }
             return true;
         }
-        struct TetAxisAlignedRectangle
-        {
-            std::size_t ItemIndex = 0;
-            int BinId = -1;
-            double MinX = 0.0;
-            double MinY = 0.0;
-            double Width = 0.0;
-            double Height = 0.0;
-        };
-        struct TetRectangleGridKey
-        {
-            int BinId = -1;
-            long long WidthKey = 0;
-            long long HeightKey = 0;
-            bool operator<(const TetRectangleGridKey &AOther) const { return std::tie(BinId, WidthKey, HeightKey) < std::tie(AOther.BinId, AOther.WidthKey, AOther.HeightKey); }
-        };
-        struct TetRectangleFamilyKey
-        {
-            int BinId = -1;
-            long long ShortSideKey = 0;
-            long long LongSideKey = 0;
-            bool operator<(const TetRectangleFamilyKey &AOther) const { return std::tie(BinId, ShortSideKey, LongSideKey) < std::tie(AOther.BinId, AOther.ShortSideKey, AOther.LongSideKey); }
-        };
-        struct TetRectangleGridGroup
-        {
-            std::vector<TetAxisAlignedRectangle> Items;
-            double OriginX = 0.0;
-            double OriginY = 0.0;
-            double PitchX = 0.0;
-            double PitchY = 0.0;
-            std::size_t ColumnCapacity = 0;
-            std::map<long long, double> RowCoordinates;
-            std::size_t InternalGapCount = 0;
-            double InternalGapArea = 0.0;
-        };
         static bool TryGetAxisAlignedRectangle(const CetNestItem &AItem, TetAxisAlignedRectangle &AOutRectangle)
         {
             CetNestItem Item = AItem;
@@ -815,53 +780,6 @@ namespace ET {
             }
             return true;
         }
-        struct TetLocalCompactEnvelope
-        {
-            bool Valid = false;
-            double MinX = 0.0;
-            double MinY = 0.0;
-            double MaxX = 0.0;
-            double MaxY = 0.0;
-            double Width = 0.0;
-            double Height = 0.0;
-            double Area = 0.0;
-            double LongSide = 0.0;
-        };
-        struct TetLocalCompactTarget
-        {
-            std::vector<std::size_t> Indices;
-            std::vector<TetItemTransform> Transforms;
-            std::string Type = "Single";
-            bool IsCluster = false;
-            double CurrentRotation = 0.0;
-            double CurrentAnchorX = 0.0;
-            double CurrentAnchorY = 0.0;
-        };
-        struct TetLocalCompactCandidate
-        {
-            bool Valid = false;
-            double Rotation = 0.0;
-            double AnchorX = 0.0;
-            double AnchorY = 0.0;
-            TetLocalCompactEnvelope Envelope;
-            int ContactScore = 0;
-            double TranslationDistance = 0.0;
-            double RotationDelta = 0.0;
-        };
-        struct TetLocalCompactFreeSpaceMetric
-        {
-            bool Valid = false;
-            std::size_t RegionCount = 0;
-            double LargestArea = 0.0;
-            double FragmentedArea = 0.0;
-        };
-        static constexpr std::size_t CET_LOCAL_COMPACT_MAX_FREE_REGIONS = 8;
-        static constexpr std::size_t CET_LOCAL_COMPACT_MAX_CONTACT_VERTICES = 4;
-        static constexpr std::size_t CET_LOCAL_COMPACT_MAX_HOLE_CONTACTS = 8;
-        static constexpr std::size_t CET_LOCAL_COMPACT_MAX_FREE_SPACE_EVALUATIONS = 8;
-        static constexpr std::size_t CET_LOCAL_COMPACT_MAX_TARGETS = 8;
-        static constexpr std::size_t CET_LOCAL_COMPACT_MAX_ANCHORS_PER_ROTATION = 96;
-        static constexpr long long CET_LOCAL_COMPACT_MAX_TIME_MS = 300;
         static double LocalCompactAngleDistance(double ALeft, double ARight)
         {
             const double Left = CetRotationUtils::NormalizeAngle(ALeft);
@@ -1097,13 +1015,6 @@ namespace ET {
                 Item.inflation(0);
             }
         }
-        struct TetLocalCompactFixedItem
-        {
-            CetNestItem Raw;
-            CetNestItem Spaced;
-            double RawMinX = 0.0, RawMinY = 0.0, RawMaxX = 0.0, RawMaxY = 0.0;
-            double SpacedMinX = 0.0, SpacedMinY = 0.0, SpacedMaxX = 0.0, SpacedMaxY = 0.0;
-        };
         static std::vector<TetLocalCompactFixedItem> LocalCompactBuildFixedItemCache(const CetTNestItemVector &AItems, const std::vector<bool> &ATargetMask, const TetNestOptions &AOptions, int ABinId)
         {
             std::vector<TetLocalCompactFixedItem> Result;
@@ -1801,14 +1712,6 @@ namespace ET {
             const double RequiredGain = std::max(1.0, std::abs(BaselineArea) * 0.01);
             return CandidateArea >= BaselineArea + RequiredGain;
         }
-        struct TetAllBinRemnantMetric
-        {
-            bool Valid = false;
-            double ReusableStripArea = 0.0;
-            double SkylineWasteArea = 0.0;
-            double UsedEnvelopeArea = 0.0;
-            std::vector<double> BinReusableStripAreas;
-        };
         static TetAllBinRemnantMetric EvaluateAllBinRemnantMetric(const CetTNestItemVector &AItems, const TetNestOptions &AOptions, std::size_t ALayers)
         {
             TetAllBinRemnantMetric Result;

@@ -1,6 +1,6 @@
 #include "pch.h"
 #include "Nest2D_StrategyManager.h"
-// #include"Nest2D_PrivateDataType.h"
+#include "Nest2D_PrivateDataType.h"
 #include "Nest2D_RotationUtils.h"
 #include "NestUtils.h"
 
@@ -45,14 +45,6 @@ namespace {
             AResult.BinAreas.resize(BinIndex + 1, 0.0);
         AResult.BinAreas[BinIndex] += AArea;
     }
-
-    struct TetAreaDensityMetric
-    {
-        double Area = 0.0;
-        double Density = 0.0;
-        double LongSide = 0.0;
-        int AreaBand = 0;
-    };
 
     TetAreaDensityMetric BuildAreaDensityMetric(const CetNestItem &AItem, const TetNestOptions &AOptions)
     {
