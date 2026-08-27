@@ -919,6 +919,866 @@ namespace ET {
 			return true;
 		}
 
+		struct TetLocalCompactEnvelope
+		{
+			bool Valid = false;
+			double MinX = 0.0;
+			double MinY = 0.0;
+			double MaxX = 0.0;
+			double MaxY = 0.0;
+			double Width = 0.0;
+			double Height = 0.0;
+			double Area = 0.0;
+			double LongSide = 0.0;
+		};
+
+		struct TetLocalCompactTarget
+		{
+			std::vector<std::size_t> Indices;
+			std::vector<TetItemTransform> Transforms;
+			std::string Type = "Single";
+			bool IsCluster = false;
+			double CurrentRotation = 0.0;
+			double CurrentAnchorX = 0.0;
+			double CurrentAnchorY = 0.0;
+		};
+
+		struct TetLocalCompactCandidate
+		{
+			bool Valid = false;
+			double Rotation = 0.0;
+			double AnchorX = 0.0;
+			double AnchorY = 0.0;
+			TetLocalCompactEnvelope Envelope;
+			int ContactScore = 0;
+			double TranslationDistance = 0.0;
+			double RotationDelta = 0.0;
+		};
+
+		struct TetLocalCompactFreeSpaceMetric
+		{
+			bool Valid = false;
+			std::size_t RegionCount = 0;
+			double LargestArea = 0.0;
+			double FragmentedArea = 0.0;
+		};
+
+		static constexpr std::size_t CET_LOCAL_COMPACT_MAX_FREE_REGIONS = 8;
+		static constexpr std::size_t CET_LOCAL_COMPACT_MAX_CONTACT_VERTICES = 4;
+		static constexpr std::size_t CET_LOCAL_COMPACT_MAX_HOLE_CONTACTS = 8;
+		static constexpr std::size_t CET_LOCAL_COMPACT_MAX_FREE_SPACE_EVALUATIONS = 8;
+		static constexpr std::size_t CET_LOCAL_COMPACT_MAX_TARGETS = 8;
+		static constexpr std::size_t CET_LOCAL_COMPACT_MAX_ANCHORS_PER_ROTATION = 96;
+		static constexpr long long CET_LOCAL_COMPACT_MAX_TIME_MS = 300;
+
+		static double LocalCompactAngleDistance(double ALeft, double ARight)
+		{
+			const double Left = CetRotationUtils::NormalizeAngle(ALeft);
+			const double Right = CetRotationUtils::NormalizeAngle(ARight);
+			const double Delta = std::abs(Left - Right);
+			return std::min(Delta, CET_CLUSTER_TWO_PI - Delta);
+		}
+
+		static bool LocalCompactGetBounds(const CetNestItem& AItem, double& AOutMinX, double& AOutMinY,
+			double& AOutMaxX, double& AOutMaxY)
+		{
+			CetNestItem Item = AItem;
+			Item.inflation(0);
+			const auto Bounds = Item.boundingBox();
+			AOutMinX = static_cast<double>(getX(Bounds.minCorner()));
+			AOutMinY = static_cast<double>(getY(Bounds.minCorner()));
+			AOutMaxX = static_cast<double>(getX(Bounds.maxCorner()));
+			AOutMaxY = static_cast<double>(getY(Bounds.maxCorner()));
+			return std::isfinite(AOutMinX) && std::isfinite(AOutMinY)
+				&& std::isfinite(AOutMaxX) && std::isfinite(AOutMaxY)
+				&& AOutMaxX >= AOutMinX && AOutMaxY >= AOutMinY;
+		}
+
+		static TetLocalCompactEnvelope LocalCompactCalculateEnvelope(const CetTNestItemVector& AItems, int ABinId,
+			const std::vector<bool>* AExcluded = nullptr)
+		{
+			TetLocalCompactEnvelope Result;
+			for (std::size_t Index = 0; Index < AItems.size(); ++Index) {
+				if (AItems[Index].binId() != ABinId || (AExcluded != nullptr && Index < AExcluded->size() && (*AExcluded)[Index])) continue;
+				double MinX = 0.0, MinY = 0.0, MaxX = 0.0, MaxY = 0.0;
+				if (!LocalCompactGetBounds(AItems[Index], MinX, MinY, MaxX, MaxY)) continue;
+				if (!Result.Valid) {
+					Result.Valid = true;
+					Result.MinX = MinX; Result.MinY = MinY; Result.MaxX = MaxX; Result.MaxY = MaxY;
+				}
+				else {
+					Result.MinX = std::min(Result.MinX, MinX); Result.MinY = std::min(Result.MinY, MinY);
+					Result.MaxX = std::max(Result.MaxX, MaxX); Result.MaxY = std::max(Result.MaxY, MaxY);
+				}
+			}
+			if (Result.Valid) {
+				Result.Width = Result.MaxX - Result.MinX;
+				Result.Height = Result.MaxY - Result.MinY;
+				Result.Area = Result.Width * Result.Height;
+				Result.LongSide = std::max(Result.Width, Result.Height);
+			}
+			return Result;
+		}
+
+		static void LocalCompactAppendFreeRegions(const ClipperLib::PolyNode& ANode,
+			std::vector<TetClusterFreeRegion>& AOutRegions)
+		{
+			if (!ANode.IsHole() && ANode.Contour.size() >= 3) {
+				TetClusterFreeRegion Region;
+				Region.Contour = ANode.Contour;
+				Region.IsClosed = true;
+				Region.Area = std::abs(static_cast<double>(ClipperLib::Area(Region.Contour)));
+				if (Region.Area > 0.0 && std::isfinite(Region.Area)) {
+					Region.MinX = Region.MaxX = static_cast<double>(Region.Contour.front().X);
+					Region.MinY = Region.MaxY = static_cast<double>(Region.Contour.front().Y);
+					for (const ClipperLib::IntPoint& Point : Region.Contour) {
+						Region.MinX = std::min(Region.MinX, static_cast<double>(Point.X));
+						Region.MinY = std::min(Region.MinY, static_cast<double>(Point.Y));
+						Region.MaxX = std::max(Region.MaxX, static_cast<double>(Point.X));
+						Region.MaxY = std::max(Region.MaxY, static_cast<double>(Point.Y));
+					}
+					for (const ClipperLib::PolyNode* Child : ANode.Childs) {
+						if (Child != nullptr && Child->IsHole()) Region.Holes.push_back(Child->Contour);
+					}
+					Region.Width = Region.MaxX - Region.MinX;
+					Region.Height = Region.MaxY - Region.MinY;
+					if (Region.Width > 0.0 && Region.Height > 0.0) AOutRegions.push_back(std::move(Region));
+				}
+			}
+			for (const ClipperLib::PolyNode* Child : ANode.Childs) if (Child != nullptr) {
+				LocalCompactAppendFreeRegions(*Child, AOutRegions);
+			}
+		}
+
+		static bool BuildLocalCompactFreeRegions(const CetTNestItemVector& AItems, const TetNestOptions& AOptions,
+			int ABinId, const std::vector<bool>& ATargetMask, std::vector<TetClusterFreeRegion>& AOutRegions)
+		{
+			AOutRegions.clear();
+			ClipperLib::Paths Board;
+			if (!BuildBoardSubjectContours(AOptions, Board)) return false;
+			CetTNestItemVector FrozenItems = AItems;
+			for (std::size_t Index = 0; Index < FrozenItems.size() && Index < ATargetMask.size(); ++Index) {
+				if (ATargetMask[Index]) FrozenItems[Index].binId(-1);
+			}
+			const auto HalfSpacing = static_cast<libnest2d::Coord>(std::ceil(
+				static_cast<double>(NestUtils::ToNestCoord(std::max(0.0, AOptions.Spacing))) * 0.5));
+			ClipperLib::Paths Reserved;
+			if (!BuildPlacedReservedContours(FrozenItems, ABinId, AOptions.Spacing, Reserved, HalfSpacing)) return false;
+			ClipperLib::Clipper Difference;
+			if (!Difference.AddPaths(Board, ClipperLib::ptSubject, true)
+				|| (!Reserved.empty() && !Difference.AddPaths(Reserved, ClipperLib::ptClip, true))) return false;
+			ClipperLib::PolyTree Tree;
+			if (!Difference.Execute(ClipperLib::ctDifference, Tree, ClipperLib::pftNonZero, ClipperLib::pftNonZero)) return false;
+			for (const ClipperLib::PolyNode* Node : Tree.Childs) if (Node != nullptr) LocalCompactAppendFreeRegions(*Node, AOutRegions);
+			std::stable_sort(AOutRegions.begin(), AOutRegions.end(), [](const TetClusterFreeRegion& ALeft, const TetClusterFreeRegion& ARight) {
+				return ALeft.Area != ARight.Area ? ALeft.Area > ARight.Area : ALeft.MinY < ARight.MinY;
+			});
+			if (AOutRegions.size() > CET_LOCAL_COMPACT_MAX_FREE_REGIONS) AOutRegions.resize(CET_LOCAL_COMPACT_MAX_FREE_REGIONS);
+			return !AOutRegions.empty();
+		}
+
+		static TetLocalCompactFreeSpaceMetric LocalCompactCalculateFreeSpaceMetric(const CetTNestItemVector& AItems,
+			const TetNestOptions& AOptions, int ABinId)
+		{
+			TetLocalCompactFreeSpaceMetric Result;
+			ClipperLib::Paths Board;
+			if (!BuildBoardSubjectContours(AOptions, Board)) return Result;
+			const auto HalfSpacing = static_cast<libnest2d::Coord>(std::ceil(
+				static_cast<double>(NestUtils::ToNestCoord(std::max(0.0, AOptions.Spacing))) * 0.5));
+			ClipperLib::Paths Reserved;
+			if (!BuildPlacedReservedContours(AItems, ABinId, AOptions.Spacing, Reserved, HalfSpacing)) return Result;
+			ClipperLib::Clipper Difference;
+			if (!Difference.AddPaths(Board, ClipperLib::ptSubject, true)
+				|| (!Reserved.empty() && !Difference.AddPaths(Reserved, ClipperLib::ptClip, true))) return Result;
+			ClipperLib::PolyTree Tree;
+			if (!Difference.Execute(ClipperLib::ctDifference, Tree, ClipperLib::pftNonZero, ClipperLib::pftNonZero)) return Result;
+			double TotalArea = 0.0;
+			auto Accumulate = [&](const auto& Self, const ClipperLib::PolyNode& ANode) -> void {
+				if (!ANode.IsHole() && ANode.Contour.size() >= 3) {
+					const double Area = std::abs(static_cast<double>(ClipperLib::Area(ANode.Contour)));
+					if (Area > 0.0 && std::isfinite(Area)) {
+						++Result.RegionCount;
+						TotalArea += Area;
+						Result.LargestArea = std::max(Result.LargestArea, Area);
+					}
+				}
+				for (const ClipperLib::PolyNode* Child : ANode.Childs) if (Child != nullptr) Self(Self, *Child);
+			};
+			for (const ClipperLib::PolyNode* Node : Tree.Childs) if (Node != nullptr) Accumulate(Accumulate, *Node);
+			Result.Valid = Result.RegionCount > 0;
+			Result.FragmentedArea = std::max(0.0, TotalArea - Result.LargestArea);
+			return Result;
+		}
+
+		static double LocalCompactCalculateBoardArea(const TetNestOptions& AOptions)
+		{
+			ClipperLib::Paths Board;
+			if (!BuildBoardSubjectContours(AOptions, Board)) return 0.0;
+			double Area = 0.0;
+			for (const CetPath& Contour : Board) {
+				const double ContourArea = std::abs(static_cast<double>(ClipperLib::Area(Contour)));
+				if (ContourArea <= 0.0 || !std::isfinite(ContourArea)) continue;
+				Area += ClipperLib::Orientation(Contour) ? ContourArea : -ContourArea;
+			}
+			return std::max(0.0, Area);
+		}
+
+		static std::map<int, std::string> LocalCompactBuildSkippedBins(const CetTNestItemVector& AItems,
+			const TetNestOptions& AOptions)
+		{
+			std::map<int, std::string> SkippedBins;
+			std::map<int, std::size_t> ItemCounts;
+			for (const CetNestItem& Item : AItems) if (Item.binId() >= 0) ++ItemCounts[static_cast<int>(Item.binId())];
+			const double BoardArea = LocalCompactCalculateBoardArea(AOptions);
+			for (const auto& Entry : ItemCounts) {
+				const int BinId = Entry.first;
+				const std::size_t ItemCount = Entry.second;
+				if (ItemCount <= 1) {
+					SkippedBins[BinId] = "INSUFFICIENT_ITEMS";
+					continue;
+				}
+				const TetLocalCompactFreeSpaceMetric FreeSpace = LocalCompactCalculateFreeSpaceMetric(AItems, AOptions, BinId);
+				if (!FreeSpace.Valid) {
+					SkippedBins[BinId] = "NO_FREE_REGION";
+					continue;
+				}
+				const double DominantGapRatio = BoardArea > 0.0 ? FreeSpace.LargestArea / BoardArea : 0.0;
+				// A single region is not by itself a reason to skip: useful compacting
+				// moves often happen inside one connected free-space component. Skip
+				// only when that component is genuinely dominant (nearly empty board).
+				if (FreeSpace.RegionCount <= 1 && DominantGapRatio >= 0.80) {
+					SkippedBins[BinId] = "SINGLE_CONTIGUOUS_GAP";
+					continue;
+				}
+				if (DominantGapRatio >= 0.80) {
+					SkippedBins[BinId] = "DOMINANT_EMPTY_BOARD";
+					continue;
+				}
+			}
+			return SkippedBins;
+		}
+
+		static std::vector<std::size_t> LocalCompactSelectContactVertices(const CetPath& AContour)
+		{
+			std::vector<std::size_t> Result;
+			if (AContour.empty()) return Result;
+			std::array<std::size_t, 4> Extremes{ 0, 0, 0, 0 };
+			for (std::size_t Index = 1; Index < AContour.size(); ++Index) {
+				if (AContour[Index].X < AContour[Extremes[0]].X) Extremes[0] = Index;
+				if (AContour[Index].X > AContour[Extremes[1]].X) Extremes[1] = Index;
+				if (AContour[Index].Y < AContour[Extremes[2]].Y) Extremes[2] = Index;
+				if (AContour[Index].Y > AContour[Extremes[3]].Y) Extremes[3] = Index;
+			}
+			for (const std::size_t Index : Extremes) {
+				if (std::find(Result.begin(), Result.end(), Index) == Result.end()) Result.push_back(Index);
+			}
+			for (std::size_t Slot = 0; Result.size() < CET_LOCAL_COMPACT_MAX_CONTACT_VERTICES && Slot < AContour.size(); ++Slot) {
+				const std::size_t Index = Slot * AContour.size() / CET_LOCAL_COMPACT_MAX_CONTACT_VERTICES;
+				if (std::find(Result.begin(), Result.end(), Index) == Result.end()) Result.push_back(Index);
+			}
+			return Result;
+		}
+
+		static void LocalCompactApplyPose(CetTNestItemVector& AItems, const TetLocalCompactTarget& ATarget,
+			double ARotation, double AAnchorX, double AAnchorY)
+		{
+			const double CosRotation = std::cos(ARotation);
+			const double SinRotation = std::sin(ARotation);
+			for (std::size_t Slot = 0; Slot < ATarget.Indices.size() && Slot < ATarget.Transforms.size(); ++Slot) {
+				CetNestItem& Item = AItems[ATarget.Indices[Slot]];
+				const TetItemTransform& Transform = ATarget.Transforms[Slot];
+				const double X = AAnchorX + Transform.RelativeX * CosRotation - Transform.RelativeY * SinRotation;
+				const double Y = AAnchorY + Transform.RelativeX * SinRotation + Transform.RelativeY * CosRotation;
+				Item.translation(ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(X)),
+					static_cast<ClipperLib::cInt>(std::llround(Y))));
+				Item.rotation(ARotation + Transform.RelativeRotation);
+				Item.inflation(0);
+			}
+		}
+
+		struct TetLocalCompactFixedItem
+		{
+			CetNestItem Raw;
+			CetNestItem Spaced;
+			double RawMinX = 0.0, RawMinY = 0.0, RawMaxX = 0.0, RawMaxY = 0.0;
+			double SpacedMinX = 0.0, SpacedMinY = 0.0, SpacedMaxX = 0.0, SpacedMaxY = 0.0;
+		};
+
+		static std::vector<TetLocalCompactFixedItem> LocalCompactBuildFixedItemCache(
+			const CetTNestItemVector& AItems, const std::vector<bool>& ATargetMask,
+			const TetNestOptions& AOptions, int ABinId)
+		{
+			std::vector<TetLocalCompactFixedItem> Result;
+			const auto HalfSpacing = static_cast<libnest2d::Coord>(std::ceil(
+				static_cast<double>(NestUtils::ToNestCoord(std::max(0.0, AOptions.Spacing))) * 0.5));
+			for (std::size_t Index = 0; Index < AItems.size(); ++Index) {
+				if ((Index < ATargetMask.size() && ATargetMask[Index]) || AItems[Index].binId() != ABinId) continue;
+				CetNestItem Raw = AItems[Index];
+				Raw.inflation(0);
+				CetNestItem Spaced = Raw;
+				if (HalfSpacing > 0) Spaced.inflation(HalfSpacing);
+				const auto RawBounds = Raw.boundingBox();
+				const auto SpacedBounds = Spaced.boundingBox();
+				Result.push_back({ Raw, Spaced,
+					static_cast<double>(getX(RawBounds.minCorner())), static_cast<double>(getY(RawBounds.minCorner())),
+					static_cast<double>(getX(RawBounds.maxCorner())), static_cast<double>(getY(RawBounds.maxCorner())),
+					static_cast<double>(getX(SpacedBounds.minCorner())), static_cast<double>(getY(SpacedBounds.minCorner())),
+					static_cast<double>(getX(SpacedBounds.maxCorner())), static_cast<double>(getY(SpacedBounds.maxCorner())) });
+			}
+			return Result;
+		}
+
+		static bool LocalCompactIsTargetPoseValid(const CetTNestItemVector& AItems, const TetLocalCompactTarget& ATarget,
+			const std::vector<bool>& ATargetMask, const CetPolygonImpl& ABinPoly, const TetNestOptions& AOptions,
+			int ABinId, const std::vector<TetLocalCompactFixedItem>& AFixedItems, const char*& AOutReason)
+		{
+			AOutReason = "OUT_OF_BIN";
+			const auto HalfSpacing = static_cast<libnest2d::Coord>(std::ceil(
+				static_cast<double>(NestUtils::ToNestCoord(std::max(0.0, AOptions.Spacing))) * 0.5));
+			for (const std::size_t TargetIndex : ATarget.Indices) {
+				CetNestItem Target = AItems[TargetIndex];
+				Target.inflation(0);
+				if (Target.binId() != ABinId || !Target.isInside(ABinPoly)) return false;
+				const auto RawBounds = Target.boundingBox();
+				CetNestItem SpacedTarget = Target;
+				if (HalfSpacing > 0) SpacedTarget.inflation(HalfSpacing);
+				const auto SpacedTargetBounds = SpacedTarget.boundingBox();
+				for (const TetLocalCompactFixedItem& Other : AFixedItems) {
+					const bool RawBoundsOverlap = !(getX(RawBounds.maxCorner()) < Other.RawMinX
+						|| getX(RawBounds.minCorner()) > Other.RawMaxX
+						|| getY(RawBounds.maxCorner()) < Other.RawMinY
+						|| getY(RawBounds.minCorner()) > Other.RawMaxY);
+					if (RawBoundsOverlap && CetNestItem::intersects(Target, Other.Raw) && !CetNestItem::touches(Target, Other.Raw)) {
+						AOutReason = "COLLISION";
+						return false;
+					}
+					if (HalfSpacing > 0) {
+						if (!(getX(SpacedTargetBounds.maxCorner()) < Other.SpacedMinX
+							|| getX(SpacedTargetBounds.minCorner()) > Other.SpacedMaxX
+							|| getY(SpacedTargetBounds.maxCorner()) < Other.SpacedMinY
+							|| getY(SpacedTargetBounds.minCorner()) > Other.SpacedMaxY)
+							&& CetNestItem::intersects(SpacedTarget, Other.Spaced) && !CetNestItem::touches(SpacedTarget, Other.Spaced)) {
+							AOutReason = "SPACING";
+							return false;
+						}
+					}
+				}
+			}
+			AOutReason = "VALID";
+			return true;
+		}
+
+		static TetLocalCompactEnvelope LocalCompactCalculateTargetEnvelope(const CetTNestItemVector& AItems,
+			const TetLocalCompactTarget& ATarget)
+		{
+			TetLocalCompactEnvelope Result;
+			for (const std::size_t Index : ATarget.Indices) {
+				if (Index >= AItems.size()) continue;
+				double MinX = 0.0, MinY = 0.0, MaxX = 0.0, MaxY = 0.0;
+				if (!LocalCompactGetBounds(AItems[Index], MinX, MinY, MaxX, MaxY)) continue;
+				if (!Result.Valid) {
+					Result.Valid = true;
+					Result.MinX = MinX; Result.MinY = MinY; Result.MaxX = MaxX; Result.MaxY = MaxY;
+				}
+				else {
+					Result.MinX = std::min(Result.MinX, MinX); Result.MinY = std::min(Result.MinY, MinY);
+					Result.MaxX = std::max(Result.MaxX, MaxX); Result.MaxY = std::max(Result.MaxY, MaxY);
+				}
+			}
+			if (Result.Valid) {
+				Result.Width = Result.MaxX - Result.MinX;
+				Result.Height = Result.MaxY - Result.MinY;
+				Result.Area = Result.Width * Result.Height;
+				Result.LongSide = std::max(Result.Width, Result.Height);
+			}
+			return Result;
+		}
+
+		static TetLocalCompactEnvelope LocalCompactMergeEnvelopes(const TetLocalCompactEnvelope& AFixed,
+			const TetLocalCompactEnvelope& ATarget)
+		{
+			if (!AFixed.Valid) return ATarget;
+			if (!ATarget.Valid) return AFixed;
+			TetLocalCompactEnvelope Result;
+			Result.Valid = true;
+			Result.MinX = std::min(AFixed.MinX, ATarget.MinX);
+			Result.MinY = std::min(AFixed.MinY, ATarget.MinY);
+			Result.MaxX = std::max(AFixed.MaxX, ATarget.MaxX);
+			Result.MaxY = std::max(AFixed.MaxY, ATarget.MaxY);
+			Result.Width = Result.MaxX - Result.MinX;
+			Result.Height = Result.MaxY - Result.MinY;
+			Result.Area = Result.Width * Result.Height;
+			Result.LongSide = std::max(Result.Width, Result.Height);
+			return Result;
+		}
+
+		static bool LocalCompactTryBuildClusterTarget(const CetTNestItemVector& AItems, const TetMetaItem& AMeta,
+			TetLocalCompactTarget& AOutTarget)
+		{
+			AOutTarget = TetLocalCompactTarget{};
+			if (!AMeta.IsCluster || AMeta.TransformData.size() < 2) return false;
+			for (const TetItemTransform& Transform : AMeta.TransformData) {
+				if (Transform.OriginalId < 0 || Transform.OriginalId >= static_cast<int>(AItems.size())) return false;
+			}
+			const TetItemTransform& FirstTransform = AMeta.TransformData.front();
+			const CetNestItem& FirstItem = AItems[FirstTransform.OriginalId];
+			if (FirstItem.binId() < 0) return false;
+			const double Rotation = CetRotationUtils::NormalizeAngle(static_cast<double>(FirstItem.rotation()) - FirstTransform.RelativeRotation);
+			const double CosRotation = std::cos(Rotation);
+			const double SinRotation = std::sin(Rotation);
+			const Point FirstTranslation = FirstItem.translation();
+			const double AnchorX = static_cast<double>(FirstTranslation.X) - FirstTransform.RelativeX * CosRotation + FirstTransform.RelativeY * SinRotation;
+			const double AnchorY = static_cast<double>(FirstTranslation.Y) - FirstTransform.RelativeX * SinRotation - FirstTransform.RelativeY * CosRotation;
+			for (const TetItemTransform& Transform : AMeta.TransformData) {
+				const CetNestItem& Item = AItems[Transform.OriginalId];
+				if (Item.binId() != FirstItem.binId()
+					|| LocalCompactAngleDistance(static_cast<double>(Item.rotation()), Rotation + Transform.RelativeRotation) > 1e-8) return false;
+				const Point Translation = Item.translation();
+				const double ExpectedX = AnchorX + Transform.RelativeX * CosRotation - Transform.RelativeY * SinRotation;
+				const double ExpectedY = AnchorY + Transform.RelativeX * SinRotation + Transform.RelativeY * CosRotation;
+				if (std::abs(static_cast<double>(Translation.X) - ExpectedX) > 1.0
+					|| std::abs(static_cast<double>(Translation.Y) - ExpectedY) > 1.0) return false;
+			}
+			AOutTarget.Type = AMeta.ClusterType.empty() ? "Cluster" : AMeta.ClusterType;
+			AOutTarget.IsCluster = true;
+			AOutTarget.CurrentRotation = Rotation;
+			AOutTarget.CurrentAnchorX = AnchorX;
+			AOutTarget.CurrentAnchorY = AnchorY;
+			AOutTarget.Transforms = AMeta.TransformData;
+			for (const TetItemTransform& Transform : AMeta.TransformData) AOutTarget.Indices.push_back(static_cast<std::size_t>(Transform.OriginalId));
+			return true;
+		}
+
+		static bool LocalCompactTryRecoverCurrentClusterTarget(const CetTNestItemVector& AItems,
+			const TetMetaItem& AMeta, TetLocalCompactTarget& AOutTarget)
+		{
+			AOutTarget = TetLocalCompactTarget{};
+			if (!AMeta.IsCluster || AMeta.TransformData.size() < 2) return false;
+			const int FirstIndex = AMeta.TransformData.front().OriginalId;
+			if (FirstIndex < 0 || FirstIndex >= static_cast<int>(AItems.size()) || AItems[FirstIndex].binId() < 0) return false;
+			const int BinId = static_cast<int>(AItems[FirstIndex].binId());
+			const Point Anchor = AItems[FirstIndex].translation();
+			AOutTarget.Type = AMeta.ClusterType.empty() ? "RecoveredCluster" : AMeta.ClusterType;
+			AOutTarget.IsCluster = true;
+			AOutTarget.CurrentRotation = 0.0;
+			AOutTarget.CurrentAnchorX = static_cast<double>(Anchor.X);
+			AOutTarget.CurrentAnchorY = static_cast<double>(Anchor.Y);
+			for (const TetItemTransform& Source : AMeta.TransformData) {
+				if (Source.OriginalId < 0 || Source.OriginalId >= static_cast<int>(AItems.size())
+					|| AItems[Source.OriginalId].binId() != BinId) return false;
+				const Point Translation = AItems[Source.OriginalId].translation();
+				AOutTarget.Indices.push_back(static_cast<std::size_t>(Source.OriginalId));
+				AOutTarget.Transforms.push_back({ Source.OriginalId,
+					static_cast<double>(Translation.X - Anchor.X),
+					static_cast<double>(Translation.Y - Anchor.Y),
+					static_cast<double>(AItems[Source.OriginalId].rotation()) });
+			}
+			return true;
+		}
+
+		static std::vector<TetLocalCompactTarget> BuildLocalCompactTargets(const CetTNestItemVector& AItems,
+			const std::vector<TetMetaItem>* AMetaItems)
+		{
+			std::vector<TetLocalCompactTarget> Targets;
+			std::vector<bool> ClusterMembers(AItems.size(), false);
+			if (AMetaItems != nullptr) for (const TetMetaItem& Meta : *AMetaItems) {
+				if (!Meta.IsCluster || Meta.TransformData.size() < 2) continue;
+				bool ValidIndices = true;
+				for (const TetItemTransform& Transform : Meta.TransformData) {
+					if (Transform.OriginalId < 0 || Transform.OriginalId >= static_cast<int>(AItems.size())) { ValidIndices = false; break; }
+				}
+				if (!ValidIndices) {
+					std::cout << "[LOCAL COMPACT][SKIP] type=" << Meta.ClusterType << " reason=INVALID_CLUSTER_INDEX" << std::endl;
+					continue;
+				}
+				TetLocalCompactTarget Target;
+				if (LocalCompactTryBuildClusterTarget(AItems, Meta, Target)
+					|| LocalCompactTryRecoverCurrentClusterTarget(AItems, Meta, Target)) {
+					for (const TetItemTransform& Transform : Meta.TransformData) ClusterMembers[Transform.OriginalId] = true;
+					Targets.push_back(std::move(Target));
+				}
+				else std::cout << "[LOCAL COMPACT][SKIP] type=" << Meta.ClusterType << " reason=CLUSTER_RECOVERY_FAILED" << std::endl;
+			}
+			for (std::size_t Index = 0; Index < AItems.size(); ++Index) {
+				if (ClusterMembers[Index] || AItems[Index].binId() < 0) continue;
+				TetLocalCompactTarget Target;
+				Target.Indices.push_back(Index);
+				Target.Transforms.push_back({ static_cast<int>(Index), 0.0, 0.0, 0.0 });
+				Target.CurrentRotation = CetRotationUtils::NormalizeAngle(static_cast<double>(AItems[Index].rotation()));
+				const Point Translation = AItems[Index].translation();
+				Target.CurrentAnchorX = static_cast<double>(Translation.X);
+				Target.CurrentAnchorY = static_cast<double>(Translation.Y);
+				Targets.push_back(std::move(Target));
+			}
+			std::stable_sort(Targets.begin(), Targets.end(), [](const TetLocalCompactTarget& ALeft,
+				const TetLocalCompactTarget& ARight) {
+				if (ALeft.IsCluster != ARight.IsCluster) return ALeft.IsCluster;
+				return ALeft.Indices.size() > ARight.Indices.size();
+			});
+			return Targets;
+		}
+
+		static bool LocalCompactIsStrictImprovement(const TetLocalCompactEnvelope& ACandidate,
+			const TetLocalCompactEnvelope& ABaseline)
+		{
+			if (!ACandidate.Valid || !ABaseline.Valid) return false;
+			const double AreaEpsilon = std::max({ 1.0, std::abs(ACandidate.Area), std::abs(ABaseline.Area) }) * 1e-9;
+			if (ACandidate.Area < ABaseline.Area - AreaEpsilon) return true;
+			if (std::abs(ACandidate.Area - ABaseline.Area) > AreaEpsilon) return false;
+			const double LongSideEpsilon = std::max({ 1.0, std::abs(ACandidate.LongSide), std::abs(ABaseline.LongSide) }) * 1e-9;
+			return ACandidate.LongSide < ABaseline.LongSide - LongSideEpsilon;
+		}
+
+		static bool LocalCompactIsNonWorsening(const TetLocalCompactEnvelope& ACandidate,
+			const TetLocalCompactEnvelope& ABaseline)
+		{
+			if (!ACandidate.Valid || !ABaseline.Valid) return false;
+			const double AreaEpsilon = std::max({ 1.0, std::abs(ACandidate.Area), std::abs(ABaseline.Area) }) * 1e-9;
+			if (ACandidate.Area > ABaseline.Area + AreaEpsilon) return false;
+			const double LongSideEpsilon = std::max({ 1.0, std::abs(ACandidate.LongSide), std::abs(ABaseline.LongSide) }) * 1e-9;
+			return ACandidate.LongSide <= ABaseline.LongSide + LongSideEpsilon;
+		}
+
+		static bool LocalCompactIsFreeSpaceBetter(const TetLocalCompactFreeSpaceMetric& ACandidate,
+			const TetLocalCompactFreeSpaceMetric& ABaseline)
+		{
+			if (!ACandidate.Valid || !ABaseline.Valid) return false;
+			if (ACandidate.RegionCount != ABaseline.RegionCount)
+				return ACandidate.RegionCount < ABaseline.RegionCount;
+			const double AreaEpsilon = std::max({ 1.0, std::abs(ACandidate.LargestArea), std::abs(ABaseline.LargestArea) }) * 1e-9;
+			if (ACandidate.LargestArea > ABaseline.LargestArea + AreaEpsilon) return true;
+			if (std::abs(ACandidate.LargestArea - ABaseline.LargestArea) > AreaEpsilon) return false;
+			const double FragmentedEpsilon = std::max({ 1.0, std::abs(ACandidate.FragmentedArea), std::abs(ABaseline.FragmentedArea) }) * 1e-9;
+			return ACandidate.FragmentedArea < ABaseline.FragmentedArea - FragmentedEpsilon;
+		}
+
+		static bool LocalCompactIsCandidateBetter(const TetLocalCompactCandidate& ACandidate,
+			const TetLocalCompactCandidate& ABest)
+		{
+			const double AreaEpsilon = std::max({ 1.0, std::abs(ACandidate.Envelope.Area), std::abs(ABest.Envelope.Area) }) * 1e-9;
+			if (std::abs(ACandidate.Envelope.Area - ABest.Envelope.Area) > AreaEpsilon)
+				return ACandidate.Envelope.Area < ABest.Envelope.Area;
+			const double LongSideEpsilon = std::max({ 1.0, std::abs(ACandidate.Envelope.LongSide), std::abs(ABest.Envelope.LongSide) }) * 1e-9;
+			if (std::abs(ACandidate.Envelope.LongSide - ABest.Envelope.LongSide) > LongSideEpsilon)
+				return ACandidate.Envelope.LongSide < ABest.Envelope.LongSide;
+			if (ACandidate.ContactScore != ABest.ContactScore)
+				return ACandidate.ContactScore > ABest.ContactScore;
+			if (std::abs(ACandidate.TranslationDistance - ABest.TranslationDistance) > 1e-9)
+				return ACandidate.TranslationDistance < ABest.TranslationDistance;
+			return ACandidate.RotationDelta < ABest.RotationDelta - 1e-12;
+		}
+
+	static void RunLocalCompactPass(CetTNestItemVector& AItems, const TetNestOptions& AOptions,
+		const std::vector<TetMetaItem>* AMetaItems)
+	{
+		if (!AOptions.EnableLocalCompactPass) {
+			std::cout << "[LOCAL COMPACT][SKIP] reason=DISABLED" << std::endl;
+			return;
+		}
+		if (AItems.empty()) {
+			std::cout << "[LOCAL COMPACT][SKIP] reason=EMPTY_ITEMS" << std::endl;
+			return;
+		}
+			double BoardWidth = AOptions.BinWidth;
+			double BoardHeight = AOptions.BinHeight;
+			const CetPolygonImpl BinPoly = Nest2DUtils->Nest2DBord->BuildBinPolygonFromOptions(AOptions, BoardWidth, BoardHeight);
+			if (BinPoly.Contour.size() < 3) {
+				std::cout << "[LOCAL COMPACT][SKIP] reason=INVALID_BIN" << std::endl;
+				return;
+			}
+			const CetTNestItemVector BaselineItems = AItems;
+			const auto PassStart = std::chrono::steady_clock::now();
+			const std::vector<TetLocalCompactTarget> Targets = BuildLocalCompactTargets(AItems, AMetaItems);
+			const std::map<int, std::string> SkippedBins = LocalCompactBuildSkippedBins(AItems, AOptions);
+			auto TimeBudgetReached = [&PassStart]() {
+				return std::chrono::duration_cast<std::chrono::milliseconds>(
+					std::chrono::steady_clock::now() - PassStart).count() >= CET_LOCAL_COMPACT_MAX_TIME_MS;
+			};
+			for (const auto& Entry : SkippedBins)
+				std::cout << "[LOCAL COMPACT][SKIP BIN] bin=" << Entry.first << " reason=" << Entry.second << std::endl;
+			const std::vector<double> AllowedRotations = CetRotationUtils::BuildAllowedRotations(AOptions.Rotations);
+			std::cout << "[LOCAL COMPACT][PASS] targets=" << Targets.size() << " rotations=" << AllowedRotations.size() << std::endl;
+
+			std::size_t ProcessedTargets = 0;
+			bool TimedOut = false;
+			for (std::size_t TargetNumber = 0; TargetNumber < Targets.size(); ++TargetNumber) {
+				if (TimeBudgetReached() || ProcessedTargets >= CET_LOCAL_COMPACT_MAX_TARGETS) {
+					TimedOut = TimeBudgetReached();
+					break;
+				}
+				const TetLocalCompactTarget& Target = Targets[TargetNumber];
+				if (Target.Indices.empty() || Target.Indices.front() >= AItems.size()) continue;
+				const int BinId = static_cast<int>(AItems[Target.Indices.front()].binId());
+				if (BinId < 0) continue;
+				if (SkippedBins.find(BinId) != SkippedBins.end()) continue;
+				std::vector<bool> TargetMask(AItems.size(), false);
+				for (const std::size_t Index : Target.Indices) if (Index < TargetMask.size()) TargetMask[Index] = true;
+				const TetLocalCompactEnvelope OldEnvelope = LocalCompactCalculateEnvelope(AItems, BinId);
+				const TetLocalCompactEnvelope FixedEnvelope = LocalCompactCalculateEnvelope(AItems, BinId, &TargetMask);
+				const TetLocalCompactEnvelope CurrentTargetEnvelope = LocalCompactCalculateTargetEnvelope(AItems, Target);
+				const double BoundaryTolerance = 1.0;
+				const bool TouchesEnvelope = OldEnvelope.Valid && CurrentTargetEnvelope.Valid
+					&& (CurrentTargetEnvelope.MinX <= OldEnvelope.MinX + BoundaryTolerance
+						|| CurrentTargetEnvelope.MinY <= OldEnvelope.MinY + BoundaryTolerance
+						|| CurrentTargetEnvelope.MaxX >= OldEnvelope.MaxX - BoundaryTolerance
+						|| CurrentTargetEnvelope.MaxY >= OldEnvelope.MaxY - BoundaryTolerance);
+				if (!TouchesEnvelope) continue;
+				++ProcessedTargets;
+				const std::vector<TetLocalCompactFixedItem> FixedItems = LocalCompactBuildFixedItemCache(
+					AItems, TargetMask, AOptions, BinId);
+				std::vector<TetClusterFreeRegion> FreeRegions;
+				const bool HasFreeRegions = BuildLocalCompactFreeRegions(AItems, AOptions, BinId, TargetMask, FreeRegions);
+				std::cout << "[LOCAL COMPACT][BEGIN] index=" << TargetNumber << " type=" << Target.Type
+					<< " isCluster=" << Target.IsCluster << " oldRotation=" << Target.CurrentRotation
+					<< " allowedRotations=" << AllowedRotations.size() << " oldEnvelope=("
+					<< OldEnvelope.Width << "," << OldEnvelope.Height << "," << OldEnvelope.Area << ","
+					<< OldEnvelope.LongSide << ") freeRegions=" << FreeRegions.size() << std::endl;
+				if (!HasFreeRegions || !OldEnvelope.Valid) {
+					std::cout << "[LOCAL COMPACT][BEST] accepted=false reason=NO_FREE_REGION" << std::endl;
+					continue;
+				}
+
+				bool HasBest = false;
+				TetLocalCompactCandidate Best;
+				std::size_t CandidateCount = 0;
+				std::size_t ValidCandidateCount = 0;
+				std::size_t OutOfBinCount = 0;
+				std::size_t CollisionCount = 0;
+				std::size_t SpacingCount = 0;
+				const TetLocalCompactFreeSpaceMetric BaselineFreeSpace = LocalCompactCalculateFreeSpaceMetric(AItems, AOptions, BinId);
+				std::vector<TetLocalCompactCandidate> FreeSpaceCandidates;
+				std::vector<double> TargetRotations = AllowedRotations;
+				if (Target.IsCluster) {
+					std::stable_sort(TargetRotations.begin(), TargetRotations.end(), [&](double ALeft, double ARight) {
+						const double LeftDelta = LocalCompactAngleDistance(ALeft, Target.CurrentRotation);
+						const double RightDelta = LocalCompactAngleDistance(ARight, Target.CurrentRotation);
+						const double LeftQuarterDistance = std::abs(LeftDelta - CET_CLUSTER_HALF_PI);
+						const double RightQuarterDistance = std::abs(RightDelta - CET_CLUSTER_HALF_PI);
+						return LeftQuarterDistance < RightQuarterDistance;
+					});
+				}
+				for (const double Rotation : TargetRotations) {
+					if (TimeBudgetReached()) { TimedOut = true; break; }
+					CetTNestItemVector CandidateItems = AItems;
+					LocalCompactApplyPose(CandidateItems, Target, Rotation, 0.0, 0.0);
+					const TetLocalCompactEnvelope TemplateEnvelope = LocalCompactCalculateTargetEnvelope(CandidateItems, Target);
+					if (!TemplateEnvelope.Valid) continue;
+					CetPath TargetVertices;
+					for (const std::size_t Index : Target.Indices) {
+						const CetPolygonImpl Shape = CandidateItems[Index].transformedShape();
+						TargetVertices.insert(TargetVertices.end(), Shape.Contour.begin(), Shape.Contour.end());
+					}
+					const std::vector<std::size_t> TargetContacts = LocalCompactSelectContactVertices(TargetVertices);
+					std::map<std::pair<ClipperLib::cInt, ClipperLib::cInt>, int> Anchors;
+					auto AddAnchor = [&Anchors](ClipperLib::cInt AX, ClipperLib::cInt AY, int AContactScore) {
+						const auto Key = std::make_pair(AX, AY);
+						auto Existing = Anchors.find(Key);
+						if (Existing == Anchors.end()) Anchors.emplace(Key, AContactScore);
+						else Existing->second = std::max(Existing->second, AContactScore);
+					};
+					auto AddContactAnchors = [&](const CetPath& AContactContour, int AContactScore) {
+						const std::vector<std::size_t> ContactVertices = LocalCompactSelectContactVertices(AContactContour);
+						for (const std::size_t TargetVertex : TargetContacts) for (const std::size_t ContactVertex : ContactVertices) {
+							const ClipperLib::cInt X = AContactContour[ContactVertex].X - TargetVertices[TargetVertex].X;
+							const ClipperLib::cInt Y = AContactContour[ContactVertex].Y - TargetVertices[TargetVertex].Y;
+							// Free-region boundaries are spacing-inflated. Probe one integer unit around an exact
+							// contact so rounding cannot turn a legal clearance touch into a spacing overlap.
+							for (ClipperLib::cInt DX = -1; DX <= 1; ++DX) for (ClipperLib::cInt DY = -1; DY <= 1; ++DY)
+								AddAnchor(X + DX, Y + DY, AContactScore);
+						}
+					};
+					std::vector<std::pair<double, const CetPath*>> HoleContacts;
+					for (const TetClusterFreeRegion& Region : FreeRegions) for (const CetPath& Hole : Region.Holes) {
+						if (Hole.empty()) continue;
+						double DistanceSquared = std::numeric_limits<double>::infinity();
+						for (const std::size_t Vertex : LocalCompactSelectContactVertices(Hole)) {
+							const double DX = static_cast<double>(Hole[Vertex].X) - Target.CurrentAnchorX;
+							const double DY = static_cast<double>(Hole[Vertex].Y) - Target.CurrentAnchorY;
+							DistanceSquared = std::min(DistanceSquared, DX * DX + DY * DY);
+						}
+						HoleContacts.emplace_back(DistanceSquared, &Hole);
+					}
+					std::stable_sort(HoleContacts.begin(), HoleContacts.end(), [](const auto& ALeft, const auto& ARight) {
+						return ALeft.first < ARight.first;
+					});
+					std::vector<const CetPath*> SelectedHoleContacts;
+					auto AddSelectedHole = [&SelectedHoleContacts](const CetPath* AHole) {
+						if (AHole != nullptr && std::find(SelectedHoleContacts.begin(), SelectedHoleContacts.end(), AHole) == SelectedHoleContacts.end())
+							SelectedHoleContacts.push_back(AHole);
+					};
+					if (!HoleContacts.empty()) {
+						auto SelectExtreme = [&](auto ACoordinate, bool ASelectMinimum) {
+							const auto Extreme = std::min_element(HoleContacts.begin(), HoleContacts.end(), [&](const auto& ALeft, const auto& ARight) {
+								const double Left = ACoordinate(*ALeft.second);
+								const double Right = ACoordinate(*ARight.second);
+								return ASelectMinimum ? Left < Right : Left > Right;
+							});
+							AddSelectedHole(Extreme->second);
+						};
+						SelectExtreme([](const CetPath& APath) { return static_cast<double>(std::min_element(APath.begin(), APath.end(),
+							[](const auto& ALeft, const auto& ARight) { return ALeft.X < ARight.X; })->X); }, true);
+						SelectExtreme([](const CetPath& APath) { return static_cast<double>(std::max_element(APath.begin(), APath.end(),
+							[](const auto& ALeft, const auto& ARight) { return ALeft.X < ARight.X; })->X); }, false);
+						SelectExtreme([](const CetPath& APath) { return static_cast<double>(std::min_element(APath.begin(), APath.end(),
+							[](const auto& ALeft, const auto& ARight) { return ALeft.Y < ARight.Y; })->Y); }, true);
+						SelectExtreme([](const CetPath& APath) { return static_cast<double>(std::max_element(APath.begin(), APath.end(),
+							[](const auto& ALeft, const auto& ARight) { return ALeft.Y < ARight.Y; })->Y); }, false);
+					}
+					for (const auto& HoleContact : HoleContacts) {
+						if (SelectedHoleContacts.size() >= CET_LOCAL_COMPACT_MAX_HOLE_CONTACTS) break;
+						AddSelectedHole(HoleContact.second);
+					}
+					for (const TetClusterFreeRegion& Region : FreeRegions) {
+						const std::array<double, 2> XAnchors{ Region.MinX - TemplateEnvelope.MinX, Region.MaxX - TemplateEnvelope.MaxX };
+						const std::array<double, 2> YAnchors{ Region.MinY - TemplateEnvelope.MinY, Region.MaxY - TemplateEnvelope.MaxY };
+						for (const double X : XAnchors) for (const double Y : YAnchors)
+							AddAnchor(static_cast<ClipperLib::cInt>(std::llround(X)), static_cast<ClipperLib::cInt>(std::llround(Y)), 0);
+						AddContactAnchors(Region.Contour, 1);
+					}
+					// Keep both directional extremes and nearby holes. The extremes preserve empty
+					// regions below/above a target that would otherwise be missed by nearest-only sampling.
+					for (const CetPath* Hole : SelectedHoleContacts) AddContactAnchors(*Hole, 2);
+
+					using TetAnchor = std::pair<std::pair<ClipperLib::cInt, ClipperLib::cInt>, int>;
+					std::vector<TetAnchor> AllAnchors;
+					AllAnchors.reserve(Anchors.size());
+					for (const auto& Anchor : Anchors) AllAnchors.push_back({ Anchor.first, Anchor.second });
+					std::vector<TetAnchor> CandidateAnchors;
+					auto AddCandidateAnchor = [&CandidateAnchors](const TetAnchor& AAnchor) {
+						if (std::find_if(CandidateAnchors.begin(), CandidateAnchors.end(), [&](const TetAnchor& AExisting) {
+							return AExisting.first == AAnchor.first;
+						}) == CandidateAnchors.end()) CandidateAnchors.push_back(AAnchor);
+					};
+					if (AllAnchors.size() <= CET_LOCAL_COMPACT_MAX_ANCHORS_PER_ROTATION) CandidateAnchors = AllAnchors;
+					else {
+						const int MaxScore = std::max_element(AllAnchors.begin(), AllAnchors.end(), [](const TetAnchor& ALeft, const TetAnchor& ARight) {
+							return ALeft.second < ARight.second;
+						})->second;
+						std::vector<TetAnchor> BestContacts;
+						for (const TetAnchor& Anchor : AllAnchors) if (Anchor.second == MaxScore) BestContacts.push_back(Anchor);
+						if (!BestContacts.empty()) {
+							AddCandidateAnchor(BestContacts.front());
+							AddCandidateAnchor(BestContacts.back());
+							AddCandidateAnchor(*std::min_element(BestContacts.begin(), BestContacts.end(), [](const TetAnchor& ALeft, const TetAnchor& ARight) { return ALeft.first.second < ARight.first.second; }));
+							AddCandidateAnchor(*std::max_element(BestContacts.begin(), BestContacts.end(), [](const TetAnchor& ALeft, const TetAnchor& ARight) { return ALeft.first.second < ARight.first.second; }));
+						}
+						const std::size_t Remaining = CET_LOCAL_COMPACT_MAX_ANCHORS_PER_ROTATION - CandidateAnchors.size();
+						for (std::size_t Slot = 0; Slot < Remaining; ++Slot) {
+							const std::size_t Index = Remaining > 1 ? Slot * (AllAnchors.size() - 1) / (Remaining - 1) : 0;
+							AddCandidateAnchor(AllAnchors[Index]);
+						}
+					}
+					std::stable_sort(CandidateAnchors.begin(), CandidateAnchors.end(), [&](const TetAnchor& ALeft, const TetAnchor& ARight) {
+						auto EstimatedEnvelope = [&](const TetAnchor& AAnchor) {
+							TetLocalCompactEnvelope Placed = TemplateEnvelope;
+							Placed.MinX += static_cast<double>(AAnchor.first.first);
+							Placed.MaxX += static_cast<double>(AAnchor.first.first);
+							Placed.MinY += static_cast<double>(AAnchor.first.second);
+							Placed.MaxY += static_cast<double>(AAnchor.first.second);
+							return LocalCompactMergeEnvelopes(FixedEnvelope, Placed);
+						};
+						const TetLocalCompactEnvelope LeftEnvelope = EstimatedEnvelope(ALeft);
+						const TetLocalCompactEnvelope RightEnvelope = EstimatedEnvelope(ARight);
+						if (LeftEnvelope.Area != RightEnvelope.Area) return LeftEnvelope.Area < RightEnvelope.Area;
+						if (LeftEnvelope.LongSide != RightEnvelope.LongSide) return LeftEnvelope.LongSide < RightEnvelope.LongSide;
+						return ALeft.second > ARight.second;
+					});
+					for (const TetAnchor& Anchor : CandidateAnchors) {
+						if (TimeBudgetReached()) { TimedOut = true; break; }
+						++CandidateCount;
+						const double AnchorX = static_cast<double>(Anchor.first.first);
+						const double AnchorY = static_cast<double>(Anchor.first.second);
+						LocalCompactApplyPose(CandidateItems, Target, Rotation, AnchorX, AnchorY);
+						const char* Reason = "OUT_OF_BIN";
+						const bool Valid = LocalCompactIsTargetPoseValid(CandidateItems, Target, TargetMask, BinPoly,
+							AOptions, BinId, FixedItems, Reason);
+						TetLocalCompactCandidate Candidate;
+						Candidate.Valid = Valid;
+						Candidate.Rotation = Rotation;
+						Candidate.AnchorX = AnchorX;
+						Candidate.AnchorY = AnchorY;
+						Candidate.ContactScore = Anchor.second;
+						Candidate.TranslationDistance = std::hypot(AnchorX - Target.CurrentAnchorX, AnchorY - Target.CurrentAnchorY);
+						Candidate.RotationDelta = LocalCompactAngleDistance(Rotation, Target.CurrentRotation);
+						if (Valid) Candidate.Envelope = LocalCompactMergeEnvelopes(FixedEnvelope, LocalCompactCalculateTargetEnvelope(CandidateItems, Target));
+						const bool StrictImprovement = Valid && LocalCompactIsStrictImprovement(Candidate.Envelope, OldEnvelope);
+						const bool ContactImprovement = Valid && Candidate.ContactScore > 0
+							&& LocalCompactIsNonWorsening(Candidate.Envelope, OldEnvelope);
+						const bool Improved = StrictImprovement || ContactImprovement;
+						if (Valid) ++ValidCandidateCount;
+						else if (std::string(Reason) == "OUT_OF_BIN") ++OutOfBinCount;
+						else if (std::string(Reason) == "COLLISION") ++CollisionCount;
+						else if (std::string(Reason) == "SPACING") ++SpacingCount;
+						if (Valid && LocalCompactIsNonWorsening(Candidate.Envelope, OldEnvelope)) FreeSpaceCandidates.push_back(Candidate);
+						if (Improved && (!HasBest || LocalCompactIsCandidateBetter(Candidate, Best))) {
+							std::cout << "[LOCAL COMPACT][CANDIDATE] rotation=" << Rotation << " translation=(" << AnchorX << "," << AnchorY
+								<< ") contactScore=" << Candidate.ContactScore << " newEnvelope=(" << Candidate.Envelope.Width << ","
+								<< Candidate.Envelope.Height << "," << Candidate.Envelope.Area << ") reason="
+								<< (StrictImprovement ? "STRICT_IMPROVEMENT" : "CONTACT_IMPROVEMENT") << std::endl;
+							HasBest = true;
+							Best = Candidate;
+						}
+					}
+					if (TimedOut) break;
+				}
+				if (BaselineFreeSpace.Valid && !FreeSpaceCandidates.empty()) {
+					std::stable_sort(FreeSpaceCandidates.begin(), FreeSpaceCandidates.end(), LocalCompactIsCandidateBetter);
+					std::vector<std::size_t> EvaluationIndices;
+					auto AddEvaluationIndex = [&EvaluationIndices](std::size_t AIndex) {
+						if (std::find(EvaluationIndices.begin(), EvaluationIndices.end(), AIndex) == EvaluationIndices.end())
+							EvaluationIndices.push_back(AIndex);
+					};
+					for (std::size_t Index = 0; Index < FreeSpaceCandidates.size()
+						&& EvaluationIndices.size() < CET_LOCAL_COMPACT_MAX_FREE_SPACE_EVALUATIONS / 2; ++Index) AddEvaluationIndex(Index);
+					auto AddExtremeCandidate = [&](auto ACoordinate, bool ASelectMinimum) {
+						const auto Extreme = std::min_element(FreeSpaceCandidates.begin(), FreeSpaceCandidates.end(), [&](const auto& ALeft, const auto& ARight) {
+							const double Left = ACoordinate(ALeft);
+							const double Right = ACoordinate(ARight);
+							return ASelectMinimum ? Left < Right : Left > Right;
+						});
+						AddEvaluationIndex(static_cast<std::size_t>(std::distance(FreeSpaceCandidates.begin(), Extreme)));
+					};
+					AddExtremeCandidate([](const TetLocalCompactCandidate& ACandidate) { return ACandidate.AnchorX; }, true);
+					AddExtremeCandidate([](const TetLocalCompactCandidate& ACandidate) { return ACandidate.AnchorX; }, false);
+					AddExtremeCandidate([](const TetLocalCompactCandidate& ACandidate) { return ACandidate.AnchorY; }, true);
+					AddExtremeCandidate([](const TetLocalCompactCandidate& ACandidate) { return ACandidate.AnchorY; }, false);
+					for (const std::size_t Index : EvaluationIndices) {
+						const TetLocalCompactCandidate& Candidate = FreeSpaceCandidates[Index];
+						CetTNestItemVector CandidateItems = AItems;
+						LocalCompactApplyPose(CandidateItems, Target, Candidate.Rotation, Candidate.AnchorX, Candidate.AnchorY);
+						const TetLocalCompactFreeSpaceMetric CandidateFreeSpace = LocalCompactCalculateFreeSpaceMetric(CandidateItems, AOptions, BinId);
+						if (!LocalCompactIsFreeSpaceBetter(CandidateFreeSpace, BaselineFreeSpace)) continue;
+						if (!HasBest || LocalCompactIsCandidateBetter(Candidate, Best)) {
+							std::cout << "[LOCAL COMPACT][RECOMPOSE] translation=(" << Candidate.AnchorX << "," << Candidate.AnchorY
+								<< ") regions=" << BaselineFreeSpace.RegionCount << "->" << CandidateFreeSpace.RegionCount
+								<< " largestFree=" << BaselineFreeSpace.LargestArea << "->" << CandidateFreeSpace.LargestArea << std::endl;
+							HasBest = true;
+							Best = Candidate;
+						}
+					}
+				}
+				std::cout << "[LOCAL COMPACT][SUMMARY] candidates=" << CandidateCount << " valid=" << ValidCandidateCount
+					<< " outOfBin=" << OutOfBinCount << " collision=" << CollisionCount << " spacing=" << SpacingCount << std::endl;
+				if (HasBest) {
+					LocalCompactApplyPose(AItems, Target, Best.Rotation, Best.AnchorX, Best.AnchorY);
+				}
+				std::cout << "[LOCAL COMPACT][BEST] accepted=" << HasBest
+					<< " rotation=" << (HasBest ? Best.Rotation : Target.CurrentRotation)
+					<< " translation=(" << (HasBest ? Best.AnchorX : Target.CurrentAnchorX) << ","
+					<< (HasBest ? Best.AnchorY : Target.CurrentAnchorY) << ") oldArea=" << OldEnvelope.Area
+					<< " newArea=" << (HasBest ? Best.Envelope.Area : OldEnvelope.Area)
+					<< " oldLongSide=" << OldEnvelope.LongSide
+					<< " newLongSide=" << (HasBest ? Best.Envelope.LongSide : OldEnvelope.LongSide) << std::endl;
+			}
+			if (TimedOut) std::cout << "[LOCAL COMPACT][BUDGET] elapsedMs=" << CET_LOCAL_COMPACT_MAX_TIME_MS
+				<< " processedTargets=" << ProcessedTargets << std::endl;
+
+			if (!ValidatePlacedItemsSpacing(AItems, AOptions)) {
+				AItems = BaselineItems;
+				std::cout << "[LOCAL COMPACT][ROLLBACK] reason=FINAL_SPACING_VALIDATION" << std::endl;
+			}
+		}
+
 		static void AccumulateFreeRegions(const ClipperLib::PolyNode& ANode, std::size_t& AInOutCount, double& AInOutArea, double& AInOutLargest)
 		{
 			if (!ANode.IsHole() && ANode.Contour.size() >= 3) {
@@ -1349,6 +2209,8 @@ namespace ET {
 				std::cout << "[POLYGON][LOCKED ENVELOPE] Skip expanded-item repair." << std::endl;
 			}
 			BestEval = Nest2DUtils->Nest2DStrategy->EvaluateNestResult(ANestItems, BestLayers);
+			RunLocalCompactPass(ANestItems, AOptions, &BestMetaItems);
+			BestEval = Nest2DUtils->Nest2DStrategy->EvaluateNestResult(ANestItems, BestLayers);
 			std::cout << "================ POLYGON BEST NEST RESULT ================" << std::endl;
 			std::cout << "[POLYGON BEST] bin0 count = " << BestEval.FirstBinCount << ", bin0 area = " << BestEval.FirstBinArea << ", layers = " << BestLayers << std::endl;
 
@@ -1545,6 +2407,9 @@ namespace ET {
 				}
 				TryCompactUniformRectangleHoles(ANestItems, AOptions);
 				TryFillRectangleGridEdgeFromCompatibleGroup(ANestItems, AOptions);
+				if (!BestHasCluster) {
+					RunLocalCompactPass(ANestItems, AOptions, &BestMetaItems);
+				}
 				BestEval = Nest2DUtils->Nest2DStrategy->EvaluateNestResult(ANestItems, BestLayers);
 				EvaluateInternalGapMetrics(ANestItems, AOptions, BestEval);
 			}
@@ -1627,6 +2492,9 @@ namespace ET {
 				|| !CetRotationUtils::IsAllowedRotation(CET_CLUSTER_HALF_PI, AOptions.Rotations, 1e-9)) return;
 			(void)ATracker;
 			constexpr std::size_t MaxTargets = 8;
+			constexpr std::size_t MaxPlacementsPerTarget = 48;
+			const auto StartTime = std::chrono::steady_clock::now();
+			constexpr auto Budget = std::chrono::milliseconds(250);
 			const auto BinWidth = NestUtils::ToNestCoord(AOptions.BinWidth);
 			const auto BinHeight = NestUtils::ToNestCoord(AOptions.BinHeight);
 			const auto Spacing = NestUtils::ToNestCoord(std::max(0.0, AOptions.Spacing));
@@ -1664,7 +2532,12 @@ namespace ET {
 				return true;
 			};
 
-			std::vector<std::pair<double, std::size_t>> Targets;
+			struct TetQuarterTurnTarget
+			{
+				double Score = 0.0;
+				std::size_t Index = 0;
+			};
+			std::vector<TetQuarterTurnTarget> Targets;
 			for (std::size_t Index = 0; Index < ALocalBest.Items.size(); ++Index) {
 				if (!ALocalBest.MetaItems[Index].IsCluster || ALocalBest.MetaItems[Index].TransformData.size() < 2) continue;
 				const auto Bounds = ALocalBest.Items[Index].boundingBox();
@@ -1672,14 +2545,26 @@ namespace ET {
 				const double Height = std::abs(static_cast<double>(Bounds.height()));
 				if (Width <= 0.0 || Height <= 0.0) continue;
 				const double Aspect = std::max(Width, Height) / std::min(Width, Height);
-				if (Aspect > 1.1) Targets.emplace_back(Aspect, Index);
+				if (Aspect <= 1.1) continue;
+				const int BinId = ALocalBest.Items[Index].binId();
+				const TetLocalCompactEnvelope FullEnvelope = LocalCompactCalculateEnvelope(ALocalBest.Items, BinId);
+				if (!FullEnvelope.Valid) continue;
+				const double Tolerance = std::max(1.0, static_cast<double>(Spacing));
+				const bool OnEnvelope = std::abs(static_cast<double>(getX(Bounds.minCorner())) - FullEnvelope.MinX) <= Tolerance
+					|| std::abs(static_cast<double>(getX(Bounds.maxCorner())) - FullEnvelope.MaxX) <= Tolerance
+					|| std::abs(static_cast<double>(getY(Bounds.minCorner())) - FullEnvelope.MinY) <= Tolerance
+					|| std::abs(static_cast<double>(getY(Bounds.maxCorner())) - FullEnvelope.MaxY) <= Tolerance;
+				if (!OnEnvelope) continue;
+				Targets.push_back({ Aspect, Index });
 			}
-			std::stable_sort(Targets.begin(), Targets.end(), std::greater<>());
+			std::stable_sort(Targets.begin(), Targets.end(), [](const TetQuarterTurnTarget& ALeft,
+				const TetQuarterTurnTarget& ARight) { return ALeft.Score > ARight.Score; });
 			if (Targets.size() > MaxTargets) Targets.resize(MaxTargets);
 			std::set<std::size_t> AppliedTargets;
 
 			std::size_t Pass = 0;
 			while (AppliedTargets.size() < Targets.size()) {
+				if (std::chrono::steady_clock::now() - StartTime >= Budget) break;
 				++Pass;
 				const CetTNestItemVector PassBaseItems = ALocalBest.Items;
 				const std::vector<TetMetaItem> PassBaseMetaItems = ALocalBest.MetaItems;
@@ -1699,12 +2584,13 @@ namespace ET {
 				std::vector<TetMetaItem> PassBestMetaItems;
 
 				for (const auto& Target : Targets) {
-					const std::size_t TargetIndex = Target.second;
+					if (std::chrono::steady_clock::now() - StartTime >= Budget) break;
+					const std::size_t TargetIndex = Target.Index;
 					if (AppliedTargets.find(TargetIndex) != AppliedTargets.end()) continue;
 					const std::string& ClusterType = PassBaseMetaItems[TargetIndex].ClusterType;
 					std::cout << "[NEST][QUARTER TURN CANDIDATE] Pass=" << Pass + 1
 						<< ", Index=" << TargetIndex << ", Type=" << ClusterType
-						<< ", Aspect=" << Target.first << std::endl;
+						<< ", Aspect=" << Target.Score << std::endl;
 
 					CetNestItem RotatedTarget = PassBaseItems[TargetIndex];
 					RotatedTarget.inflation(0);
@@ -1721,6 +2607,8 @@ namespace ET {
 					// reserved for the separate sheet-elimination pass.
 					const int CandidateBin = PassBaseItems[TargetIndex].binId();
 					if (CandidateBin < 0) continue;
+					const TetLocalCompactEnvelope CandidateBaseEnvelope = LocalCompactCalculateEnvelope(
+						PassBaseItems, CandidateBin);
 					std::size_t CheckedPlacements = 0;
 					std::size_t ValidPlacements = 0;
 						std::vector<ClipperLib::cInt> XCoordinates;
@@ -1748,6 +2636,7 @@ namespace ET {
 
 						for (ClipperLib::cInt MinY : YCoordinates) {
 							for (ClipperLib::cInt MinX : XCoordinates) {
+								if (CheckedPlacements >= MaxPlacementsPerTarget) break;
 								++CheckedPlacements;
 								CetTNestItemVector TestItems = PassBaseItems;
 								CetNestItem& TestTarget = TestItems[TargetIndex];
@@ -1760,6 +2649,13 @@ namespace ET {
 									Translation.X + MinX - getX(Bounds.minCorner()),
 									Translation.Y + MinY - getY(Bounds.minCorner())));
 								if (!CanPlaceTarget(TestItems, TargetIndex)) continue;
+								const TetLocalCompactEnvelope TestEnvelope = LocalCompactCalculateEnvelope(TestItems, CandidateBin);
+								const double EnvelopeTolerance = std::max(1.0, static_cast<double>(Spacing));
+								const bool BetterEnvelope = TestEnvelope.Valid && CandidateBaseEnvelope.Valid
+									&& (TestEnvelope.Area + EnvelopeTolerance * EnvelopeTolerance < CandidateBaseEnvelope.Area
+										|| (std::abs(TestEnvelope.Area - CandidateBaseEnvelope.Area) <= EnvelopeTolerance * EnvelopeTolerance
+											&& TestEnvelope.LongSide + EnvelopeTolerance < CandidateBaseEnvelope.LongSide));
+								if (!BetterEnvelope) continue;
 								++ValidPlacements;
 
 								CetTNestItemVector ExpandedItems;
@@ -1777,7 +2673,7 @@ namespace ET {
 								EvaluateBoardFreeRegionMetrics(ExpandedItems, AOptions, Eval);
 								EvaluatePassableFreeRegionMetrics(ExpandedItems, AOptions, Eval);
 								const TetTNestEvalResult& Comparison = HasPassBest ? PassBestEval : PassBaseEval;
-								if (!IsBetterContinuousFreeSpace(Eval, Comparison)) continue;
+								if (HasPassBest && !IsBetterContinuousFreeSpace(Eval, Comparison)) continue;
 								HasPassBest = true;
 								PassBestTarget = TargetIndex;
 								PassBestLayers = PassBaseEval.Layers;
@@ -2011,7 +2907,9 @@ namespace ET {
 				}
 			}
 			if (!UsePolygonBoard) {
-				_TryQuarterTurnCandidates(LocalBest, AOriginalItems, AOptions, ATracker, CurrentHasCluster);
+				if (AOptions.EnableLocalCompactPass && CurrentHasCluster) {
+					_TryQuarterTurnCandidates(LocalBest, AOriginalItems, AOptions, ATracker, CurrentHasCluster);
+				}
 				_TryOppositeEdgeCandidate(LocalBest, AClusterResult, AOriginalItems, AOptions, ATracker, CurrentHasCluster);
 			}
 			return LocalBest;

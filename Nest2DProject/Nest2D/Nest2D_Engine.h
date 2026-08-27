@@ -41,10 +41,10 @@ namespace ET {
 			std::vector<std::size_t> _BuildPriorityOrder(CetTNestItemVector& AItems, const TetNestOptions& AOptions, MetENestOrderStrategy AStrategy) const;
 			void _BuildSortedTestData(CetTNestItemVector& APriorityItems, const std::vector<TetMetaItem>& AMetaItems, const std::vector<std::size_t>& ASortedIndices, CetTNestItemVector& AOutItems, std::vector<TetMetaItem>& AOutMetaItems) const;
 			void _UpdateLocalBest(TetLocalBestResult& ALocalBest, TetTNestEvalResult AEvaluation, std::size_t ALayers, CetTNestItemVector& AItems, std::vector<TetMetaItem>& AMetaItems, bool AHasCluster) const;
-			void _TryQuarterTurnCandidates(TetLocalBestResult& ALocalBest, const CetTNestItemVector& AOriginalItems,
-				const TetNestOptions& AOptions, TetNestProgressTracker& ATracker, bool AHasCluster);
 			void _TryOppositeEdgeCandidate(TetLocalBestResult& ALocalBest, const TetClusterBuildResult& AClusterResult,
 				const CetTNestItemVector& AOriginalItems,
+				const TetNestOptions& AOptions, TetNestProgressTracker& ATracker, bool AHasCluster);
+			void _TryQuarterTurnCandidates(TetLocalBestResult& ALocalBest, const CetTNestItemVector& AOriginalItems,
 				const TetNestOptions& AOptions, TetNestProgressTracker& ATracker, bool AHasCluster);
 			bool ShoouldUpdateGlobalBest(const TetLocalBestResult& ALocalResult,bool AHasBest, const TetTNestEvalResult& ABestEval, std::size_t ABestLayers, bool ABestHasCluster);
             //std::size_t RunRectangleBoardNestingFill(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, TetNestProgressTracker& Tracker);

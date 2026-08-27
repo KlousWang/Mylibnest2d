@@ -309,6 +309,16 @@ namespace ET {
                     }
                     AOptions.EnableLastBinEvacuation = (value == 1);
                 }
+                else if (token == "LOCAL_COMPACT_PASS" || token == "EnableLocalCompactPass"){
+                    int value = 0;
+                    if (!(fin >> value) || (value != 0 && value != 1)){
+                        if (AErrorMessage){
+                            *AErrorMessage = "Invalid local compact pass format. Expected: LOCAL_COMPACT_PASS 0|1";
+                        }
+                        return NEST2D_ERR_FILE_UNKNOWN_TOKEN;
+                    }
+                    AOptions.EnableLocalCompactPass = (value == 1);
+                }
                 else if (token == "PLACER_ACCURACY"){
                     if (!(fin >> AOptions.Placer.Accuracy)){
                         if (AErrorMessage){
@@ -531,6 +541,7 @@ namespace ET {
             Out << "SPACING " << AOptions.Spacing << "\n";
             Out << "ROTATIONS " << AOptions.Rotations << "\n";
             Out << "LAST_BIN_EVACUATION " << (AOptions.EnableLastBinEvacuation ? 1 : 0) << "\n";
+            Out << "LOCAL_COMPACT_PASS " << (AOptions.EnableLocalCompactPass ? 1 : 0) << "\n";
             Out << "PLACER_ACCURACY " << AOptions.Placer.Accuracy << "\n";
             Out << "PLACER_ALIGNMENT " << _NestAlignmentToString(AOptions.Placer.Alignment) << "\n";
             Out << "PLACER_STARTING_POINT " << _NestAlignmentToString(AOptions.Placer.StartingPoint) << "\n";

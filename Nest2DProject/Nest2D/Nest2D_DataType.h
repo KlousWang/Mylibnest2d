@@ -59,6 +59,10 @@ struct TetNestOptions
 
 	bool ExportSvg = false;
 	bool EnableLastBinEvacuation = false;
+	// Optional final pass: move or rotate one target while every other placement is frozen.
+	// Enabled by default so existing nest files get the compacting pass.  A
+	// file can still opt out explicitly with LOCAL_COMPACT_PASS 0.
+	bool EnableLocalCompactPass = true;
 	std::string SvgPath = "NestingResult";
 
 	NestProgressCallback ProgressCallback = nullptr; 
