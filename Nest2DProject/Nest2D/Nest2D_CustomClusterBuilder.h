@@ -36,6 +36,7 @@ namespace ET {
             void _BuildSameShapeClusterCandidates(const CetTNestItemVector &AOriginalItems, const std::vector<TetShapeFeature> &AFeatures, const std::vector<int> &AIndices, const TetNestOptions &AOptions, std::vector<TetClusterCandidate> &AOutCandidates);
             bool _BuildMixedShapeCandidate(const CetTNestItemVector &AOriginalItems, const std::vector<TetShapeFeature> &AFeatures, const std::vector<int> &AIndices, const TetNestOptions &AOptions, TetClusterCandidate &AOutCandidate);
             bool _BuildMixedShapeCandidateImpl(const CetTNestItemVector &AOriginalItems, const std::vector<TetShapeFeature> &AFeatures, const std::vector<int> &AIndices, const TetNestOptions &AOptions, TetClusterCandidate &AOutCandidate);
+            void _TryUpdateMixedShapeCandidate(const TetCustomMixedCandidateRequest &ARequest);
             bool _FindLargestBoardFitLayout(const CetTNestItemVector &AOriginalItems, const std::vector<int> &AIndices, const TetNestOptions &AOptions, std::size_t &AOutChildCount, TetClusterCandidate &AOutCandidate);
             bool _BuildBestEdgePairCandidate(const TetEdgePairRequest &ARequest);
             bool _PrepareEdgePairSearch(const TetEdgePairRequest &ARequest, TetEdgePairSearchContext &AOutContext);

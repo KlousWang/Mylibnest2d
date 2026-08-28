@@ -1,0 +1,24 @@
+Language: Cpp
+BasedOnStyle: LLVM
+ColumnLimit: 9999
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+AccessModifierOffset: -4
+NamespaceIndentation: All 
+
+# --- 修改这里：强制删除所有多余的空行 ---
+MaxEmptyLinesToKeep: 0                  
+KeepEmptyLinesAtTheStartOfBlocks: false 
+
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterFunction: true
+  AfterControlStatement: false
+  AfterClass: true
+  AfterNamespace: false
+  AfterEnum: true
+  AfterStruct: true
+  AfterUnion: true
+  BeforeElse: false
+  BeforeCatch: false

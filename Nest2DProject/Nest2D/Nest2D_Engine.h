@@ -30,7 +30,8 @@ namespace ET {
             std::size_t RunRectangleBoardNesting(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker);
             bool _RunLastBinEvacuation(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, std::size_t& ALayers);
             bool _RepairAndEvacuate(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, const CetPolygonImpl& ABinPoly, double ABinWidth, double ABinHeight, std::size_t& ALayers);
-			bool _TryLockedEnvelopeBoardRepair(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, const CetPolygonImpl& ABinPoly, double ABinWidth, double ABinHeight, const std::vector<std::size_t>& ALockedChildren, std::size_t& ALayers);
+            bool _TryLockedEnvelopeBoardRepair(const TetLockedEnvelopeRepairRequest &ARequest);
+            void _FinalizeRectangleBest(const TetRectangleBestFinalizeRequest &ARequest);
             bool _TryBoardFeedbackNest(CetTNestItemVector& ANestItems, const TetNestOptions& AOptions, TetNestProgressTracker& ATracker, std::size_t& ALayers);
             std::size_t RunRectangleNestOnce(CetTNestItemVector& ATestItems, const TetNestOptions& AOptions,
                 TetNestProgressTracker& ATracker, bool AUseFillerSelector = false, bool AAllowRotations = true);

@@ -141,8 +141,9 @@ namespace ET {
             constexpr double RotationTolerance = 1e-9;
             return CetRotationUtils::IsAllowedRotation(CET_CLUSTER_HALF_PI, AOptions.Rotations, RotationTolerance);
         }
-        bool CetRectangleClusterBuilder::_MakePairCandidate(const CetTNestItemVector &AItems, const std::vector<TetShapeFeature> &AFeatures, int AIndexA, int AIndexB, bool AHorizontal, bool ARotateB90, const TetNestOptions &AOptions, TetClusterCandidate &AOutCandidate)
+        bool CetRectangleClusterBuilder::_MakePairCandidate(const TetRectanglePairRequest &ARequest, TetClusterCandidate &AOutCandidate)
         {
+            const auto &AItems = ARequest.Items; const auto &AFeatures = ARequest.Features; const int AIndexA = ARequest.FirstIndex; const int AIndexB = ARequest.SecondIndex; const bool AHorizontal = ARequest.Horizontal; const bool ARotateB90 = ARequest.RotateSecondQuarterTurn; const auto &AOptions = ARequest.Options;
             AOutCandidate = TetClusterCandidate{};
             if (AIndexA < 0 || AIndexB < 0 || AIndexA == AIndexB || AIndexA >= static_cast<int>(AItems.size()) || AIndexB >= static_cast<int>(AItems.size()) || AIndexA >= static_cast<int>(AFeatures.size()) || AIndexB >= static_cast<int>(AFeatures.size())) {
                 return false;

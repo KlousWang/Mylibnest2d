@@ -765,6 +765,15 @@ namespace ET {
             return AOutLength > CET_SHAPE_EPSILON;
         }
 
+        static bool IsSemiCircleAreaCompatible(double AArea, double ARadius, double &AOutAreaError)
+        {
+            const double ExpectedArea = 0.5 * CET_CLUSTER_PI * ARadius * ARadius;
+            if (ExpectedArea <= CET_SHAPE_EPSILON)
+                return false;
+            AOutAreaError = std::abs(AArea - ExpectedArea) / std::max(1.0, ExpectedArea);
+            return AOutAreaError <= 0.25;
+        }
+
         bool CetShapeAnalyzer::TryFitSemiCircle(const CetPath &AContour, double AArea, TetSemiCircleFit &AOutFit)
         {
             AOutFit = TetSemiCircleFit{};
@@ -849,12 +858,8 @@ namespace ET {
             if (AverageRadiusError > 0.12 || MaxRadiusError > 0.25)
                 return false;
 
-            const double ExpectedArea = 0.5 * CET_CLUSTER_PI * Radius * Radius;
-            if (ExpectedArea <= CET_SHAPE_EPSILON)
-                return false;
-
-            const double AreaError = std::abs(AArea - ExpectedArea) / std::max(1.0, ExpectedArea);
-            if (AreaError > 0.25)
+            double AreaError = 0.0;
+            if (!IsSemiCircleAreaCompatible(AArea, Radius, AreaError))
                 return false;
 
             AOutFit.Valid = true;

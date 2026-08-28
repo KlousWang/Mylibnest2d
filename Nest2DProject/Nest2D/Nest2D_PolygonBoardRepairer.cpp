@@ -874,7 +874,7 @@ namespace ET {
                 }
                 Changed = false;
                 ++Iteration;
-                Changed = _RunBoardCompositePass(ALayers, CompositeDeadline, CompositeTimePerBinMs, CompositeExactChecksByBin, CompositeRollbackBins, CompositeMovedItems, CompositeStats, AcceptedMoves);
+                Changed = _RunBoardCompositePass({ALayers, CompositeDeadline, CompositeTimePerBinMs, CompositeExactChecksByBin, CompositeRollbackBins, CompositeMovedItems, CompositeStats, AcceptedMoves});
                 if (!Changed)
                     Changed = _RunLegacyBoardFillPass(ALayers, AcceptedMoves);
                 ALayers = _CompactItemBins();
@@ -882,8 +882,9 @@ namespace ET {
             std::cout << "[BOARD FILL][SUMMARY] MoveAttempts=" << (m_PlacementChecks - BeforePlacementChecks) << " AcceptedMoves=" << AcceptedMoves << " BeforeFirstBinArea=" << BeforeFirstBinArea << " AfterFirstBinArea=" << _CalculateBinOccupiedArea(0) << " BeforeUsedBins=" << BeforeUsedBins << " AfterUsedBins=" << _CountUsedBins() << " Iterations=" << Iteration << std::endl;
             std::cout << "[BOARD COMPOSITE][SUMMARY] Candidates=" << CompositeStats.CandidateCount << " Accepted=" << CompositeStats.AcceptedCount << " Rollbacks=" << CompositeStats.RollbackCount << " Fillers=" << CompositeStats.FillerCount << " ExactChecks=" << CompositeStats.ExactPlacementChecks << " AnchoredRanked=" << CompositeStats.RankedAnchoredSkeletons << " MovingRanked=" << CompositeStats.RankedMovingSkeletons << " BuildFail=" << CompositeStats.SkeletonBuildFailures << " EmptyFillers=" << CompositeStats.EmptyFillerSets << " BeamFail=" << CompositeStats.BeamExpansionFailures << " PlacementFail=" << CompositeStats.PlacementFailures << std::endl;
         }
-        bool CetPolygonBoardRepairer::_RunBoardCompositePass(std::size_t &ALayers, const std::chrono::steady_clock::time_point &ADeadline, long long ATimePerBinMs, std::vector<long long> &AExactChecksByBin, std::vector<std::size_t> &ARollbackBins, std::vector<std::size_t> &AMovedItems, TetBoardCompositeSearchStats &AStats, std::size_t &AAcceptedMoves)
+        bool CetPolygonBoardRepairer::_RunBoardCompositePass(const TetBoardCompositePassRequest &ARequest)
         {
+            std::size_t &ALayers = ARequest.Layers; const auto &ADeadline = ARequest.Deadline; const long long ATimePerBinMs = ARequest.TimePerBinMs; auto &AExactChecksByBin = ARequest.ExactChecksByBin; auto &ARollbackBins = ARequest.RollbackBins; auto &AMovedItems = ARequest.MovedItems; auto &AStats = ARequest.Stats; std::size_t &AAcceptedMoves = ARequest.AcceptedMoves;
             bool Changed = false;
             for (int TargetBin = 0; TargetBin < static_cast<int>(ALayers); ++TargetBin) {
                 if (std::chrono::steady_clock::now() >= ADeadline)
@@ -1164,8 +1165,9 @@ namespace ET {
             AOutCluster = Best.front();
             return AOutCluster.OriginalIndices.size() >= 2;
         }
-        bool CetPolygonBoardRepairer::_BuildBoardCompositeForSkeleton(int ATargetBin, const TetClusterFreeRegion &AFreeRegion, int ASkeletonIndex, const std::vector<TetShapeFeature> &AFeatures, long long &AInOutExactChecks, TetBoardCompositeCandidate &AOutCandidate, TetBoardCompositeSearchStats &AInOutStats)
+        bool CetPolygonBoardRepairer::_BuildBoardCompositeForSkeleton(const TetBoardCompositeBuildRequest &ARequest)
         {
+            const int ATargetBin = ARequest.TargetBin; const TetClusterFreeRegion &AFreeRegion = *ARequest.FreeRegion; const int ASkeletonIndex = ARequest.SkeletonIndex; const auto &AFeatures = ARequest.Features; long long &AInOutExactChecks = ARequest.ExactChecks; TetBoardCompositeCandidate &AOutCandidate = ARequest.OutCandidate; TetBoardCompositeSearchStats &AInOutStats = ARequest.Stats;
             AOutCandidate = TetBoardCompositeCandidate{};
             if (_Items == nullptr || _Options == nullptr || ASkeletonIndex < 0 || ASkeletonIndex >= static_cast<int>(AFeatures.size()))
                 return false;
@@ -1192,8 +1194,9 @@ namespace ET {
             ++AInOutStats.PlacementFailures;
             return false;
         }
-        bool CetPolygonBoardRepairer::_BuildAnchoredBoardComposite(int ATargetBin, const TetClusterFreeRegion &AFreeRegion, int ASkeletonIndex, const std::vector<TetShapeFeature> &AFeatures, long long &AInOutExactChecks, TetBoardCompositeCandidate &AOutCandidate, TetBoardCompositeSearchStats &AInOutStats)
+        bool CetPolygonBoardRepairer::_BuildAnchoredBoardComposite(const TetBoardCompositeBuildRequest &ARequest)
         {
+            const int ATargetBin = ARequest.TargetBin; const TetClusterFreeRegion &AFreeRegion = *ARequest.FreeRegion; const int ASkeletonIndex = ARequest.SkeletonIndex; const auto &AFeatures = ARequest.Features; long long &AInOutExactChecks = ARequest.ExactChecks; TetBoardCompositeCandidate &AOutCandidate = ARequest.OutCandidate; TetBoardCompositeSearchStats &AInOutStats = ARequest.Stats;
             AOutCandidate = TetBoardCompositeCandidate{};
             if (_Items == nullptr || ASkeletonIndex < 0 || ASkeletonIndex >= static_cast<int>(AFeatures.size()))
                 return false;
@@ -1210,7 +1213,7 @@ namespace ET {
             for (int Filler : Fillers) {
                 TetBoardCompositeCandidate Candidate;
                 Candidate.FreeRegion = AFreeRegion;
-                if (_BuildAnchoredCandidateForFiller(ATargetBin, ASkeletonIndex, Filler, Skeleton, AFeatures, AInOutExactChecks, Candidate, AInOutStats)) {
+                if (_BuildAnchoredCandidateForFiller({ATargetBin, &AFreeRegion, ASkeletonIndex, Filler, &Skeleton, AFeatures, AInOutExactChecks, Candidate, AInOutStats})) {
                     AOutCandidate = std::move(Candidate);
                     return true;
                 }
@@ -1220,8 +1223,9 @@ namespace ET {
             ++AInOutStats.BeamExpansionFailures;
             return false;
         }
-        bool CetPolygonBoardRepairer::_BuildAnchoredCandidateForFiller(int ATargetBin, int ASkeletonIndex, int AFillerIndex, const TetClusterCandidate &ASkeleton, const std::vector<TetShapeFeature> &AFeatures, long long &AInOutExactChecks, TetBoardCompositeCandidate &AOutCandidate, TetBoardCompositeSearchStats &AInOutStats)
+        bool CetPolygonBoardRepairer::_BuildAnchoredCandidateForFiller(const TetBoardCompositeBuildRequest &ARequest)
         {
+            const int ATargetBin = ARequest.TargetBin; const int ASkeletonIndex = ARequest.SkeletonIndex; const int AFillerIndex = ARequest.FillerIndex; const TetClusterCandidate &ASkeleton = *ARequest.Skeleton; const auto &AFeatures = ARequest.Features; long long &AInOutExactChecks = ARequest.ExactChecks; TetBoardCompositeCandidate &AOutCandidate = ARequest.OutCandidate; TetBoardCompositeSearchStats &AInOutStats = ARequest.Stats;
             if (_Items == nullptr || _Options == nullptr || AFillerIndex < 0 || AFillerIndex >= static_cast<int>(_Items->size()))
                 return false;
             const int OldBin = static_cast<int>((*_Items)[AFillerIndex].binId());
@@ -1562,7 +1566,7 @@ namespace ET {
                 for (int Skeleton : AnchoredSkeletons) {
                     ++Attempts;
                     TetBoardCompositeCandidate Candidate;
-                    if (_BuildAnchoredBoardComposite(ATargetBin, Region, Skeleton, Features, ExactChecks, Candidate, AInOutStats)) {
+                    if (_BuildAnchoredBoardComposite({ATargetBin, &Region, Skeleton, -1, nullptr, Features, ExactChecks, Candidate, AInOutStats})) {
                         std::cout << "[BOARD COMPOSITE][CANDIDATE] Bin=" << ATargetBin << " Skeleton=" << Skeleton << " Mode=Anchored Parts=" << Candidate.Placements.size() << " Fill=" << Candidate.Score.InternalFillRatio << " Score=" << Candidate.Score.Total << std::endl;
                         if (!Found || _IsBoardCompositeBetter(Candidate, AOutCandidate)) {
                             AOutCandidate = std::move(Candidate);
@@ -1579,7 +1583,7 @@ namespace ET {
                 for (int Skeleton : Skeletons) {
                     ++Attempts;
                     TetBoardCompositeCandidate Candidate;
-                    if (_BuildBoardCompositeForSkeleton(ATargetBin, Region, Skeleton, Features, ExactChecks, Candidate, AInOutStats)) {
+                    if (_BuildBoardCompositeForSkeleton({ATargetBin, &Region, Skeleton, -1, nullptr, Features, ExactChecks, Candidate, AInOutStats})) {
                         std::cout << "[BOARD COMPOSITE][CANDIDATE] Bin=" << ATargetBin << " Skeleton=" << Skeleton << " Parts=" << Candidate.Placements.size() << " Fill=" << Candidate.Score.InternalFillRatio << " Score=" << Candidate.Score.Total << std::endl;
                         if (!Found || _IsBoardCompositeBetter(Candidate, AOutCandidate)) {
                             AOutCandidate = std::move(Candidate);
@@ -1838,8 +1842,9 @@ namespace ET {
             }
             return Found;
         }
-        bool CetPolygonBoardRepairer::_EvaluateBoardFillPlacement(std::size_t AItemIndex, int ATargetBin, int AOldBin, const TetClusterFreeRegion &AFreeRegion, const Radians &ARotation, const Point &ATranslation, long long ACheckLimit, long long &ACheckedCount, TetHoleFillCandidate &ABestCandidate)
+        bool CetPolygonBoardRepairer::_EvaluateBoardFillPlacement(const TetBoardFillPlacementRequest &ARequest, long long &ACheckedCount, TetHoleFillCandidate &ABestCandidate)
         {
+            const std::size_t AItemIndex = ARequest.ItemIndex; const int ATargetBin = ARequest.TargetBin; const int AOldBin = ARequest.OldBin; const auto &AFreeRegion = ARequest.FreeRegion; const auto &ARotation = ARequest.Rotation; const auto &ATranslation = ARequest.Translation; const long long ACheckLimit = ARequest.CheckLimit;
             if (ACheckedCount >= ACheckLimit || !_CanContinueSearch())
                 return false;
             ++ACheckedCount;
@@ -1885,8 +1890,9 @@ namespace ET {
             }
             return Result;
         }
-        void CetPolygonBoardRepairer::_ProbeContourContactPlacements(std::size_t AItemIndex, int ATargetBin, int AOldBin, const TetClusterFreeRegion &AFreeRegion, const Radians &ARotation, const CetPath &ARotatedContour, long long AProbeLimit, long long ACheckLimit, long long &ACheckedCount, TetHoleFillCandidate &ABestCandidate)
+        void CetPolygonBoardRepairer::_ProbeContourContactPlacements(const TetBoardFillPlacementRequest &ARequest, long long &ACheckedCount, TetHoleFillCandidate &ABestCandidate)
         {
+            const std::size_t AItemIndex = ARequest.ItemIndex; const int ATargetBin = ARequest.TargetBin; const int AOldBin = ARequest.OldBin; const auto &AFreeRegion = ARequest.FreeRegion; const auto &ARotation = ARequest.Rotation; const CetPath &ARotatedContour = *ARequest.RotatedContour; const long long AProbeLimit = ARequest.ProbeLimit; const long long ACheckLimit = ARequest.CheckLimit;
             if (ARotatedContour.empty() || AFreeRegion.Contour.empty() || AProbeLimit <= 0)
                 return;
             const std::vector<std::size_t> ItemVertices = _SelectContactVertexIndices(ARotatedContour);
@@ -1919,7 +1925,7 @@ namespace ET {
                     const double UnitX = DirectionLength > 0.0 ? DirectionX / DirectionLength : 0.0;
                     const double UnitY = DirectionLength > 0.0 ? DirectionY / DirectionLength : 0.0;
                     const Point Translation(static_cast<ClipperLib::cInt>(std::llround(RegionPoint.X - ItemPoint.X + UnitX * Inset)), static_cast<ClipperLib::cInt>(std::llround(RegionPoint.Y - ItemPoint.Y + UnitY * Inset)));
-                    _EvaluateBoardFillPlacement(AItemIndex, ATargetBin, AOldBin, AFreeRegion, ARotation, Translation, ACheckLimit, ACheckedCount, ABestCandidate);
+                    _EvaluateBoardFillPlacement({AItemIndex, ATargetBin, AOldBin, AFreeRegion, ARotation, Translation, nullptr, 0, ACheckLimit}, ACheckedCount, ABestCandidate);
                 }
             }
         }
@@ -1943,7 +1949,7 @@ namespace ET {
                 for (const TetClusterFreeRegion &Region : AFreeRegions) {
                     if (Bounds.width() > Region.Width || Bounds.height() > Region.Height)
                         continue;
-                    _ProbeContourContactPlacements(AItemIndex, ATargetBin, OldBin, Region, Angle, RotatedContour, ContactPerPair, ContactLimit, CheckedCount, ABestCandidate);
+                    _ProbeContourContactPlacements({AItemIndex, ATargetBin, OldBin, Region, Angle, Point(0, 0), &RotatedContour, ContactPerPair, ContactLimit}, CheckedCount, ABestCandidate);
                     if (CheckedCount >= ContactLimit || !_CanContinueSearch())
                         break;
                 }
@@ -1963,7 +1969,7 @@ namespace ET {
                             Placement.Translation = Point(0, 0);
                             Placement.Rotation = Angle;
                             _FillTranslationForBBoxMin(Placement, X, Y);
-                            _EvaluateBoardFillPlacement(AItemIndex, ATargetBin, OldBin, Region, Angle, Placement.Translation, CheckLimit, CheckedCount, ABestCandidate);
+                            _EvaluateBoardFillPlacement({AItemIndex, ATargetBin, OldBin, Region, Angle, Placement.Translation, nullptr, 0, CheckLimit}, CheckedCount, ABestCandidate);
                         }
                     }
                 }

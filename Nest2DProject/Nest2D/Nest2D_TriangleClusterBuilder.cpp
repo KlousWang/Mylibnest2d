@@ -297,7 +297,7 @@ namespace ET {
             for (std::size_t LayoutIndex = 0; LayoutIndex < MaxLayoutChecks; ++LayoutIndex) {
                 const TetRightTriangleRectangleLayout &Layout = ALayouts[LayoutIndex];
                 TetClusterCandidate Candidate;
-                if (!_BuildRightTriangleRectangleLayoutCandidate(ARequest.OriginalItems, ARequest.Features, ARequest.Indices, ARequest.Options, Layout.Rows, Layout.Cols, ARequest.CellWidth, ARequest.CellHeight, ARequest.AxisGap, ARequest.CellGap, ARequest.HalfTurn, Candidate))
+                if (!_BuildRightTriangleRectangleLayoutCandidate({ARequest.OriginalItems, ARequest.Features, ARequest.Indices, ARequest.Options, Layout.Rows, Layout.Cols, ARequest.CellWidth, ARequest.CellHeight, ARequest.AxisGap, ARequest.CellGap, ARequest.HalfTurn}, Candidate))
                     continue;
                 Candidate.Score = _CalculateRightTriangleRectangleScore(Candidate, ARequest.PairCount, Layout.Rows, Layout.Cols);
                 const double CandidateBoxArea = Candidate.ClusterWidth * Candidate.ClusterHeight;
@@ -412,8 +412,9 @@ namespace ET {
             const RightTriangleRectangleRequest Request{AOriginalItems, AFeatures, AIndices, AOptions, PairCount, CellWidth, CellHeight, AxisGap, CellGap, HalfTurn};
             return _SelectRightTriangleRectangleLayout(Request, Layouts, AOutCandidate);
         }
-        bool CetTriangleClusterBuilder::_BuildRightTriangleRectangleLayoutCandidate(const CetTNestItemVector &AOriginalItems, const std::vector<TetShapeFeature> &AFeatures, const std::vector<int> &AIndices, const TetNestOptions &AOptions, int ACellRows, int ACellCols, double ACellWidth, double ACellHeight, double AAxisGap, double ACellGap, double AHalfTurn, TetClusterCandidate &AOutCandidate)
+        bool CetTriangleClusterBuilder::_BuildRightTriangleRectangleLayoutCandidate(const TetRightTriangleRectangleLayoutRequest &ARequest, TetClusterCandidate &AOutCandidate)
         {
+            const auto &AOriginalItems = ARequest.OriginalItems; const auto &AFeatures = ARequest.Features; const auto &AIndices = ARequest.Indices; const auto &AOptions = ARequest.Options; const int ACellRows = ARequest.CellRows; const int ACellCols = ARequest.CellColumns; const double ACellWidth = ARequest.CellWidth; const double ACellHeight = ARequest.CellHeight; const double AAxisGap = ARequest.AxisGap; const double ACellGap = ARequest.CellGap; const double AHalfTurn = ARequest.HalfTurn;
             (void)AFeatures;
             AOutCandidate = TetClusterCandidate{};
             if (ACellRows <= 0 || ACellCols <= 0 || ACellWidth <= 0.0 || ACellHeight <= 0.0 || AIndices.size() < 2 || (AIndices.size() % 2) != 0) {
@@ -587,66 +588,62 @@ namespace ET {
                 }
             }
             std::vector<TetClusterCandidate> PairCandidates;
-            PairCandidates.reserve(AIndices.size() / 2);
-            double CellWidth = 0.0;
-            double CellHeight = 0.0;
+            TetTrianglePairCell Cell;
+            if (!_BuildAnyTrianglePairCandidates(AOriginalItems, AFeatures, AIndices, AOptions, PairCandidates, Cell))
+                return false;
+            return _TryBuildAnyTriangleGridCandidate(AOriginalItems, AOptions, AIndices, PairCandidates, Cell, AOutCandidate);
+        }
+        bool CetTriangleClusterBuilder::_BuildAnyTrianglePairCandidates(const CetTNestItemVector &AOriginalItems, const std::vector<TetShapeFeature> &AFeatures, const std::vector<int> &AIndices, const TetNestOptions &AOptions, std::vector<TetClusterCandidate> &AOutCandidates, TetTrianglePairCell &AOutCell)
+        {
+            AOutCandidates.clear();
+            AOutCell = TetTrianglePairCell{};
             TetClusterCandidate ReusablePairCandidate;
             int ReusableAIndex = -1;
             int ReusableBIndex = -1;
-            auto HaveSameContour = [](const CetPath &A, const CetPath &AB) {
-                if (A.size() != AB.size()) {
-                    return false;
-                }
-                for (std::size_t PointIndex = 0; PointIndex < A.size(); ++PointIndex) {
-                    if (A[PointIndex].X != AB[PointIndex].X || A[PointIndex].Y != AB[PointIndex].Y) {
-                        return false;
-                    }
-                }
-                return true;
-            };
+            const auto HaveSameContour = [](const CetPath &A, const CetPath &AB) { return A.size() == AB.size() && std::equal(A.begin(), A.end(), AB.begin(), [](const CetInpoint &APoint, const CetInpoint &ABPoint) { return APoint.X == ABPoint.X && APoint.Y == ABPoint.Y; }); };
+            AOutCandidates.reserve(AIndices.size() / 2);
             for (std::size_t PairOffset = 0; PairOffset < AIndices.size(); PairOffset += 2) {
                 const int AIndex = AIndices[PairOffset];
                 const int BIndex = AIndices[PairOffset + 1];
                 TetClusterCandidate PairCandidate;
-                const bool CanReusePair = ReusableAIndex >= 0 && ReusableBIndex >= 0 && HaveSameContour(AFeatures[AIndex].NormalizedContour, AFeatures[ReusableAIndex].NormalizedContour) && HaveSameContour(AFeatures[BIndex].NormalizedContour, AFeatures[ReusableBIndex].NormalizedContour) && ReusablePairCandidate.Transforms.size() == 2;
+                const bool CanReusePair = ReusableAIndex >= 0 && HaveSameContour(AFeatures[AIndex].NormalizedContour, AFeatures[ReusableAIndex].NormalizedContour) && HaveSameContour(AFeatures[BIndex].NormalizedContour, AFeatures[ReusableBIndex].NormalizedContour) && ReusablePairCandidate.Transforms.size() == 2;
                 if (CanReusePair) {
                     PairCandidate = ReusablePairCandidate;
                     PairCandidate.OriginalIndices = {AIndex, BIndex};
                     PairCandidate.Transforms[0].OriginalId = AIndex;
                     PairCandidate.Transforms[1].OriginalId = BIndex;
-                } else {
-                    if (!_BuildAnyTrianglePairCandidate(AOriginalItems, AFeatures, AIndex, BIndex, AOptions, PairCandidate)) {
-                        return false;
-                    }
-                    if (ReusableAIndex < 0) {
-                        ReusableAIndex = AIndex;
-                        ReusableBIndex = BIndex;
-                        ReusablePairCandidate = PairCandidate;
-                    }
+                } else if (!_BuildAnyTrianglePairCandidate(AOriginalItems, AFeatures, AIndex, BIndex, AOptions, PairCandidate)) {
+                    return false;
+                } else if (ReusableAIndex < 0) {
+                    ReusableAIndex = AIndex;
+                    ReusableBIndex = BIndex;
+                    ReusablePairCandidate = PairCandidate;
                 }
-                CellWidth = std::max(CellWidth, PairCandidate.ClusterWidth);
-                CellHeight = std::max(CellHeight, PairCandidate.ClusterHeight);
-                PairCandidates.push_back(std::move(PairCandidate));
+                AOutCell.Width = std::max(AOutCell.Width, PairCandidate.ClusterWidth);
+                AOutCell.Height = std::max(AOutCell.Height, PairCandidate.ClusterHeight);
+                AOutCandidates.push_back(std::move(PairCandidate));
             }
-            if (CellWidth <= 0.0 || CellHeight <= 0.0) {
-                return false;
-            }
+            return AOutCell.Width > 0.0 && AOutCell.Height > 0.0;
+        }
+        bool CetTriangleClusterBuilder::_TryBuildAnyTriangleGridCandidate(const CetTNestItemVector &AOriginalItems, const TetNestOptions &AOptions, const std::vector<int> &AIndices, const std::vector<TetClusterCandidate> &APairCandidates, const TetTrianglePairCell &ACell, TetClusterCandidate &AOutCandidate)
+        {
+            const double CellWidth = ACell.Width, CellHeight = ACell.Height;
             const double RequiredGap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
             const double SafetyGap = RequiredGap > 0.0 ? std::max(CET_CLUSTER_MIN_SAFETY_GAP, RequiredGap * 0.001) : 0.0;
             const double CellGap = RequiredGap + SafetyGap;
-            const int PairCount = static_cast<int>(PairCandidates.size());
+            const int PairCount = static_cast<int>(APairCandidates.size());
             const double BinWidth = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth));
             const double BinHeight = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinHeight));
             const bool QuarterTurnAllowed = CetRotationUtils::IsAllowedRotation(CET_CLUSTER_HALF_PI, AOptions.Rotations, 1e-9);
             CetClusterGeometryHelper Geometry;
             auto FindMinimumPairPitch = [&](bool AHorizontal, double AFallbackPitch) {
-                if (PairCandidates.size() < 2 || AFallbackPitch <= 0.0) {
+                if (APairCandidates.size() < 2 || AFallbackPitch <= 0.0) {
                     return AFallbackPitch;
                 }
                 auto HasValidPitch = [&](double APitch) {
-                    std::vector<TetItemTransform> ProbeTransforms = PairCandidates[0].Transforms;
-                    ProbeTransforms.reserve(PairCandidates[0].Transforms.size() + PairCandidates[1].Transforms.size());
-                    for (TetItemTransform Transform : PairCandidates[1].Transforms) {
+                    std::vector<TetItemTransform> ProbeTransforms = APairCandidates[0].Transforms;
+                    ProbeTransforms.reserve(APairCandidates[0].Transforms.size() + APairCandidates[1].Transforms.size());
+                    for (TetItemTransform Transform : APairCandidates[1].Transforms) {
                         if (AHorizontal) {
                             Transform.RelativeX += APitch;
                         } else {
@@ -707,7 +704,7 @@ namespace ET {
                 Candidate.Confidence = 1.0;
                 Candidate.Transforms.reserve(AIndices.size());
                 for (int PairIndex = 0; PairIndex < PairCount; ++PairIndex) {
-                    const TetClusterCandidate &PairCandidate = PairCandidates[static_cast<std::size_t>(PairIndex)];
+                    const TetClusterCandidate &PairCandidate = APairCandidates[static_cast<std::size_t>(PairIndex)];
                     const int Row = PairIndex / Layout.Cols;
                     const int Col = PairIndex % Layout.Cols;
                     const double BaseX = static_cast<double>(Col) * PairPitchX + (CellWidth - PairCandidate.ClusterWidth) * 0.5;

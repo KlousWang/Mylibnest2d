@@ -54,15 +54,15 @@ namespace ET {
             void _FixInvalidItems(std::size_t &ALayers);
 
             void _FillHoles(std::size_t &ALayers);
-            bool _RunBoardCompositePass(std::size_t &ALayers, const std::chrono::steady_clock::time_point &ADeadline, long long ATimePerBinMs, std::vector<long long> &AExactChecksByBin, std::vector<std::size_t> &ARollbackBins, std::vector<std::size_t> &AMovedItems, TetBoardCompositeSearchStats &AStats, std::size_t &AAcceptedMoves);
+            bool _RunBoardCompositePass(const TetBoardCompositePassRequest &ARequest);
             bool _RunLegacyBoardFillPass(std::size_t ALayers, std::size_t &AAcceptedMoves);
             bool _ExtractBoardFreeRegions(int ATargetBin, std::vector<TetClusterFreeRegion> &AOutRegions) const;
             bool _BuildBoardReservedContours(int ATargetBin, ClipperLib::Paths &AOutContours) const;
             bool _AppendBoardFreeRegion(const ClipperLib::PolyNode &ANode, std::vector<TetClusterFreeRegion> &AOutRegions) const;
             bool _FindBestBoardCompositeForBin(int ATargetBin, const std::vector<TetClusterFreeRegion> &AFreeRegions, long long &AInOutExactChecks, TetBoardCompositeCandidate &AOutCandidate, TetBoardCompositeSearchStats &AInOutStats);
-            bool _BuildBoardCompositeForSkeleton(int ATargetBin, const TetClusterFreeRegion &AFreeRegion, int ASkeletonIndex, const std::vector<TetShapeFeature> &AFeatures, long long &AInOutExactChecks, TetBoardCompositeCandidate &AOutCandidate, TetBoardCompositeSearchStats &AInOutStats);
-            bool _BuildAnchoredBoardComposite(int ATargetBin, const TetClusterFreeRegion &AFreeRegion, int ASkeletonIndex, const std::vector<TetShapeFeature> &AFeatures, long long &AInOutExactChecks, TetBoardCompositeCandidate &AOutCandidate, TetBoardCompositeSearchStats &AInOutStats);
-            bool _BuildAnchoredCandidateForFiller(int ATargetBin, int ASkeletonIndex, int AFillerIndex, const TetClusterCandidate &ASkeleton, const std::vector<TetShapeFeature> &AFeatures, long long &AInOutExactChecks, TetBoardCompositeCandidate &AOutCandidate, TetBoardCompositeSearchStats &AInOutStats);
+            bool _BuildBoardCompositeForSkeleton(const TetBoardCompositeBuildRequest &ARequest);
+            bool _BuildAnchoredBoardComposite(const TetBoardCompositeBuildRequest &ARequest);
+            bool _BuildAnchoredCandidateForFiller(const TetBoardCompositeBuildRequest &ARequest);
             void _TranslateFreeRegions(std::vector<TetClusterFreeRegion> &ARegions, double AOffsetX, double AOffsetY) const;
             bool _BuildCompositeSkeleton(int ASkeletonIndex, const TetShapeFeature &AFeature, TetClusterCandidate &AOutCluster) const;
             bool _BuildAnchoredCompositeSkeleton(int ASkeletonIndex, const TetShapeFeature &AFeature, TetClusterCandidate &AOutCluster) const;
@@ -85,8 +85,8 @@ namespace ET {
             void _UpdateBoardLocalEnvelope(const std::vector<TetHoleFillCandidate> &APlacements, double &AOutArea, double &AOutFillRatio) const;
             bool _FindBestCandidateForTargetBin(int ATargetBin, const std::vector<TetClusterFreeRegion> &AFreeRegions, TetHoleFillCandidate &ABestCandidate);
             bool _TryFindBestPlacementInBin(std::size_t AItemIndex, int ATargetBin, const std::vector<TetClusterFreeRegion> &AFreeRegions, TetHoleFillCandidate &ABestCandidate, long long ACheckLimit = 0);
-            bool _EvaluateBoardFillPlacement(std::size_t AItemIndex, int ATargetBin, int AOldBin, const TetClusterFreeRegion &AFreeRegion, const libnest2d::Radians &ARotation, const libnest2d::Point &ATranslation, long long ACheckLimit, long long &ACheckedCount, TetHoleFillCandidate &ABestCandidate);
-            void _ProbeContourContactPlacements(std::size_t AItemIndex, int ATargetBin, int AOldBin, const TetClusterFreeRegion &AFreeRegion, const libnest2d::Radians &ARotation, const CetPath &ARotatedContour, long long AProbeLimit, long long ACheckLimit, long long &ACheckedCount, TetHoleFillCandidate &ABestCandidate);
+            bool _EvaluateBoardFillPlacement(const TetBoardFillPlacementRequest &ARequest, long long &ACheckedCount, TetHoleFillCandidate &ABestCandidate);
+            void _ProbeContourContactPlacements(const TetBoardFillPlacementRequest &ARequest, long long &ACheckedCount, TetHoleFillCandidate &ABestCandidate);
             std::vector<std::size_t> _SelectContactVertexIndices(const CetPath &AContour) const;
             bool _IsPlacementInsideFreeRegion(const TetPlacementCandidate &APlacement, const TetClusterFreeRegion &AFreeRegion) const;
             bool _ApplyHoleFillCandidate(const TetHoleFillCandidate &ACandidate);
