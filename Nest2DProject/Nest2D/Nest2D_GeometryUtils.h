@@ -1,7 +1,7 @@
 #pragma once
 #include "EtTechCore_Object.h"
-#include"Nest2D_DataType.h"
-#include<iostream>
+#include "Nest2D_DataType.h"
+#include <iostream>
 
 namespace ET {
 	namespace NEST2DMANAGERLIB {

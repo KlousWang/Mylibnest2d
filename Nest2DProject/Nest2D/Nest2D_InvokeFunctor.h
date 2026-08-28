@@ -14,6 +14,7 @@
 #include "Nest2D_Sort.h"
 #include "Nest2D_StrategyManager.h"
 #include "Nest2D_SvgUtils.h"
+#include "Nest2D_LocalCompactor.h"
 #include "NestDataMapper.h"
 
 #include "Nest2D_CircleClusterBuilder.h"
@@ -52,6 +53,7 @@ namespace ET {
             CetTriangleClusterBuilder *Nest2dClusterTri = nullptr;
             CetCircleClusterBuilder *Nest2dClusterCircle = nullptr;
 
+            CetLocalCompactor *Nest2dLocalCompactor = nullptr;
         protected:
             ET::CORE::CetCoreObject *m_Engine = nullptr;
             //  ET::CORE::CetCoreObject* m_SvgUtils = nullptr;

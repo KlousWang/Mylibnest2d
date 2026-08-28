@@ -2,6 +2,7 @@
 #include "Nest2D_Engine.h"
 #include "Nest2D_ClusterManager.h"
 #include "Nest2D_DataConst.h"
+#include "Nest2D_LocalCompactor.h"
 #include "Nest2D_PolygonBoardRepairer.h"
 #include "Nest2D_PrivateDataType.h"
 #include "Nest2D_RotationUtils.h"
@@ -781,6 +782,7 @@ namespace ET {
             }
             return true;
         }
+        #if 0 // Moved to CetLocalCompactor; retained temporarily for comparison.
         static double LocalCompactAngleDistance(double ALeft, double ARight)
         {
             const double Left = CetRotationUtils::NormalizeAngle(ALeft);
@@ -1529,6 +1531,7 @@ namespace ET {
                 std::cout << "[LOCAL COMPACT][ROLLBACK] reason=FINAL_SPACING_VALIDATION" << std::endl;
             }
         }
+        #endif
         static void AccumulateFreeRegions(const ClipperLib::PolyNode &ANode, std::size_t &AInOutCount, double &AInOutArea, double &AInOutLargest)
         {
             if (!ANode.IsHole() && ANode.Contour.size() >= 3) {
@@ -1900,7 +1903,7 @@ namespace ET {
                 std::cout << "[POLYGON][LOCKED ENVELOPE] Skip expanded-item repair." << std::endl;
             }
             BestEval = Nest2DUtils->Nest2DStrategy->EvaluateNestResult(ANestItems, BestLayers);
-            RunLocalCompactPass(ANestItems, AOptions, &BestMetaItems);
+            Nest2DUtils->Nest2dLocalCompactor->RunLocalCompactPass(ANestItems, AOptions, &BestMetaItems);
             BestEval = Nest2DUtils->Nest2DStrategy->EvaluateNestResult(ANestItems, BestLayers);
             std::cout << "================ POLYGON BEST NEST RESULT ================" << std::endl;
             std::cout << "[POLYGON BEST] bin0 count = " << BestEval.FirstBinCount << ", bin0 area = " << BestEval.FirstBinArea << ", layers = " << BestLayers << std::endl;
@@ -2019,7 +2022,7 @@ namespace ET {
                 if (Width <= 0.0 || Height <= 0.0) continue;
                 const double Aspect = std::max(Width, Height) / std::min(Width, Height);
                 if (Aspect <= 1.1) continue;
-                const TetLocalCompactEnvelope Envelope = LocalCompactCalculateEnvelope(AItems, AItems[Index].binId());
+                const TetLocalCompactEnvelope Envelope = Nest2DUtils->Nest2dLocalCompactor->CalculateEnvelope(AItems, AItems[Index].binId());
                 const double Tolerance = std::max(1.0, static_cast<double>(ASpacing));
                 const bool OnEnvelope = Envelope.Valid && (std::abs(static_cast<double>(getX(Bounds.minCorner())) - Envelope.MinX) <= Tolerance || std::abs(static_cast<double>(getX(Bounds.maxCorner())) - Envelope.MaxX) <= Tolerance || std::abs(static_cast<double>(getY(Bounds.minCorner())) - Envelope.MinY) <= Tolerance || std::abs(static_cast<double>(getY(Bounds.maxCorner())) - Envelope.MaxY) <= Tolerance);
                 if (OnEnvelope) Targets.push_back({Aspect, Index});
@@ -2115,7 +2118,7 @@ namespace ET {
             TryCompactUniformRectangleHoles(ARequest.OutNestItems, ARequest.Options);
             TryFillRectangleGridEdgeFromCompatibleGroup(ARequest.OutNestItems, ARequest.Options);
             if (!ARequest.BestHasCluster)
-                RunLocalCompactPass(ARequest.OutNestItems, ARequest.Options, &ARequest.BestMetaItems);
+                Nest2DUtils->Nest2dLocalCompactor->RunLocalCompactPass(ARequest.OutNestItems, ARequest.Options, &ARequest.BestMetaItems);
             ARequest.BestEval = Nest2DUtils->Nest2DStrategy->EvaluateNestResult(ARequest.OutNestItems, ARequest.BestLayers);
             EvaluateInternalGapMetrics(ARequest.OutNestItems, ARequest.Options, ARequest.BestEval);
         }
@@ -2221,7 +2224,7 @@ namespace ET {
                     const int CandidateBin = PassBaseItems[TargetIndex].binId();
                     if (CandidateBin < 0)
                         continue;
-                    const TetLocalCompactEnvelope CandidateBaseEnvelope = LocalCompactCalculateEnvelope(PassBaseItems, CandidateBin);
+                    const TetLocalCompactEnvelope CandidateBaseEnvelope = Nest2DUtils->Nest2dLocalCompactor->CalculateEnvelope(PassBaseItems, CandidateBin);
                     std::size_t CheckedPlacements = 0, ValidPlacements = 0;
                     const TetQuarterTurnCoordinates Coordinates = BuildQuarterTurnCoordinates({PassBaseItems, TargetIndex, CandidateBin, RotatedWidth, RotatedHeight, Spacing, BinWidth, BinHeight});
                     const std::vector<ClipperLib::cInt> &XCoordinates = Coordinates.X;
@@ -2239,7 +2242,7 @@ namespace ET {
                             TestTarget.translation(Point(Translation.X + MinX - getX(Bounds.minCorner()), Translation.Y + MinY - getY(Bounds.minCorner())));
                             if (!CanPlaceQuarterTurnTarget(TestItems, TargetIndex, BinWidth, BinHeight, HalfSpacing))
                                 continue;
-                            const TetLocalCompactEnvelope TestEnvelope = LocalCompactCalculateEnvelope(TestItems, CandidateBin);
+                            const TetLocalCompactEnvelope TestEnvelope = Nest2DUtils->Nest2dLocalCompactor->CalculateEnvelope(TestItems, CandidateBin);
                             const double EnvelopeTolerance = std::max(1.0, static_cast<double>(Spacing));
                             const bool BetterEnvelope = TestEnvelope.Valid && CandidateBaseEnvelope.Valid && (TestEnvelope.Area + EnvelopeTolerance * EnvelopeTolerance < CandidateBaseEnvelope.Area || (std::abs(TestEnvelope.Area - CandidateBaseEnvelope.Area) <= EnvelopeTolerance * EnvelopeTolerance && TestEnvelope.LongSide + EnvelopeTolerance < CandidateBaseEnvelope.LongSide));
                             if (!BetterEnvelope)

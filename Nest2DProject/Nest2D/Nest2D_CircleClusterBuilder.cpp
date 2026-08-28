@@ -1,8 +1,9 @@
 #include "pch.h"
 #include "Nest2D_CircleClusterBuilder.h"
+#include "Nest2D_BoardUtils.h"
 #include "Nest2D_ClusterGeometryHelper.h"
 #include "Nest2D_ClusterMathUtils.h"
-#include "Nest2D_RotationUtils.h"
+#include "Nest2D_SelfFunction.h"
 #include "NestUtils.h"
 #include <algorithm>
 #include <cmath>
@@ -78,24 +79,6 @@ namespace ET {
                 }
 
                 return Groups;
-            }
-
-            bool FitsBin(double AClusterWidth, double AClusterHeight, const TetNestOptions &AOptions)
-            {
-                if (AClusterWidth <= 0.0 || AClusterHeight <= 0.0) {
-                    return false;
-                }
-
-                const double BinWidth = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth));
-                const double BinHeight = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinHeight));
-                if (BinWidth <= 0.0 || BinHeight <= 0.0) {
-                    return false;
-                }
-
-                const bool FitsNormally = AClusterWidth <= BinWidth && AClusterHeight <= BinHeight;
-                const bool QuarterTurnAllowed = CetRotationUtils::IsAllowedRotation(CET_CLUSTER_HALF_PI, AOptions.Rotations, 1e-9);
-                const bool FitsAfterRotation = QuarterTurnAllowed && AClusterHeight <= BinWidth && AClusterWidth <= BinHeight;
-                return FitsNormally || FitsAfterRotation;
             }
 
             // A circle skeleton may be transposed without rotating any child
@@ -248,9 +231,9 @@ namespace ET {
                     if (Layout.Slots.size() != ACount) {
                         continue;
                     }
-
+                    
                     TransposeIfNeededForBin(Layout, AOptions);
-                    if (!FitsBin(Layout.Width, Layout.Height, AOptions)) {
+                    if (!Nest2DUtils->Nest2DBord->FitsBin(Layout.Width, Layout.Height, AOptions)) {
                         continue;
                     }
 
@@ -459,8 +442,8 @@ namespace ET {
             if (Layout.Slots.size() != Indices.size() || Layout.Width <= 0.0 || Layout.Height <= 0.0) {
                 return false;
             }
-
-            if (!FitsBin(Layout.Width, Layout.Height, AOptions)) {
+            
+            if (!Nest2DUtils->Nest2DBord->FitsBin(Layout.Width, Layout.Height, AOptions)) {
                 return false;
             }
 
@@ -495,8 +478,6 @@ namespace ET {
             AOutCandidate.Score = _CalculateScore(AOutCandidate);
             return true;
         }
-
-        bool CetCircleClusterBuilder::_FitsBin(double AClusterWidth, double AClusterHeight, const TetNestOptions &AOptions) { return FitsBin(AClusterWidth, AClusterHeight, AOptions); }
 
         double CetCircleClusterBuilder::_CalculateScore(const TetClusterCandidate &ACandidate)
         {

@@ -17,6 +17,7 @@ namespace ET {
 			}
 			void _WrapFuncs() override {
 				CetCoreObject::_WrapFuncs();
+                _WrapFunc("FitsBin", Type_Class_Func(FitsBin));
 				_WrapFunc("CalcBoardBoundsLocal", Type_Class_Func(CalcBoardBoundsLocal));
 				_WrapFunc("BuildPathFromPoints", Type_Class_Func(BuildPathFromPoints));
 				_WrapFunc("BuildBinPolygonFromOptions", Type_Class_Func(BuildBinPolygonFromOptions));
@@ -28,6 +29,9 @@ namespace ET {
 			~CetNest2DBoardUtils();
 
 		public:
+			// Checks whether a layout fits the configured bin, including an allowed
+			// quarter-turn of the completed layout.
+		    bool FitsBin(double AWidth, double AHeight, const TetNestOptions& AOptions);
 			TetBoardBounds CalcBoardBoundsLocal(const TetNestBoard& ABoard);
 			CetPath BuildPathFromPoints(const std::vector<TetNestPoint>& APoints, double AOffsetX, double AOffsetY, bool AWantOuter);
             CetPolygonImpl BuildBinPolygonFromOptions(const TetNestOptions& AOptions, double& AOutBinWidth, double& AOutBinHeight);

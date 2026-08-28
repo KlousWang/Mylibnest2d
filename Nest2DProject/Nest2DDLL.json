@@ -18,7 +18,8 @@
 	"Nest2D_TriangleClusterBuilder,Nest2D_TriangleClusterBuilder",
 	"Nest2D_ClusterInvokeFunctor,Nest2D_ClusterInvokeFunctor",
 	"Nest2D_CircleClusterBuilder,Nest2D_CircleClusterBuilder",
-	"Nest2D_RectangleFillClusterBuilder,Nest2D_RectangleFillClusterBuilder"
+	"Nest2D_RectangleFillClusterBuilder,Nest2D_RectangleFillClusterBuilder",
+	"Nest2D_LocalCompactor,Nest2D_LocalCompactor"
 	],
   "ComponentClassType": [],
   "LocalObjIns_LocalType": [ 
@@ -35,7 +36,8 @@
 	"l_AreaUsageCalculator,Nest2D_AreaUsageCalculator",
 	"l_ShapeAnalyzer,Nest2D_ShapeAnalyzer",
 	"l_TriangleClusterBuilder,Nest2D_TriangleClusterBuilder",
-	"l_CircleClusterBuilder,Nest2D_CircleClusterBuilder"
+	"l_CircleClusterBuilder,Nest2D_CircleClusterBuilder",
+	"l_LocalCompactor,Nest2D_LocalCompactor"
   ],
   "GlobalObjIns_LocalIns": [
 	],

@@ -1,8 +1,10 @@
 #include "pch.h"
 #include "Nest2D_EllipseClusterBuilder.h"
+#include "Nest2D_BoardUtils.h"
 #include "Nest2D_ClusterGeometryHelper.h"
 #include "Nest2D_ClusterMathUtils.h"
 #include "Nest2D_RotationUtils.h"
+#include "Nest2D_SelfFunction.h"
 #include "NestUtils.h"
 #include <algorithm>
 #include <cmath>
@@ -16,21 +18,6 @@ namespace ET {
         namespace {
             bool IsValidEllipseFeature(const TetShapeFeature &AFeature) { return AFeature.ShapeType == MetShapeType::EllipseLike && AFeature.EllipseMajorAxis > 0.0 && AFeature.EllipseMinorAxis > 0.0 && AFeature.Width > 0.0 && AFeature.Height > 0.0 && AFeature.Area > 0.0; }
             bool AreSameSizeEllipses(const TetShapeFeature &A, const TetShapeFeature &AB) { return IsValidEllipseFeature(A) && IsValidEllipseFeature(AB) && CetClusterMathUtils::NearlyEqual(A.EllipseMajorAxis, AB.EllipseMajorAxis, CET_ELLIPSE_SIZE_TOLERANCE) && CetClusterMathUtils::NearlyEqual(A.EllipseMinorAxis, AB.EllipseMinorAxis, CET_ELLIPSE_SIZE_TOLERANCE); }
-            bool FitsBin(double AWidth, double AHeight, const TetNestOptions &AOptions)
-            {
-                if (AWidth <= 0.0 || AHeight <= 0.0) {
-                    return false;
-                }
-                const double BinWidth = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth));
-                const double BinHeight = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinHeight));
-                if (BinWidth <= 0.0 || BinHeight <= 0.0) {
-                    return false;
-                }
-                const bool Normal = AWidth <= BinWidth && AHeight <= BinHeight;
-                const bool QuarterTurnAllowed = CetRotationUtils::IsAllowedRotation(CET_CLUSTER_HALF_PI, AOptions.Rotations, 1e-9);
-                const bool Rotated = QuarterTurnAllowed && AHeight <= BinWidth && AWidth <= BinHeight;
-                return Normal || Rotated;
-            }
             std::vector<std::vector<int>> GroupEllipseIndices(const std::vector<int> &AIndices, const std::vector<TetShapeFeature> &AFeatures)
             {
                 std::vector<TetEllipseIndexInfo> Infos;
@@ -340,7 +327,7 @@ namespace ET {
             bool HasBest = false;
             TetClusterCandidate BestCandidate;
             for (const TetEllipseLayout &Layout : Layouts) {
-                if (Layout.Slots.size() != Indices.size() || Layout.Width <= 0.0 || Layout.Height <= 0.0 || !FitsBin(Layout.Width, Layout.Height, AOptions))
+                if (Layout.Slots.size() != Indices.size() || Layout.Width <= 0.0 || Layout.Height <= 0.0 || !Nest2DUtils->Nest2DBord->FitsBin(Layout.Width, Layout.Height, AOptions))
                     continue;
                 TetClusterCandidate Candidate;
                 if (!_BuildEllipseCandidateForLayout(Request, Layout, Candidate))

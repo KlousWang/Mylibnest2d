@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Nest2D_ArcClusterBuilder.h"
+#include "Nest2D_SelfFunction.h"
 #include "Nest2D_ClusterGeometryHelper.h"
 #include "Nest2D_ClusterMathUtils.h"
 #include "Nest2D_RotationUtils.h"
@@ -127,21 +128,6 @@ namespace ET {
                     Groups.push_back(std::move(CurrentGroup));
                 }
                 return Groups;
-            }
-            bool FitsBin(double AClusterWidth, double AClusterHeight, const TetNestOptions &AOptions)
-            {
-                if (AClusterWidth <= 0.0 || AClusterHeight <= 0.0) {
-                    return false;
-                }
-                const double BinWidth = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth));
-                const double BinHeight = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinHeight));
-                if (BinWidth <= 0.0 || BinHeight <= 0.0) {
-                    return false;
-                }
-                const bool FitsNormally = AClusterWidth <= BinWidth && AClusterHeight <= BinHeight;
-                const bool QuarterTurnAllowed = CetRotationUtils::IsAllowedRotation(CET_CLUSTER_HALF_PI, AOptions.Rotations, 1e-9);
-                const bool FitsAfterRotation = QuarterTurnAllowed && AClusterHeight <= BinWidth && AClusterWidth <= BinHeight;
-                return FitsNormally || FitsAfterRotation;
             }
             bool GetArcOrientationBounds(const CetNestItem &AItem, const TetShapeFeature &AFeature, bool AReverseChordDirection, const TetNestOptions &AOptions, const CetClusterGeometryHelper &AGeometry, TetArcOrientationBounds &AOutBounds)
             {
@@ -400,7 +386,7 @@ namespace ET {
             bool HasBestCandidate = false;
             TetClusterCandidate BestCandidate;
             for (const TetArcLayout &Layout : Layouts) {
-                if (!_FitsBin(Layout.Width, Layout.Height, AOptions)) {
+                if (!Nest2DUtils->Nest2DBord->FitsBin(Layout.Width, Layout.Height, AOptions)) {
                     continue;
                 }
                 TetClusterCandidate Candidate;
@@ -419,7 +405,6 @@ namespace ET {
             AOutCandidate = std::move(BestCandidate);
             return true;
         }
-        bool CetArcClusterBuilder::_FitsBin(double AClusterWidth, double AClusterHeight, const TetNestOptions &AOptions) { return FitsBin(AClusterWidth, AClusterHeight, AOptions); }
         double CetArcClusterBuilder::_CalculateScore(const TetClusterCandidate &ACandidate, const TetNestOptions &AOptions)
         {
             if (!ACandidate.Valid || ACandidate.OriginalIndices.empty() || ACandidate.ClusterWidth <= 0.0 || ACandidate.ClusterHeight <= 0.0 || ACandidate.ProxyArea <= 0.0) {

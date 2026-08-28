@@ -1,10 +1,26 @@
 #include "pch.h"
 #include "Nest2D_BoardUtils.h"
+#include "Nest2D_RotationUtils.h"
 #include "NestUtils.h"
 
 // using namespace libnest2d;
 ET::NEST2DMANAGERLIB::CetNest2DBoardUtils::CetNest2DBoardUtils() {}
 ET::NEST2DMANAGERLIB::CetNest2DBoardUtils::~CetNest2DBoardUtils() {}
+bool ET::NEST2DMANAGERLIB::CetNest2DBoardUtils::FitsBin(double AWidth, double AHeight, const TetNestOptions &AOptions)
+{
+    if (AWidth <= 0.0 || AHeight <= 0.0) {
+        return false;
+    }
+    const double BinWidth = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth));
+    const double BinHeight = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinHeight));
+    if (BinWidth <= 0.0 || BinHeight <= 0.0) {
+        return false;
+    }
+    const bool FitsNormally = AWidth <= BinWidth && AHeight <= BinHeight;
+    const bool QuarterTurnAllowed = CetRotationUtils::IsAllowedRotation(CET_CLUSTER_HALF_PI, AOptions.Rotations, 1e-9);
+    const bool FitsAfterRotation = QuarterTurnAllowed && AHeight <= BinWidth && AWidth <= BinHeight;
+    return FitsNormally || FitsAfterRotation;
+}
 TetBoardBounds ET::NEST2DMANAGERLIB::CetNest2DBoardUtils::CalcBoardBoundsLocal(const TetNestBoard &ABoard)
 {
     TetBoardBounds B;

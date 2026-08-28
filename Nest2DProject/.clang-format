@@ -22,3 +22,8 @@ BraceWrapping:
   AfterUnion: true
   BeforeElse: false
   BeforeCatch: false
+IncludeCategories:
+  - Regex:           '^"(pch|stdafx)\.h"'
+    Priority:        -1
+  - Regex:           '.*'
+    Priority:        1
