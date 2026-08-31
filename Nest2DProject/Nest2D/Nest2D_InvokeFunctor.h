@@ -15,6 +15,10 @@
 #include "Nest2D_StrategyManager.h"
 #include "Nest2D_SvgUtils.h"
 #include "Nest2D_LocalCompactor.h"
+#include "Nest2D_QuarterTurnOptimizer.h"
+#include "Nest2D_RectangleGridOptimizer.h"
+#include "Nest2D_FreeSpaceEvaluator.h"
+#include "Nest2D_RotationUtils.h"
 #include "NestDataMapper.h"
 
 #include "Nest2D_CircleClusterBuilder.h"
@@ -54,6 +58,10 @@ namespace ET {
             CetCircleClusterBuilder *Nest2dClusterCircle = nullptr;
 
             CetLocalCompactor *Nest2dLocalCompactor = nullptr;
+            CetQuarterTurnOptimizer *Nest2dQuarterTurnOptimizer = nullptr;
+            CetRectangleGridOptimizer *Nest2dRectangleGridOptimizer = nullptr;
+            CetFreeSpaceEvaluator *Nest2dFreeSpaceEvaluator = nullptr;
+            CetRotationUtils *Nest2dRotationUtils = nullptr;
         protected:
             ET::CORE::CetCoreObject *m_Engine = nullptr;
             //  ET::CORE::CetCoreObject* m_SvgUtils = nullptr;

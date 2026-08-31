@@ -18,17 +18,7 @@ using namespace ClipperLib;
 using namespace libnest2d;
 namespace ET {
     namespace NEST2DMANAGERLIB {
-        thread_local bool CetPolygonBoardRepairer::_HadBoardFillChanges = false;
-        /*  struct TetPlacementCandidate
-          {
-              TetPlacementCandidate(): ItemIndex(0), TargetBin(-1), Translation(Point(0, 0)), Rotation(libnest2d::Radians(0.0)){
-              }
-
-              std::size_t ItemIndex;
-              int TargetBin;
-              Point Translation;
-              libnest2d::Radians Rotation;
-          };*/
+        thread_local bool CetPolygonBoardRepairer::_HadBoardFillChanges = false;  
         CetPolygonBoardRepairer::CetPolygonBoardRepairer() : CetCoreObject() {}
         CetPolygonBoardRepairer::~CetPolygonBoardRepairer() {}
         CetPolygonBoardRepairer::CetPolygonBoardRepairer(CetTNestItemVector &ANestItems, const TetNestOptions &AOptions, const CetPolygonImpl &ABinPoly, double ABoardBinWidth, double ABoardBinHeight) : CetCoreObject() { SetContext(ANestItems, AOptions, ABinPoly, ABoardBinWidth, ABoardBinHeight); }

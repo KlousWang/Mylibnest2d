@@ -11,13 +11,10 @@
 #include <map>
 #include <unordered_set>
 #include <utility>
-
 namespace ET {
     namespace NEST2DMANAGERLIB {
-
         CetRectangleFillClusterBuilder::CetRectangleFillClusterBuilder() : CetCoreObject() {}
         CetRectangleFillClusterBuilder::~CetRectangleFillClusterBuilder() {}
-
         bool CetRectangleFillClusterBuilder::BuildCandidateForBase(const CetTNestItemVector &AOriginalItems, const std::vector<TetShapeFeature> &AFeatures, const TetClusterCandidate &ABaseCandidate, const TetNestOptions &AOptions, const std::vector<bool> &AUsed, TetClusterCandidate &AOutCandidate)
         {
             AOutCandidate = TetClusterCandidate{};
@@ -27,7 +24,6 @@ namespace ET {
             if (!ABaseCandidate.Valid || ABaseCandidate.OriginalIndices.size() < 2 || ABaseCandidate.OriginalIndices.size() != ABaseCandidate.Transforms.size()) {
                 return false;
             }
-
             CetClusterGeometryHelper Geometry;
             TetClusterCandidate CurrentCandidate = ABaseCandidate;
             const double EnvelopeWidth = ABaseCandidate.ClusterWidth;
@@ -35,24 +31,19 @@ namespace ET {
             const double EnvelopeArea = EnvelopeWidth * EnvelopeHeight;
             const double BaseAreaTolerance = std::max(1.0, EnvelopeArea * 1e-9);
             const double BaseAvailableArea = std::max(0.0, EnvelopeArea - ABaseCandidate.ReservedArea);
-
             if (!std::isfinite(EnvelopeArea) || EnvelopeArea <= 0.0 || BaseAvailableArea <= BaseAreaTolerance) {
                 return false;
             }
             if (EnvelopeWidth <= 0.0 || EnvelopeHeight <= 0.0 || !Geometry.FinalizeCandidateInRectangle(AOriginalItems, AOptions, CurrentCandidate, EnvelopeWidth, EnvelopeHeight)) {
                 return false;
             }
-
             // 将繁杂的收集和排序提取出去
             TetRectangleFillContext FillCtx{AOriginalItems, AFeatures, AOptions, AUsed};
             std::vector<int> FillerIndices = _PrepareFillerIndices(FillCtx, CurrentCandidate, BaseAvailableArea);
-
             const std::size_t InitialChildCount = CurrentCandidate.OriginalIndices.size();
             std::unordered_set<std::uint64_t> FailedFillerShapes;
-
             const bool IsCircleOnlyBase = std::all_of(CurrentCandidate.OriginalIndices.begin(), CurrentCandidate.OriginalIndices.end(), [&](int AOriginalIndex) { return AOriginalIndex >= 0 && AOriginalIndex < static_cast<int>(AFeatures.size()) && AFeatures[AOriginalIndex].ShapeType == MetShapeType::CircleLike; });
             std::size_t MaxAcceptedFillerCount = IsCircleOnlyBase ? AOriginalItems.size() : (InitialChildCount >= 16 ? CET_RECTANGLE_FILL_LARGE_BASE_MAX_ACCEPTED_ITEMS : (InitialChildCount >= 8 ? CET_RECTANGLE_FILL_MEDIUM_BASE_MAX_ACCEPTED_ITEMS : CET_RECTANGLE_FILL_MAX_ACCEPTED_ITEMS_PER_BASE));
-
             for (int FillerIndex : FillerIndices) {
                 if (CurrentCandidate.OriginalIndices.size() - InitialChildCount >= MaxAcceptedFillerCount) {
                     break;
@@ -66,29 +57,24 @@ namespace ET {
                 if (FillerArea > AvailableArea + AreaTolerance) {
                     continue;
                 }
-
                 // 调用提取出的签名计算函数
                 const std::uint64_t FillerShapeSignature = _BuildFillerShapeSignature(AFeatures[FillerIndex], FillerIndex);
                 if (FailedFillerShapes.find(FillerShapeSignature) != FailedFillerShapes.end()) {
                     continue;
                 }
-
                 TetClusterCandidate Candidate;
                 const TetRectangleFillRequest Request{AOriginalItems, AFeatures, AOptions, ABaseCandidate, ABaseCandidate, CurrentCandidate, nullptr, FillerIndex, EnvelopeWidth, EnvelopeHeight};
                 if (!_TryAddFiller(Request, Candidate)) {
                     FailedFillerShapes.insert(FillerShapeSignature);
                     continue;
                 }
-
                 CurrentCandidate = std::move(Candidate);
                 FailedFillerShapes.clear();
                 std::cout << "[GAP_FILL][ACCEPT] OriginalId=" << FillerIndex << ", ChildCount=" << CurrentCandidate.OriginalIndices.size() << ", Width=" << CurrentCandidate.ClusterWidth << ", Height=" << CurrentCandidate.ClusterHeight << std::endl;
             }
-
             if (CurrentCandidate.OriginalIndices.size() == InitialChildCount) {
                 return false;
             }
-
             CurrentCandidate.BuilderName = "GapFillBuilder";
             CurrentCandidate.ClusterType = ABaseCandidate.ClusterType + "_GapFill";
             AOutCandidate = std::move(CurrentCandidate);
@@ -96,7 +82,13 @@ namespace ET {
         }
         bool CetRectangleFillClusterBuilder::_TryAddFiller(const TetRectangleFillRequest &ARequest, TetClusterCandidate &AOutCandidate)
         {
-            const auto &AOriginalItems = ARequest.OriginalItems; const auto &AFeatures = ARequest.Features; const auto &ACurrentCandidate = ARequest.CurrentCandidate; const int AFillerIndex = ARequest.FillerIndex; const auto &AOptions = ARequest.Options; const double AEnvelopeWidth = ARequest.EnvelopeWidth; const double AEnvelopeHeight = ARequest.EnvelopeHeight;
+            const auto &AOriginalItems = ARequest.OriginalItems;
+            const auto &AFeatures = ARequest.Features;
+            const auto &ACurrentCandidate = ARequest.CurrentCandidate;
+            const int AFillerIndex = ARequest.FillerIndex;
+            const auto &AOptions = ARequest.Options;
+            const double AEnvelopeWidth = ARequest.EnvelopeWidth;
+            const double AEnvelopeHeight = ARequest.EnvelopeHeight;
             AOutCandidate = TetClusterCandidate{};
             TetItemTransform FillerTransform;
             CetClusterGeometryHelper Geometry;
@@ -105,49 +97,50 @@ namespace ET {
             if (!Geometry.ExtractCandidateFreeRegions(AOriginalItems, AOptions, ACurrentCandidate, FreeRegions) || !_TryFindFillerTransform(FillRequest, FillerTransform)) {
                 return false;
             }
-
             TetClusterCandidate BestCandidate = ACurrentCandidate;
             BestCandidate.OriginalIndices.push_back(AFillerIndex);
             BestCandidate.Transforms.push_back(FillerTransform);
             if (!Geometry.FinalizeCandidateInRectangle(AOriginalItems, AOptions, BestCandidate, AEnvelopeWidth, AEnvelopeHeight)) {
                 return false;
             }
-
             BestCandidate.BuilderName = "GapFillBuilder";
             AOutCandidate = std::move(BestCandidate);
             return true;
         }
-
         bool CetRectangleFillClusterBuilder::TryAppendFiller(const TetRectangleFillRequest &ARequest, TetClusterCandidate &AOutCandidate)
         {
-            const auto &AOriginalItems = ARequest.OriginalItems; const auto &AOptions = ARequest.Options; const auto &ACurrentCandidate = ARequest.CurrentCandidate;
+            const auto &AOriginalItems = ARequest.OriginalItems;
+            const auto &AOptions = ARequest.Options;
+            const auto &ACurrentCandidate = ARequest.CurrentCandidate;
             CetClusterGeometryHelper Geometry;
             std::vector<TetClusterFreeRegion> FreeRegions;
             const TetRectangleFillRequest FillRequest{ARequest.OriginalItems, ARequest.Features, ARequest.Options, ARequest.BaseCandidate, ARequest.EnvelopeCandidate, ARequest.CurrentCandidate, &FreeRegions, ARequest.FillerIndex, ARequest.EnvelopeWidth, ARequest.EnvelopeHeight};
             return Geometry.ExtractCandidateFreeRegions(AOriginalItems, AOptions, ACurrentCandidate, FreeRegions) && TryAppendFillerInFreeRegions(FillRequest, AOutCandidate);
         }
-
         bool CetRectangleFillClusterBuilder::TryAppendFillerInFreeRegions(const TetRectangleFillRequest &ARequest, TetClusterCandidate &AOutCandidate)
         {
-            const auto &AOriginalItems = ARequest.OriginalItems; const auto &AFeatures = ARequest.Features; const auto &ABaseCandidate = ARequest.BaseCandidate; const auto &ACurrentCandidate = ARequest.CurrentCandidate; const auto &AFreeRegions = *ARequest.FreeRegions; const int AFillerIndex = ARequest.FillerIndex; const auto &AOptions = ARequest.Options;
+            const auto &AOriginalItems = ARequest.OriginalItems;
+            const auto &AFeatures = ARequest.Features;
+            const auto &ABaseCandidate = ARequest.BaseCandidate;
+            const auto &ACurrentCandidate = ARequest.CurrentCandidate;
+            const auto &AFreeRegions = *ARequest.FreeRegions;
+            const int AFillerIndex = ARequest.FillerIndex;
+            const auto &AOptions = ARequest.Options;
             AOutCandidate = TetClusterCandidate{};
             if (!ABaseCandidate.Valid || !ACurrentCandidate.Valid || ABaseCandidate.ProxyContour.size() < 3 || ABaseCandidate.ProxyArea <= 0.0 || AFreeRegions.empty()) {
                 return false;
             }
-
             TetItemTransform FillerTransform;
             const TetRectangleFillRequest FillRequest{AOriginalItems, AFeatures, AOptions, ABaseCandidate, ARequest.EnvelopeCandidate, ACurrentCandidate, &AFreeRegions, AFillerIndex, ABaseCandidate.ClusterWidth, ABaseCandidate.ClusterHeight};
             if (!_TryFindFillerTransform(FillRequest, FillerTransform)) {
                 return false;
             }
-
             CetClusterGeometryHelper Geometry;
             const CetPath FillerContour = Geometry.TransformContour(Geometry.GetIdentityContour(AOriginalItems[AFillerIndex]), FillerTransform.RelativeRotation, FillerTransform.RelativeX, FillerTransform.RelativeY);
             const double AreaTolerance = std::max(1.0, ABaseCandidate.ProxyArea * CET_CLUSTER_GEOMETRY_RELATIVE_AREA_TOLERANCE);
             if (!Geometry.IsContourFullyContained(FillerContour, ACurrentCandidate.ProxyContour, AreaTolerance)) {
                 return false;
             }
-
             TetClusterCandidate Candidate = ACurrentCandidate;
             Candidate.OriginalIndices.push_back(AFillerIndex);
             Candidate.Transforms.push_back(FillerTransform);
@@ -157,39 +150,40 @@ namespace ET {
             if (Candidate.ProxyArea > ABaseCandidate.ProxyArea * (1.0 + CET_CLUSTER_FILL_MAX_PROXY_GROWTH_RATIO)) {
                 return false;
             }
-
             Candidate.BuilderName = "TemplateFillSearch";
             Candidate.ClusterType = ABaseCandidate.ClusterType + "_Fill";
             AOutCandidate = std::move(Candidate);
             return true;
         }
-
         bool CetRectangleFillClusterBuilder::TryAppendFillerInRectangleEnvelope(const TetRectangleFillRequest &ARequest, TetClusterCandidate &AOutCandidate)
         {
-            const auto &AOriginalItems = ARequest.OriginalItems; const auto &AFeatures = ARequest.Features; const auto &ABaseCandidate = ARequest.BaseCandidate; const auto &AEnvelopeCandidate = ARequest.EnvelopeCandidate; const auto &ACurrentCandidate = ARequest.CurrentCandidate; const auto &AFreeRegions = *ARequest.FreeRegions; const int AFillerIndex = ARequest.FillerIndex; const auto &AOptions = ARequest.Options;
+            const auto &AOriginalItems = ARequest.OriginalItems;
+            const auto &AFeatures = ARequest.Features;
+            const auto &ABaseCandidate = ARequest.BaseCandidate;
+            const auto &AEnvelopeCandidate = ARequest.EnvelopeCandidate;
+            const auto &ACurrentCandidate = ARequest.CurrentCandidate;
+            const auto &AFreeRegions = *ARequest.FreeRegions;
+            const int AFillerIndex = ARequest.FillerIndex;
+            const auto &AOptions = ARequest.Options;
             AOutCandidate = TetClusterCandidate{};
             if (!ABaseCandidate.Valid || !AEnvelopeCandidate.Valid || !ACurrentCandidate.Valid || AEnvelopeCandidate.ProxyContour.size() < 4 || AEnvelopeCandidate.ClusterWidth <= 0.0 || AEnvelopeCandidate.ClusterHeight <= 0.0 || AFreeRegions.empty()) {
                 return false;
             }
             const double RequiredGap = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
-
             TetItemTransform FillerTransform;
             const TetRectangleFillRequest FillRequest{AOriginalItems, AFeatures, AOptions, ABaseCandidate, AEnvelopeCandidate, ACurrentCandidate, &AFreeRegions, AFillerIndex, AEnvelopeCandidate.ClusterWidth, AEnvelopeCandidate.ClusterHeight};
             if (!_TryFindFillerTransform(FillRequest, FillerTransform)) {
                 return false;
             }
-
             CetClusterGeometryHelper Geometry;
             const CetPath FillerContour = Geometry.TransformContour(Geometry.GetIdentityContour(AOriginalItems[AFillerIndex]), FillerTransform.RelativeRotation, FillerTransform.RelativeX, FillerTransform.RelativeY);
             const double AreaTolerance = std::max(1.0, AEnvelopeCandidate.ProxyArea * CET_CLUSTER_GEOMETRY_RELATIVE_AREA_TOLERANCE);
             if (!Geometry.IsContourFullyContained(FillerContour, AEnvelopeCandidate.ProxyContour, AreaTolerance)) {
                 return false;
             }
-
             TetClusterCandidate Candidate = ACurrentCandidate;
             Candidate.OriginalIndices.push_back(AFillerIndex);
             Candidate.Transforms.push_back(FillerTransform);
-
             // The probe already passed exact free-region containment and pairwise
             // spacing. Keep the fixed rectangle state lightweight during beam
             // search; the selected completion receives full union/offset and true
@@ -213,16 +207,19 @@ namespace ET {
             Candidate.Score += _CalculatePlacementScore({AOriginalItems, ACurrentCandidate, FillerContour, AFreeRegions, FillerMinX, FillerMinY, FillerMaxX, FillerMaxY, RequiredGap});
             Candidate.BoundingFillRatio = Candidate.FillRatio;
             Candidate.AreaSavingRatio = Candidate.BaselineArea > 0.0 ? 1.0 - Candidate.ProxyArea / Candidate.BaselineArea : 0.0;
-
             Candidate.BuilderName = "EnvelopeFillSearch";
             Candidate.ClusterType = ABaseCandidate.ClusterType + "_EnvelopeFill";
             AOutCandidate = std::move(Candidate);
             return true;
         }
-
         bool CetRectangleFillClusterBuilder::TryAppendFillerTemplateInRectangleEnvelope(const TetRectangleFillRequest &ARequest, const TetItemTransform &ATemplateTransform, TetClusterCandidate &AOutCandidate)
         {
-            const auto &AOriginalItems = ARequest.OriginalItems; const auto &AFeatures = ARequest.Features; const auto &ABaseCandidate = ARequest.BaseCandidate; const auto &AEnvelopeCandidate = ARequest.EnvelopeCandidate; const auto &ACurrentCandidate = ARequest.CurrentCandidate; const auto &AOptions = ARequest.Options;
+            const auto &AOriginalItems = ARequest.OriginalItems;
+            const auto &AFeatures = ARequest.Features;
+            const auto &ABaseCandidate = ARequest.BaseCandidate;
+            const auto &AEnvelopeCandidate = ARequest.EnvelopeCandidate;
+            const auto &ACurrentCandidate = ARequest.CurrentCandidate;
+            const auto &AOptions = ARequest.Options;
             AOutCandidate = TetClusterCandidate{};
             if (!ABaseCandidate.Valid || !AEnvelopeCandidate.Valid || !ACurrentCandidate.Valid || ATemplateTransform.OriginalId < 0 || ATemplateTransform.OriginalId >= static_cast<int>(AOriginalItems.size()) || _ContainsOriginalIndex(ACurrentCandidate, ATemplateTransform.OriginalId))
                 return false;
@@ -254,10 +251,16 @@ namespace ET {
             AOutCandidate = std::move(Candidate);
             return true;
         }
-
         bool CetRectangleFillClusterBuilder::_TryFindFillerTransform(const TetRectangleFillRequest &ARequest, TetItemTransform &AOutTransform) const
         {
-            const auto &AOriginalItems = ARequest.OriginalItems; const auto &AFeatures = ARequest.Features; const auto &ACurrentCandidate = ARequest.CurrentCandidate; const auto &AFreeRegions = *ARequest.FreeRegions; const int AFillerIndex = ARequest.FillerIndex; const auto &AOptions = ARequest.Options; const double AEnvelopeWidth = ARequest.EnvelopeWidth; const double AEnvelopeHeight = ARequest.EnvelopeHeight;
+            const auto &AOriginalItems = ARequest.OriginalItems;
+            const auto &AFeatures = ARequest.Features;
+            const auto &ACurrentCandidate = ARequest.CurrentCandidate;
+            const auto &AFreeRegions = *ARequest.FreeRegions;
+            const int AFillerIndex = ARequest.FillerIndex;
+            const auto &AOptions = ARequest.Options;
+            const double AEnvelopeWidth = ARequest.EnvelopeWidth;
+            const double AEnvelopeHeight = ARequest.EnvelopeHeight;
             if (AFillerIndex < 0 || AFillerIndex >= static_cast<int>(AOriginalItems.size()) || AFillerIndex >= static_cast<int>(AFeatures.size()) || _ContainsOriginalIndex(ACurrentCandidate, AFillerIndex))
                 return false;
             const std::vector<double> Rotations = CetRotationUtils::BuildAllowedRotations(AOptions.Rotations);
@@ -283,10 +286,16 @@ namespace ET {
             }
             return Found;
         }
-
         bool CetRectangleFillClusterBuilder::_TryFindRotationPlacement(const TetRectangleFillRequest &ARequest, double ARotation, TetItemTransform &AOutTransform, double &AOutScore) const
         {
-            const auto &AOriginalItems = ARequest.OriginalItems; const auto &AFeatures = ARequest.Features; const auto &ACurrentCandidate = ARequest.CurrentCandidate; const auto &AFreeRegions = *ARequest.FreeRegions; const int AFillerIndex = ARequest.FillerIndex; const auto &AOptions = ARequest.Options; const double AEnvelopeWidth = ARequest.EnvelopeWidth; const double AEnvelopeHeight = ARequest.EnvelopeHeight;
+            const auto &AOriginalItems = ARequest.OriginalItems;
+            const auto &AFeatures = ARequest.Features;
+            const auto &ACurrentCandidate = ARequest.CurrentCandidate;
+            const auto &AFreeRegions = *ARequest.FreeRegions;
+            const int AFillerIndex = ARequest.FillerIndex;
+            const auto &AOptions = ARequest.Options;
+            const double AEnvelopeWidth = ARequest.EnvelopeWidth;
+            const double AEnvelopeHeight = ARequest.EnvelopeHeight;
             CetClusterGeometryHelper Geometry;
             const CetPath Rotated = Geometry.TransformContour(Geometry.GetIdentityContour(AOriginalItems[AFillerIndex]), ARotation, 0.0, 0.0);
             double MinX = 0.0, MinY = 0.0, MaxX = 0.0, MaxY = 0.0;
@@ -337,10 +346,16 @@ namespace ET {
             }
             return Found;
         }
-
         bool CetRectangleFillClusterBuilder::_TryFindBoundaryRotationPlacement(const TetRectangleFillRequest &ARequest, double ARotation, TetItemTransform &AOutTransform, double &AOutScore) const
         {
-            const auto &AOriginalItems = ARequest.OriginalItems; const auto &AFeatures = ARequest.Features; const auto &ACurrentCandidate = ARequest.CurrentCandidate; const auto &AFreeRegions = *ARequest.FreeRegions; const int AFillerIndex = ARequest.FillerIndex; const auto &AOptions = ARequest.Options; const double AEnvelopeWidth = ARequest.EnvelopeWidth; const double AEnvelopeHeight = ARequest.EnvelopeHeight;
+            const auto &AOriginalItems = ARequest.OriginalItems;
+            const auto &AFeatures = ARequest.Features;
+            const auto &ACurrentCandidate = ARequest.CurrentCandidate;
+            const auto &AFreeRegions = *ARequest.FreeRegions;
+            const int AFillerIndex = ARequest.FillerIndex;
+            const auto &AOptions = ARequest.Options;
+            const double AEnvelopeWidth = ARequest.EnvelopeWidth;
+            const double AEnvelopeHeight = ARequest.EnvelopeHeight;
             if (AFreeRegions.empty())
                 return false;
             CetClusterGeometryHelper Geometry;
@@ -371,7 +386,6 @@ namespace ET {
             }
             return Found;
         }
-
         bool CetRectangleFillClusterBuilder::_IsContourInsideFreeRegions(const CetPath &AContour, const std::vector<TetClusterFreeRegion> &AFreeRegions) const
         {
             CetClusterGeometryHelper Geometry;
@@ -388,7 +402,6 @@ namespace ET {
             if (ACtx.MaxX < 0.0 || ACtx.MaxY < 0.0) {
                 return;
             }
-
             const bool HasCircleSkeleton = std::any_of(ACtx.Candidate.Transforms.begin(), ACtx.Candidate.Transforms.end(), [&](const TetItemTransform &Transform) { return Transform.OriginalId >= 0 && Transform.OriginalId < static_cast<int>(ACtx.Features.size()) && ACtx.Features[Transform.OriginalId].ShapeType == MetShapeType::CircleLike; });
             const bool HasEllipseSkeleton = std::any_of(ACtx.Candidate.Transforms.begin(), ACtx.Candidate.Transforms.end(), [&](const TetItemTransform &Transform) { return Transform.OriginalId >= 0 && Transform.OriginalId < static_cast<int>(ACtx.Features.size()) && ACtx.Features[Transform.OriginalId].ShapeType == MetShapeType::EllipseLike; });
             if (HasCircleSkeleton) {
@@ -397,15 +410,12 @@ namespace ET {
             if (HasEllipseSkeleton) {
                 _BuildEllipseProbePositions(ACtx, AOutPositions);
             }
-
             auto AddPosition = [&](double AX, double AY) { _AppendProbePosition(AOutPositions, AX, AY, ACtx.MaxX, ACtx.MaxY); };
-
             AddPosition(0.0, 0.0);
             AddPosition(ACtx.MaxX, 0.0);
             AddPosition(0.0, ACtx.MaxY);
             AddPosition(ACtx.MaxX, ACtx.MaxY);
             AddPosition(ACtx.MaxX * 0.5, ACtx.MaxY * 0.5);
-
             // Geometry-driven contact probes must precede the uniform grid. Large
             // orders intentionally truncate the probe list, and putting the grid
             // first starved left/right/bottom ellipse-corner positions.
@@ -413,7 +423,6 @@ namespace ET {
             if (NeedsChildContourProbes) {
                 _BuildChildContourProbePositions(ACtx, AOutPositions);
             }
-
             for (int Row = 0; Row < CET_RECTANGLE_FILL_GRID_PROBE_COUNT; ++Row) {
                 const double YRatio = static_cast<double>(Row) / static_cast<double>(CET_RECTANGLE_FILL_GRID_PROBE_COUNT - 1);
                 for (int Column = 0; Column < CET_RECTANGLE_FILL_GRID_PROBE_COUNT; ++Column) {
@@ -430,7 +439,6 @@ namespace ET {
             std::vector<TetCircleCenter> CircleCenters;
             CircleCenters.reserve(ACtx.Candidate.Transforms.size());
             CetClusterGeometryHelper Geometry;
-
             for (const TetItemTransform &Transform : ACtx.Candidate.Transforms) {
                 if (Transform.OriginalId < 0 || Transform.OriginalId >= static_cast<int>(ACtx.Features.size()) || ACtx.Features[Transform.OriginalId].ShapeType != MetShapeType::CircleLike) {
                     continue;
@@ -447,9 +455,7 @@ namespace ET {
                 }
                 CircleCenters.push_back({(MinX + ChildMaxX) * 0.5, (MinY + ChildMaxY) * 0.5, std::min(Width, Height) * 0.5});
             }
-
             _AppendFourCircleCenterProbes(ACtx, CircleCenters, AOutPositions);
-
             // Probe the midpoint as well as both sides of every pair.  The
             // midpoint is important for the triangular void between three
             // circles; the side probes cover exterior/corner voids.  Exact
@@ -457,7 +463,6 @@ namespace ET {
             const double FillerRadius = std::min(ACtx.FillerWidth, ACtx.FillerHeight) * 0.5;
             std::size_t PairProbeCount = 0;
             const std::size_t MaxPairProbes = std::max<std::size_t>(1, std::min(CET_CIRCLE_FILL_MAX_PAIR_PROBES, CET_RECTANGLE_FILL_MAX_PROBE_COUNT / 6));
-
             for (std::size_t First = 0; First < CircleCenters.size() && PairProbeCount < MaxPairProbes; ++First) {
                 for (std::size_t Second = First + 1; Second < CircleCenters.size() && PairProbeCount < MaxPairProbes; ++Second) {
                     const TetCircleCenter &A = CircleCenters[First];
@@ -466,7 +471,6 @@ namespace ET {
                     const double DeltaY = B.Y - A.Y;
                     const double CenterDistance = std::hypot(DeltaX, DeltaY);
                     const double RequiredDistance = std::max(A.Radius, B.Radius) + FillerRadius + ACtx.RequiredGap;
-
                     if (CenterDistance <= 1e-9 || CenterDistance * 0.5 > RequiredDistance) {
                         continue;
                     }
@@ -479,7 +483,6 @@ namespace ET {
                     const double PerpendicularY = DeltaX / CenterDistance;
                     const double MidX = (A.X + B.X) * 0.5;
                     const double MidY = (A.Y + B.Y) * 0.5;
-
                     for (double Scale : {0.0, 0.5, 1.0, 1.5, 2.0, 2.5}) {
                         const double SideOffset = Offset * Scale;
                         _AppendProbePosition(AOutPositions, MidX + PerpendicularX * SideOffset - ACtx.FillerWidth * 0.5, MidY + PerpendicularY * SideOffset - ACtx.FillerHeight * 0.5, ACtx.MaxX, ACtx.MaxY);
@@ -489,7 +492,6 @@ namespace ET {
                     ++PairProbeCount;
                 }
             }
-
             // A three-circle void has a different optimum from any pair
             // midpoint.  Its circumcenter is the only useful seed when the
             // spacing leaves a very narrow triangular pocket.
@@ -513,7 +515,6 @@ namespace ET {
                         ++TripleProbeCount;
                     }
         }
-
         void CetRectangleFillClusterBuilder::_AppendFourCircleCenterProbes(const TetProbeContext &ACtx, const std::vector<TetCircleCenter> &ACircleCenters, std::vector<std::pair<double, double>> &AOutPositions) const
         {
             if (ACircleCenters.size() != 4)
@@ -656,7 +657,6 @@ namespace ET {
                 AppendContour(Region.Contour);
             }
         }
-
         void CetRectangleFillClusterBuilder::_AppendFreeRegionContourProbes(const TetProbeContext &ACtx, const CetPath &AContour, std::vector<std::pair<double, double>> &AOutPositions) const
         {
             if (AContour.empty() || ACtx.RotatedFiller.empty())
@@ -676,14 +676,12 @@ namespace ET {
                 }
             }
         }
-
         void CetRectangleFillClusterBuilder::_AppendFreeRegionCenterProbes(const TetProbeContext &ACtx, const std::vector<TetClusterFreeRegion> &AFreeRegions, std::vector<std::pair<double, double>> &AOutPositions) const
         {
             for (const TetClusterFreeRegion &Region : AFreeRegions) {
                 _AppendProbePosition(AOutPositions, Region.MinX + (Region.Width - ACtx.FillerWidth) * 0.5, Region.MinY + (Region.Height - ACtx.FillerHeight) * 0.5, ACtx.MaxX, ACtx.MaxY);
             }
         }
-
         void CetRectangleFillClusterBuilder::_PrioritizeFreeRegionProbes(const TetProbeContext &ACtx, const std::vector<TetClusterFreeRegion> &AFreeRegions, bool AHasDenseEllipseSkeleton, std::vector<std::pair<double, double>> &AInOutPositions) const
         {
             if (AFreeRegions.empty())
@@ -696,7 +694,6 @@ namespace ET {
             FreeRegionPositions.insert(FreeRegionPositions.end(), AInOutPositions.begin(), AInOutPositions.end());
             AInOutPositions = std::move(FreeRegionPositions);
         }
-
         void CetRectangleFillClusterBuilder::_BuildDenseCircleFreeRegionProbePositions(const TetProbeContext &ACtx, const std::vector<TetClusterFreeRegion> &AFreeRegions, std::vector<std::pair<double, double>> &AOutPositions) const
         {
             AOutPositions.clear();
@@ -730,7 +727,6 @@ namespace ET {
         {
             std::vector<double> XEvents{0.0, ACtx.MaxX};
             std::vector<double> YEvents{0.0, ACtx.MaxY};
-
             auto AddAxisEvent = [](std::vector<double> &AEvents, double AValue, double AMaximum) {
                 if (!std::isfinite(AValue) || AValue < -CET_RECTANGLE_FILL_POSITION_TOLERANCE || AValue > AMaximum + CET_RECTANGLE_FILL_POSITION_TOLERANCE) {
                     return;
@@ -745,7 +741,6 @@ namespace ET {
                     AEvents.push_back(Quantized);
                 }
             };
-
             CetClusterGeometryHelper Geometry;
             for (const TetItemTransform &Transform : ACtx.Candidate.Transforms) {
                 if (Transform.OriginalId < 0 || Transform.OriginalId >= static_cast<int>(ACtx.OriginalItems.size())) {
@@ -756,18 +751,15 @@ namespace ET {
                 if (!Geometry.GetBounds(Child, MinX, MinY, ChildMaxX, ChildMaxY)) {
                     continue;
                 }
-
                 _AppendProbePosition(AOutPositions, ChildMaxX + ACtx.RequiredGap, MinY, ACtx.MaxX, ACtx.MaxY);
                 _AppendProbePosition(AOutPositions, MinX - ACtx.FillerWidth - ACtx.RequiredGap, MinY, ACtx.MaxX, ACtx.MaxY);
                 _AppendProbePosition(AOutPositions, MinX, ChildMaxY + ACtx.RequiredGap, ACtx.MaxX, ACtx.MaxY);
                 _AppendProbePosition(AOutPositions, MinX, MinY - ACtx.FillerHeight - ACtx.RequiredGap, ACtx.MaxX, ACtx.MaxY);
                 _AppendProbePosition(AOutPositions, ChildMaxX + ACtx.RequiredGap, ChildMaxY + ACtx.RequiredGap, ACtx.MaxX, ACtx.MaxY);
-
                 AddAxisEvent(XEvents, ChildMaxX + ACtx.RequiredGap, ACtx.MaxX);
                 AddAxisEvent(XEvents, MinX - ACtx.FillerWidth - ACtx.RequiredGap, ACtx.MaxX);
                 AddAxisEvent(YEvents, ChildMaxY + ACtx.RequiredGap, ACtx.MaxY);
                 AddAxisEvent(YEvents, MinY - ACtx.FillerHeight - ACtx.RequiredGap, ACtx.MaxY);
-
                 for (const ClipperLib::IntPoint &ChildVertex : Child) {
                     for (const ClipperLib::IntPoint &FillerVertex : ACtx.RotatedFiller) {
                         AddAxisEvent(XEvents, static_cast<double>(ChildVertex.X - FillerVertex.X) + ACtx.FillerMinX + ACtx.RequiredGap, ACtx.MaxX);
@@ -777,10 +769,8 @@ namespace ET {
                     }
                 }
             }
-
             std::sort(XEvents.begin(), XEvents.end());
             std::sort(YEvents.begin(), YEvents.end());
-
             for (double Y : YEvents) {
                 for (double X : XEvents) {
                     _AppendProbePosition(AOutPositions, X, Y, ACtx.MaxX, ACtx.MaxY);
@@ -792,7 +782,15 @@ namespace ET {
         }
         double CetRectangleFillClusterBuilder::_CalculatePlacementScore(const TetPlacementScoreRequest &ARequest) const
         {
-            const auto &AOriginalItems = ARequest.OriginalItems; const auto &ACandidate = ARequest.Candidate; const auto &AFillerContour = ARequest.FillerContour; const auto &AFreeRegions = ARequest.FreeRegions; const double AFillerLeft = ARequest.FillerLeft; const double AFillerTop = ARequest.FillerTop; const double AFillerRight = ARequest.FillerRight; const double AFillerBottom = ARequest.FillerBottom; const double ARequiredGap = ARequest.RequiredGap;
+            const auto &AOriginalItems = ARequest.OriginalItems;
+            const auto &ACandidate = ARequest.Candidate;
+            const auto &AFillerContour = ARequest.FillerContour;
+            const auto &AFreeRegions = ARequest.FreeRegions;
+            const double AFillerLeft = ARequest.FillerLeft;
+            const double AFillerTop = ARequest.FillerTop;
+            const double AFillerRight = ARequest.FillerRight;
+            const double AFillerBottom = ARequest.FillerBottom;
+            const double ARequiredGap = ARequest.RequiredGap;
             const double ContactTolerance = ARequiredGap + CET_RECTANGLE_FILL_POSITION_TOLERANCE;
             // Prefer extending the current row from left to right.  The old
             // equal X/Y weight could select an upper-right probe, which
@@ -841,7 +839,6 @@ namespace ET {
                     // same-row continuation when both placements fit.
                     Score += 2.0;
                 }
-
                 if (!VerticalOverlap) {
                     NearestVerticalGap = std::min(NearestVerticalGap, VerticalGap);
                 }
@@ -855,7 +852,6 @@ namespace ET {
                 Score += 20.0;
             return Score;
         }
-
         double CetRectangleFillClusterBuilder::_CalculateFreeRegionBoundaryContactScore(const CetPath &AFillerContour, const std::vector<TetClusterFreeRegion> &AFreeRegions, double ARequiredGap) const
         {
             if (AFillerContour.empty() || AFreeRegions.empty())
@@ -890,7 +886,6 @@ namespace ET {
             }
             return static_cast<double>(ContactCount) * 0.1;
         }
-
         void CetRectangleFillClusterBuilder::_AppendProbePosition(std::vector<std::pair<double, double>> &APositions, double AX, double AY, double AMaxX, double AMaxY) const
         {
             if (APositions.size() >= CET_RECTANGLE_FILL_MAX_PROBE_COUNT) {
@@ -899,7 +894,6 @@ namespace ET {
             if (!std::isfinite(AX) || !std::isfinite(AY) || AX < -CET_RECTANGLE_FILL_POSITION_TOLERANCE || AY < -CET_RECTANGLE_FILL_POSITION_TOLERANCE || AX > AMaxX + CET_RECTANGLE_FILL_POSITION_TOLERANCE || AY > AMaxY + CET_RECTANGLE_FILL_POSITION_TOLERANCE) {
                 return;
             }
-
             const double QuantizedX = std::clamp(AX, 0.0, AMaxX);
             const double QuantizedY = std::clamp(AY, 0.0, AMaxY);
             for (const auto &Existing : APositions) {
@@ -909,13 +903,11 @@ namespace ET {
             }
             APositions.emplace_back(QuantizedX, QuantizedY);
         }
-
         std::vector<int> CetRectangleFillClusterBuilder::_PrepareFillerIndices(const TetRectangleFillContext &ACtx, const TetClusterCandidate &ACandidate, double ABaseAvailableArea) const
         {
             const double BaseAreaTolerance = std::max(1.0, ACandidate.ClusterWidth * ACandidate.ClusterHeight * 1e-9);
             std::vector<int> FillerIndices;
             FillerIndices.reserve(ACtx.OriginalItems.size());
-
             for (int Index = 0; Index < static_cast<int>(ACtx.OriginalItems.size()); ++Index) {
                 if (ACtx.Used[Index] || _ContainsOriginalIndex(ACandidate, Index)) {
                     continue;
@@ -928,7 +920,6 @@ namespace ET {
                 }
                 FillerIndices.push_back(Index);
             }
-
             std::stable_sort(FillerIndices.begin(), FillerIndices.end(), [&](int AFirstIndex, int ASecondIndex) {
                 const double FirstArea = _GetFeatureArea(ACtx.OriginalItems[AFirstIndex], ACtx.Features[AFirstIndex]);
                 const double SecondArea = _GetFeatureArea(ACtx.OriginalItems[ASecondIndex], ACtx.Features[ASecondIndex]);
@@ -937,7 +928,6 @@ namespace ET {
                 }
                 return AFirstIndex < ASecondIndex;
             });
-
             if (FillerIndices.size() > CET_RECTANGLE_FILL_MAX_CANDIDATE_ITEMS) {
                 constexpr std::size_t SmallCandidateCount = 16;
                 const std::size_t LargeCandidateCount = CET_RECTANGLE_FILL_MAX_CANDIDATE_ITEMS - SmallCandidateCount;
@@ -949,7 +939,6 @@ namespace ET {
             }
             return FillerIndices;
         }
-
         std::uint64_t CetRectangleFillClusterBuilder::_BuildFillerShapeSignature(const TetShapeFeature &AFeature, int AIndex) const
         {
             std::uint64_t Hash = 1469598103934665603ULL;
@@ -957,7 +946,6 @@ namespace ET {
                 Hash ^= AValue;
                 Hash *= 1099511628211ULL;
             };
-
             Mix(static_cast<std::uint64_t>(AFeature.ShapeType));
             Mix(static_cast<std::uint64_t>(AFeature.NormalizedContour.size()));
             for (const ClipperLib::IntPoint &Point : AFeature.NormalizedContour) {
@@ -969,9 +957,7 @@ namespace ET {
             }
             return Hash;
         }
-
         bool CetRectangleFillClusterBuilder::_ContainsOriginalIndex(const TetClusterCandidate &ACandidate, int AOriginalIndex) const { return std::find(ACandidate.OriginalIndices.begin(), ACandidate.OriginalIndices.end(), AOriginalIndex) != ACandidate.OriginalIndices.end(); }
-
         double CetRectangleFillClusterBuilder::_GetFeatureArea(const CetNestItem &AItem, const TetShapeFeature &AFeature) const
         {
             const double FeatureArea = std::abs(AFeature.Area);
@@ -980,6 +966,5 @@ namespace ET {
             }
             return std::abs(static_cast<double>(AItem.area()));
         }
-
     } // namespace NEST2DMANAGERLIB
 } // namespace ET

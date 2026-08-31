@@ -123,6 +123,13 @@
     <ClInclude Include="Nest2D_LocalCompactor.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="Nest2D_QuarterTurnOptimizer.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Nest2D_RectangleGridOptimizer.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Nest2D_FreeSpaceEvaluator.h"><Filter>Header Files</Filter></ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
@@ -218,6 +225,13 @@
     <ClCompile Include="Nest2D_LocalCompactor.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="Nest2D_QuarterTurnOptimizer.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Nest2D_RectangleGridOptimizer.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Nest2D_FreeSpaceEvaluator.cpp"><Filter>Source Files</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="cpp.hint" />

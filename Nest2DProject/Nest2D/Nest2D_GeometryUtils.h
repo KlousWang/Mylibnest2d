@@ -1,6 +1,7 @@
 #pragma once
 #include "EtTechCore_Object.h"
 #include "Nest2D_DataType.h"
+#include "Nest2D_PrivateDataType.h"
 #include <iostream>
 
 namespace ET {
@@ -21,7 +22,10 @@ namespace ET {
 				_WrapFunc("IsPointInsideBoard", Type_Class_Func(IsPointInsideBoard));
 				_WrapFunc("ValidateItemsInsideBoard", Type_Class_Func(ValidateItemsInsideBoard));
 				_WrapFunc("CalcPolygonBoundingBoxArea", Type_Class_Func(CalcPolygonBoundingBoxArea));
-				_WrapFunc("ComparePolygonAreaDesc", Type_Class_Func(ComparePolygonAreaDesc));
+			_WrapFunc("ComparePolygonAreaDesc", Type_Class_Func(ComparePolygonAreaDesc));
+				_WrapFunc("AccumulateFreeRegions", Type_Class_Func(AccumulateFreeRegions));
+				_WrapFunc("GetMinimumPassableWidth", Type_Class_Func(GetMinimumPassableWidth));
+				_WrapFunc("BuildInsetBoardContours", Type_Class_Func(BuildInsetBoardContours));
 			}
 
 		public:
@@ -36,6 +40,9 @@ namespace ET {
 
 			double CalcPolygonBoundingBoxArea(const TetNestPolygon& APoly);
 			bool ComparePolygonAreaDesc(const TetNestPolygon&ADataa, const TetNestPolygon& ADAtab);
+			void AccumulateFreeRegions(const ClipperLib::PolyNode&, std::size_t&, double&, double&);
+			double GetMinimumPassableWidth(const CetTNestItemVector&, const TetNestOptions&);
+			bool BuildInsetBoardContours(const ClipperLib::Paths&, libnest2d::Coord, ClipperLib::Paths&);
 		};
 	}
 

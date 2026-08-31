@@ -21,7 +21,10 @@ namespace ET {
 				_WrapFunc("CalcBoardBoundsLocal", Type_Class_Func(CalcBoardBoundsLocal));
 				_WrapFunc("BuildPathFromPoints", Type_Class_Func(BuildPathFromPoints));
 				_WrapFunc("BuildBinPolygonFromOptions", Type_Class_Func(BuildBinPolygonFromOptions));
-				_WrapFunc("BuildRectangleBinPolygon", Type_Class_Func(BuildRectangleBinPolygon));
+                _WrapFunc("BuildRectangleBinPolygon", Type_Class_Func(BuildRectangleBinPolygon));
+                _WrapFunc("BuildBoardPath", Type_Class_Func(BuildBoardPath));
+                _WrapFunc("BuildBoardSubjectContours", Type_Class_Func(BuildBoardSubjectContours));
+                _WrapFunc("BuildPlacedReservedContours", Type_Class_Func(BuildPlacedReservedContours));
 			}
 
 		public:
@@ -35,7 +38,10 @@ namespace ET {
 			TetBoardBounds CalcBoardBoundsLocal(const TetNestBoard& ABoard);
 			CetPath BuildPathFromPoints(const std::vector<TetNestPoint>& APoints, double AOffsetX, double AOffsetY, bool AWantOuter);
             CetPolygonImpl BuildBinPolygonFromOptions(const TetNestOptions& AOptions, double& AOutBinWidth, double& AOutBinHeight);
-			CetPolygonImpl BuildRectangleBinPolygon(double ABinWidth, double ABinHeight);
+            CetPolygonImpl BuildRectangleBinPolygon(double ABinWidth, double ABinHeight);
+            bool BuildBoardPath(const std::vector<TetNestPoint>& AVertices, bool AOuter, CetPath& AOutPath);
+            bool BuildBoardSubjectContours(const TetNestOptions& AOptions, ClipperLib::Paths& AOutContours);
+            bool BuildPlacedReservedContours(const CetTNestItemVector& AItems, int ABinId, double ASpacing, ClipperLib::Paths& AOutContours, libnest2d::Coord AExtraInflation = 0);
         };
     }
 }

@@ -1,29 +1,23 @@
 ﻿#include "pch.h"
 #include "Nest2DAPI.h"
+#include "Nest2D_AreaUsageCalculator.h"
 #include "Nest2D_DataConst.h"
+#include "Nest2D_SelfFunction.h"
 #include "NestDataMapper.h"
 #include "NestUtils.h"
-#include "Nest2D_AreaUsageCalculator.h"
-#include "Nest2D_SelfFunction.h"
 #include <algorithm>
 #include <limits>
 #include <stdexcept>
-
 using namespace ClipperLib;
 using namespace libnest2d;
-
 namespace ET {
     namespace NEST2DMANAGERLIB {
-
         // using TNestItemVector = std::vector<libnest2d::Item>;
-
         static CetTNestItemVector *AsNestItems(TetLib2DItemDataType *AData) { return AData != nullptr ? &AData->NestItems : nullptr; }
-
         static const CetTNestItemVector *AsNestItems(const TetLib2DItemDataType *AData) { return AData != nullptr ? &AData->NestItems : nullptr; }
         CetNest2DManager::CetNest2DManager() : CetCoreObject()
         {
             _Lib2DItemDataType = new TetLib2DItemDataType();
-
             std::cout << "CetNest2DManager Constructor" << std::endl;
         }
         CetNest2DManager::~CetNest2DManager()
@@ -35,12 +29,10 @@ namespace ET {
         {
             std::map<int, int> Remap;
             int NextBin = 0;
-
             for (auto &Item : AItems) {
                 if (Item.Out_bin < 0) {
                     continue;
                 }
-
                 auto It = Remap.find(Item.Out_bin);
                 if (It == Remap.end()) {
                     Remap[Item.Out_bin] = NextBin;
@@ -50,10 +42,8 @@ namespace ET {
                     Item.Out_bin = It->second;
                 }
             }
-
             return static_cast<std::size_t>(NextBin);
         }
-
         static void BuildSortedItems(const std::vector<TetNestPolygon> &AItems, std::vector<TetNestPolygon> &AOutItems, std::vector<std::size_t> &AOutOriginalIndices)
         {
             std::vector<std::pair<std::size_t, TetNestPolygon>> SortedPairs;
@@ -61,13 +51,11 @@ namespace ET {
             for (std::size_t ItemIndex = 0; ItemIndex < AItems.size(); ++ItemIndex) {
                 SortedPairs.push_back({ItemIndex, AItems[ItemIndex]});
             }
-
             std::stable_sort(SortedPairs.begin(), SortedPairs.end(), [](const auto &ALeft, const auto &ARight) {
                 const bool LeftBeforeRight = Nest2DUtils->Nest2DGeometryUtils->ComparePolygonAreaDesc(ALeft.second, ARight.second);
                 const bool RightBeforeLeft = Nest2DUtils->Nest2DGeometryUtils->ComparePolygonAreaDesc(ARight.second, ALeft.second);
                 return LeftBeforeRight != RightBeforeLeft ? LeftBeforeRight : ALeft.first < ARight.first;
             });
-
             AOutItems.clear();
             AOutOriginalIndices.clear();
             AOutItems.reserve(SortedPairs.size());
@@ -77,7 +65,6 @@ namespace ET {
                 AOutItems.push_back(Entry.second);
             }
         }
-
         static void ApplySortedResults(const std::vector<TetNestPolygon> &ASortedItems, const std::vector<std::size_t> &ASortedToOriginal, std::vector<TetNestPolygon> &AItems)
         {
             const std::size_t ResultCount = std::min(ASortedItems.size(), ASortedToOriginal.size());
@@ -92,17 +79,14 @@ namespace ET {
                 AItems[OriginalIndex].Out_angle = ASortedItems[SortedIndex].Out_angle;
             }
         }
-
         int CetNest2DManager::PerformNestingEx(std::vector<TetNestPolygon> &AItems, const TetNestOptions &AOptions, TetNestResult *AResult)
         {
-
             if (AResult) {
                 AResult->Code = 0;
                 AResult->UsedBins = 0;
                 AResult->BoardUsages.clear();
                 AResult->Message.clear();
             }
-
             if (AItems.empty())
                 return NEST2D_ERR_CORE_EMPTY_INPUT;
             if (AOptions.BinHeight <= 0 || AOptions.BinWidth <= 0)
@@ -118,10 +102,8 @@ namespace ET {
             std::vector<TetNestPolygon> SortedItems;
             std::vector<std::size_t> SortedToOriginal;
             BuildSortedItems(AItems, SortedItems, SortedToOriginal);
-
             Nest2DUtils->NestDataMapperIns->BuildNestItems(SortedItems, NestItems);
             std::cout << "[DEBUG] SortedItems.size = " << SortedItems.size() << ", NestItems.size = " << NestItems.size() << std::endl;
-
             if (NestItems.size() != SortedItems.size()) {
                 if (AResult) {
                     AResult->Code = NEST2D_ERR_CORE_NESTING_FAILED;
@@ -134,11 +116,9 @@ namespace ET {
             std::size_t UsedBins = 0;
             // int NestCode = Nest2DUtils->Nest2DEngineIns->RunNesting_Impl(NestItems, AOptions, &UsedBins);
             int NestCode = Nest2DUtils->PerformNestingEx(NestItems, AOptions, &UsedBins);
-
             // int NestCode = Nest2DUtils->RunNestingFunctor(NestItems, AOptions, &UsedBins);
             if (NestCode != Nest2D_Success)
                 return NestCode;
-
             Nest2DUtils->NestDataMapperIns->ApplyResults(NestItems, SortedItems);
             ApplySortedResults(SortedItems, SortedToOriginal, AItems);
             for (const auto &Item : AItems) {
@@ -177,13 +157,10 @@ namespace ET {
             CetAreaUsageCalculator *UsageCalculator = Nest2DUtils->Nest2DAreaUsage != nullptr ? Nest2DUtils->Nest2DAreaUsage : &LocalUsageCalculator;
             // Nest2DUtils->Nest2DAreaUsage->CalculateBoardUsages(AItems, AOptions, static_cast<int>(UsedBins));
             std::vector<TetBoardUsageResult> BoardUsages = UsageCalculator->CalculateBoardUsages(AItems, AOptions, static_cast<int>(UsedBins));
-
             if (AOptions.ExportSvg) {
-
                 // CetExportPhoto::ExportSvg(AItems, AOptions, static_cast<int>(layers)); // 调用我们之前拆出来的函数
                 Nest2DUtils->Nest2DExportPhoto->ExportSvg(AItems, AOptions, static_cast<int>(UsedBins));
             }
-
             if (AResult) {
                 AResult->UsedBins = UsedBins;
                 AResult->BoardUsages = BoardUsages;
@@ -191,7 +168,6 @@ namespace ET {
             }
             return 0;
         }
-
         void CetNest2DManager::SortItemsByAreaDesc(std::vector<TetNestPolygon> &AItems)
         {
             Nest2DUtils->Nest2DSortIns->Sort(AItems);
@@ -199,6 +175,5 @@ namespace ET {
                 return Nest2DUtils->ComparePolygonAreaDesc(ADataa, ADatab);
                 });*/
         }
-
     } // namespace NEST2DMANAGERLIB
 } // namespace ET

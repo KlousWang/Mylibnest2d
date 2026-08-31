@@ -14,8 +14,6 @@ using namespace ClipperLib;
 using namespace libnest2d;
 namespace ET {
     namespace NEST2DMANAGERLIB {
-        namespace {
-        }
         CetTriangleClusterBuilder::CetTriangleClusterBuilder() : CetCoreObject() {}
         CetTriangleClusterBuilder::~CetTriangleClusterBuilder() {}
         bool CetTriangleClusterBuilder::TryMakeRightTrianglePair(const CetTNestItemVector &AOriginalItems, int AAIndex, int ABIndex, const TetNestOptions &AOptions, TetClusterBuildResult &AResult)
@@ -314,7 +312,6 @@ namespace ET {
             AOutCandidate = std::move(BestCandidate);
             return true;
         }
-
         bool CetTriangleClusterBuilder::_BuildRightTriangleRectangleClusterCandidate(const CetTNestItemVector &AOriginalItems, const std::vector<TetShapeFeature> &AFeatures, const std::vector<int> &AIndices, const TetNestOptions &AOptions, TetClusterCandidate &AOutCandidate)
         {
             AOutCandidate = TetClusterCandidate{};
@@ -414,7 +411,17 @@ namespace ET {
         }
         bool CetTriangleClusterBuilder::_BuildRightTriangleRectangleLayoutCandidate(const TetRightTriangleRectangleLayoutRequest &ARequest, TetClusterCandidate &AOutCandidate)
         {
-            const auto &AOriginalItems = ARequest.OriginalItems; const auto &AFeatures = ARequest.Features; const auto &AIndices = ARequest.Indices; const auto &AOptions = ARequest.Options; const int ACellRows = ARequest.CellRows; const int ACellCols = ARequest.CellColumns; const double ACellWidth = ARequest.CellWidth; const double ACellHeight = ARequest.CellHeight; const double AAxisGap = ARequest.AxisGap; const double ACellGap = ARequest.CellGap; const double AHalfTurn = ARequest.HalfTurn;
+            const auto &AOriginalItems = ARequest.OriginalItems;
+            const auto &AFeatures = ARequest.Features;
+            const auto &AIndices = ARequest.Indices;
+            const auto &AOptions = ARequest.Options;
+            const int ACellRows = ARequest.CellRows;
+            const int ACellCols = ARequest.CellColumns;
+            const double ACellWidth = ARequest.CellWidth;
+            const double ACellHeight = ARequest.CellHeight;
+            const double AAxisGap = ARequest.AxisGap;
+            const double ACellGap = ARequest.CellGap;
+            const double AHalfTurn = ARequest.HalfTurn;
             (void)AFeatures;
             AOutCandidate = TetClusterCandidate{};
             if (ACellRows <= 0 || ACellCols <= 0 || ACellWidth <= 0.0 || ACellHeight <= 0.0 || AIndices.size() < 2 || (AIndices.size() % 2) != 0) {
@@ -833,7 +840,6 @@ namespace ET {
             AOutGeometry.LengthMatchRatio = std::min(EdgeA.Length, EdgeB.Length) / std::max(EdgeA.Length, EdgeB.Length);
             return true;
         }
-
         bool CetTriangleClusterBuilder::_BuildTriangleEdgePairCandidateAtOffset(const TriangleEdgePairRequest &ARequest, const TriangleEdgePairGeometry &AGeometry, const TetBaseOffset &ABaseOffset, TetClusterCandidate &AOutCandidate)
         {
             const double BThirdBaseX = static_cast<double>(AGeometry.RotatedBThird.X) + ABaseOffset.X;
@@ -855,7 +861,6 @@ namespace ET {
             if (AGeometry.ASide * BSide >= 0.0) {
                 return false;
             }
-
             AOutCandidate.BuilderName = "TriangleBuilder";
             AOutCandidate.ClusterType = "AnyTriangleEdgePair";
             AOutCandidate.OriginalIndices = {ARequest.AIndex, ARequest.BIndex};
@@ -871,7 +876,6 @@ namespace ET {
             TransformB.RelativeRotation = AGeometry.RotationB;
             AOutCandidate.Transforms = {TransformA, TransformB};
             AOutCandidate.Confidence = 0.90;
-
             CetClusterGeometryHelper Geometry;
             if (!Geometry.FinalizeCandidate(ARequest.OriginalItems, ARequest.Options, AOutCandidate)) {
                 return false;
@@ -879,14 +883,12 @@ namespace ET {
             AOutCandidate.Score += AGeometry.LengthMatchRatio * 50.0;
             return true;
         }
-
         bool CetTriangleClusterBuilder::_TryBuildTriangleEdgePairCandidate(const TriangleEdgePairRequest &ARequest)
         {
             TriangleEdgePairGeometry Geometry;
             if (!_PrepareTriangleEdgePair(ARequest, Geometry)) {
                 return false;
             }
-
             const TetBaseOffset BaseOffset{Geometry.AMidX - Geometry.BMidX, Geometry.AMidY - Geometry.BMidY};
             bool HasBest = false;
             TetClusterCandidate BestCandidate;

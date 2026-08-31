@@ -46,6 +46,10 @@ namespace ET {
             Nest2dClusterTri = (decltype(Nest2dClusterTri))m_LibConfig->GetLocalCoreObjIns("l_TriangleClusterBuilder");
             Nest2dClusterCircle = (decltype(Nest2dClusterCircle))m_LibConfig->GetLocalCoreObjIns("l_CircleClusterBuilder");
             Nest2dLocalCompactor = (decltype(Nest2dLocalCompactor))m_LibConfig->GetLocalCoreObjIns("l_LocalCompactor");
+            Nest2dQuarterTurnOptimizer = (decltype(Nest2dQuarterTurnOptimizer))m_LibConfig->GetLocalCoreObjIns("l_QuarterTurnOptimizer");
+            Nest2dRectangleGridOptimizer = (decltype(Nest2dRectangleGridOptimizer))m_LibConfig->GetLocalCoreObjIns("l_RectangleGridOptimizer");
+            Nest2dFreeSpaceEvaluator = (decltype(Nest2dFreeSpaceEvaluator))m_LibConfig->GetLocalCoreObjIns("l_FreeSpaceEvaluator");
+            Nest2dRotationUtils = (decltype(Nest2dRotationUtils))m_LibConfig->GetLocalCoreObjIns("l_RotationUtils");
             PerformNestingEx.Reload(m_Engine, "RunNesting");
             /* CetNest2DInvokeFunctor::MakeBoardSvgPath.Reload(m_SvgUtils, "MakeBoardSvgPath");
              CetNest2DInvokeFunctor::InsertTextBeforeSvgEnd.Reload(m_SvgUtils, "InsertTextBeforeSvgEnd");*/

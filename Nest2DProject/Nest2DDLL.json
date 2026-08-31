@@ -19,7 +19,11 @@
 	"Nest2D_ClusterInvokeFunctor,Nest2D_ClusterInvokeFunctor",
 	"Nest2D_CircleClusterBuilder,Nest2D_CircleClusterBuilder",
 	"Nest2D_RectangleFillClusterBuilder,Nest2D_RectangleFillClusterBuilder",
-	"Nest2D_LocalCompactor,Nest2D_LocalCompactor"
+	"Nest2D_LocalCompactor,Nest2D_LocalCompactor",
+	"Nest2D_QuarterTurnOptimizer,Nest2D_QuarterTurnOptimizer",
+	"Nest2D_RectangleGridOptimizer,Nest2D_RectangleGridOptimizer"
+	,"Nest2D_FreeSpaceEvaluator,Nest2D_FreeSpaceEvaluator"
+	,"Nest2D_RotationUtils,Nest2D_RotationUtils"
 	],
   "ComponentClassType": [],
   "LocalObjIns_LocalType": [ 
@@ -37,7 +41,11 @@
 	"l_ShapeAnalyzer,Nest2D_ShapeAnalyzer",
 	"l_TriangleClusterBuilder,Nest2D_TriangleClusterBuilder",
 	"l_CircleClusterBuilder,Nest2D_CircleClusterBuilder",
-	"l_LocalCompactor,Nest2D_LocalCompactor"
+	"l_LocalCompactor,Nest2D_LocalCompactor",
+	"l_QuarterTurnOptimizer,Nest2D_QuarterTurnOptimizer",
+	"l_RectangleGridOptimizer,Nest2D_RectangleGridOptimizer"
+	,"l_FreeSpaceEvaluator,Nest2D_FreeSpaceEvaluator"
+	,"l_RotationUtils,Nest2D_RotationUtils"
   ],
   "GlobalObjIns_LocalIns": [
 	],

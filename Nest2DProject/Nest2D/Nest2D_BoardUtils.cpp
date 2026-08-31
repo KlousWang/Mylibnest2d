@@ -2,6 +2,7 @@
 #include "Nest2D_BoardUtils.h"
 #include "Nest2D_RotationUtils.h"
 #include "NestUtils.h"
+#include <cmath>
 
 // using namespace libnest2d;
 ET::NEST2DMANAGERLIB::CetNest2DBoardUtils::CetNest2DBoardUtils() {}
@@ -107,3 +108,9 @@ CetPolygonImpl ET::NEST2DMANAGERLIB::CetNest2DBoardUtils::BuildRectangleBinPolyg
     ClipperLib::Paths Holes;
     return CetPolygonImpl(std::move(Contour), std::move(Holes));
 }
+bool ET::NEST2DMANAGERLIB::CetNest2DBoardUtils::BuildBoardPath(const std::vector<TetNestPoint>& V, bool Outer, CetPath& Out)
+{ Out.clear(); for (const auto& P:V) Out.push_back({NestUtils::ToNestCoord(P.X),NestUtils::ToNestCoord(P.Y)}); ClipperLib::CleanPolygon(Out,1.0); if(Out.size()<3||std::abs(ClipperLib::Area(Out))<=0.0)return false; if(ClipperLib::Orientation(Out)!=Outer)std::reverse(Out.begin(),Out.end()); return true; }
+bool ET::NEST2DMANAGERLIB::CetNest2DBoardUtils::BuildBoardSubjectContours(const TetNestOptions& O, ClipperLib::Paths& Out)
+{ Out.clear(); if(O.Board.Enabled&&O.Board.Vertices.size()>=3){CetPath P;if(!BuildBoardPath(O.Board.Vertices,true,P))return false;Out.push_back(std::move(P));for(const auto& H:O.Board.Holes){CetPath Q;if(!BuildBoardPath(H,false,Q))return false;Out.push_back(std::move(Q));}return true;} if(O.BinWidth<=0.0||O.BinHeight<=0.0)return false;std::vector<TetNestPoint> R{{0,0},{O.BinWidth,0},{O.BinWidth,O.BinHeight},{0,O.BinHeight}};CetPath P;if(!BuildBoardPath(R,true,P))return false;Out.push_back(std::move(P));return true; }
+bool ET::NEST2DMANAGERLIB::CetNest2DBoardUtils::BuildPlacedReservedContours(const CetTNestItemVector& Items,int Bin,double Spacing,ClipperLib::Paths& Out,libnest2d::Coord Extra)
+{ Out.clear();const auto Half=static_cast<libnest2d::Coord>(std::ceil(static_cast<double>(NestUtils::ToNestCoord(std::max(0.0,Spacing)))*0.5));for(const auto& Source:Items){if(Source.binId()!=Bin)continue;CetNestItem Item=Source;Item.inflation(Half+std::max<libnest2d::Coord>(0,Extra));CetPolygonImpl Shape=Item.transformedShape();ClipperLib::CleanPolygon(Shape.Contour,1.0);if(Shape.Contour.size()<3||std::abs(ClipperLib::Area(Shape.Contour))<=0.0)return false;if(!ClipperLib::Orientation(Shape.Contour))std::reverse(Shape.Contour.begin(),Shape.Contour.end());Out.push_back(std::move(Shape.Contour));for(CetPath Hole:Shape.Holes){ClipperLib::CleanPolygon(Hole,1.0);if(Hole.size()<3||std::abs(ClipperLib::Area(Hole))<=0.0)return false;if(ClipperLib::Orientation(Hole))std::reverse(Hole.begin(),Hole.end());Out.push_back(std::move(Hole));}}return true; }

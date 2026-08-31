@@ -3,22 +3,18 @@
 #include "Nest2D_PrivateDataType.h"
 #include "Nest2D_RotationUtils.h"
 #include "NestUtils.h"
-
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <limits>
 #include <numeric>
-
 using namespace libnest2d;
-
 namespace {
     bool AreMetricValuesDifferent(double AFirst, double ASecond)
     {
         const double Scale = std::max({1.0, std::abs(AFirst), std::abs(ASecond)});
         return std::abs(AFirst - ASecond) > Scale * 1e-9;
     }
-
     bool IsMoreBalancedBoardUsage(const std::vector<double> &AAreas, const std::vector<double> &BAreas)
     {
         if (AAreas.empty() || BAreas.empty())
@@ -35,7 +31,6 @@ namespace {
         }
         return false;
     }
-
     void AddBinArea(TetTNestEvalResult &AResult, int ABinId, double AArea)
     {
         if (ABinId < 0 || !std::isfinite(AArea) || AArea <= 0.0)
@@ -45,14 +40,12 @@ namespace {
             AResult.BinAreas.resize(BinIndex + 1, 0.0);
         AResult.BinAreas[BinIndex] += AArea;
     }
-
     TetAreaDensityMetric BuildAreaDensityMetric(const CetNestItem &AItem, const TetNestOptions &AOptions)
     {
         TetAreaDensityMetric Result;
         Result.Area = std::abs(static_cast<double>(AItem.area()));
         if (Result.Area <= 0.0)
             return Result;
-
         const double Spacing = std::max(0.0, static_cast<double>(NestUtils::ToNestCoord(AOptions.Spacing)));
         double BestEnvelopeArea = std::numeric_limits<double>::infinity();
         for (const Radians Rotation : ET::NEST2DMANAGERLIB::CetRotationUtils::BuildAllowedLibRotations(AOptions.Rotations)) {
@@ -72,7 +65,6 @@ namespace {
         Result.AreaBand = static_cast<int>(std::floor(std::log2(std::max(1.0, Result.Area))));
         return Result;
     }
-
     bool IsPriorityBefore(const CetTNestItemVector &AItems, MetENestOrderStrategy AStrategy, const std::vector<int> &AAnchorRanks, const std::vector<TetAreaDensityMetric> *AAreaDensityMetrics, std::size_t A, std::size_t AB)
     {
         const bool AIsAnchor = AAnchorRanks[A] >= 0;
@@ -94,7 +86,6 @@ namespace {
                 return MetricA.Area > MetricB.Area;
             return A < AB;
         }
-
         const auto Width = [&](std::size_t Index) { return static_cast<double>(AItems[Index].boundingBox().width()); };
         const auto Height = [&](std::size_t Index) { return static_cast<double>(AItems[Index].boundingBox().height()); };
         const double AreaA = std::abs(static_cast<double>(AItems[A].area()));
@@ -114,11 +105,8 @@ namespace {
         return A < AB;
     }
 } // namespace
-
 ET::NEST2DMANAGERLIB::CetStrategyManager::CetStrategyManager() : CetCoreObject() {}
-
 ET::NEST2DMANAGERLIB::CetStrategyManager::~CetStrategyManager() {}
-
 TetTNestEvalResult ET::NEST2DMANAGERLIB::CetStrategyManager::EvaluateNestResult(const CetTNestItemVector &AItems, std::size_t ALayers)
 {
     TetTNestEvalResult Result{};
@@ -135,28 +123,23 @@ TetTNestEvalResult ET::NEST2DMANAGERLIB::CetStrategyManager::EvaluateNestResult(
     }
     return Result;
 }
-
 bool ET::NEST2DMANAGERLIB::CetStrategyManager::IsBetterNestResult(const TetTNestEvalResult &A, const TetTNestEvalResult &AB)
 {
     if (A.Layers != AB.Layers) {
         return A.Layers < AB.Layers;
     }
-
     if (IsMoreBalancedBoardUsage(A.BinAreas, AB.BinAreas)) {
         return true;
     }
     if (IsMoreBalancedBoardUsage(AB.BinAreas, A.BinAreas)) {
         return false;
     }
-
     if (AreMetricValuesDifferent(A.FirstBinArea, AB.FirstBinArea)) {
         return A.FirstBinArea > AB.FirstBinArea;
     }
-
     if (A.FirstBinCount != AB.FirstBinCount) {
         return A.FirstBinCount > AB.FirstBinCount;
     }
-
     if (A.HasInternalGapMetric && AB.HasInternalGapMetric) {
         if (AreMetricValuesDifferent(A.InternalGapArea, AB.InternalGapArea)) {
             return A.InternalGapArea < AB.InternalGapArea;
@@ -165,7 +148,6 @@ bool ET::NEST2DMANAGERLIB::CetStrategyManager::IsBetterNestResult(const TetTNest
             return A.InternalGapCount < AB.InternalGapCount;
         }
     }
-
     if (A.HasBoardFreeRegionMetric && AB.HasBoardFreeRegionMetric) {
         if (AreMetricValuesDifferent(A.FragmentedFreeArea, AB.FragmentedFreeArea))
             return A.FragmentedFreeArea < AB.FragmentedFreeArea;
@@ -174,7 +156,6 @@ bool ET::NEST2DMANAGERLIB::CetStrategyManager::IsBetterNestResult(const TetTNest
         if (A.BoardFreeRegionCount != AB.BoardFreeRegionCount)
             return A.BoardFreeRegionCount < AB.BoardFreeRegionCount;
     }
-
     if (A.HasPassableFreeRegionMetric && AB.HasPassableFreeRegionMetric) {
         if (AreMetricValuesDifferent(A.FragmentedPassableFreeArea, AB.FragmentedPassableFreeArea))
             return A.FragmentedPassableFreeArea < AB.FragmentedPassableFreeArea;
@@ -183,7 +164,6 @@ bool ET::NEST2DMANAGERLIB::CetStrategyManager::IsBetterNestResult(const TetTNest
         if (A.PassableFreeRegionCount != AB.PassableFreeRegionCount)
             return A.PassableFreeRegionCount < AB.PassableFreeRegionCount;
     }
-
     if (A.HasRemnantMetrics && AB.HasRemnantMetrics) {
         if (AreMetricValuesDifferent(A.ReusableRemnantArea, AB.ReusableRemnantArea)) {
             return A.ReusableRemnantArea > AB.ReusableRemnantArea;
@@ -198,10 +178,8 @@ bool ET::NEST2DMANAGERLIB::CetStrategyManager::IsBetterNestResult(const TetTNest
             return A.UsedDepth < AB.UsedDepth;
         }
     }
-
     return false;
 }
-
 void ET::NEST2DMANAGERLIB::CetStrategyManager::ApplyNestPriorityStrategy(CetTNestItemVector &AItems, const TetNestOptions &AOptions, MetENestOrderStrategy AStrategy)
 {
     std::vector<std::size_t> Indices;
@@ -231,20 +209,16 @@ void ET::NEST2DMANAGERLIB::CetStrategyManager::ApplyNestPriorityStrategy(CetTNes
             AreaDensityMetrics.push_back(BuildAreaDensityMetric(Item, AOptions));
         }
     }
-
     std::stable_sort(Indices.begin(), Indices.end(), [&](std::size_t A, std::size_t AB) {
         const auto *Metrics = AreaDensityMetrics.empty() ? nullptr : &AreaDensityMetrics;
         return IsPriorityBefore(AItems, AStrategy, AnchorRanks, Metrics, A, AB);
     });
-
     int Priority = static_cast<int>(AItems.size());
-
     for (std::size_t Index : Indices) {
         AItems[Index].priority(Priority--);
     }
     std::cout << "[NEST][ORDER] Strategy=" << static_cast<int>(AStrategy) << ", AnchorCount=" << AnchorCount << ", PackedCount=" << AItems.size() << std::endl;
 }
-
 void ET::NEST2DMANAGERLIB::CetStrategyManager::PrintBinCount(const CetTNestItemVector &AItems)
 {
     std::map<int, int> BinCount;
@@ -255,7 +229,6 @@ void ET::NEST2DMANAGERLIB::CetStrategyManager::PrintBinCount(const CetTNestItemV
         std::cout << "[NEST] binId = " << Pair.first << ", count = " << Pair.second << std::endl;
     }
 }
-
 TetTNestEvalResult ET::NEST2DMANAGERLIB::CetStrategyManager::EvaluatePackedResultWithMeta(const CetTNestItemVector &AItems, const std::vector<TetMetaItem> &AMetaItems, const CetTNestItemVector &AOriginalItems, const TetNestOptions &AOptions, std::size_t ALayers)
 {
     TetTNestEvalResult Result{};
@@ -264,52 +237,41 @@ TetTNestEvalResult ET::NEST2DMANAGERLIB::CetStrategyManager::EvaluatePackedResul
         std::cout << "[NEST][EVAL][ERROR] PackedItems size != MetaItems size. PackedItems = " << AItems.size() << ", MetaItems = " << AMetaItems.size() << std::endl;
         return Result;
     }
-
     int LastBinId = -1;
     for (const CetNestItem &PackedItem : AItems) {
         LastBinId = std::max(LastBinId, PackedItem.binId());
     }
     Result.BinAreas.resize(std::max(ALayers, LastBinId < 0 ? std::size_t{0} : static_cast<std::size_t>(LastBinId + 1)), 0.0);
-
     // 1. 提取包围盒并统计基础面积数据
     std::vector<TetRemnantPartBounds> LastBinBounds = _ExtractLastBinBounds(AItems, AMetaItems, AOriginalItems, LastBinId, Result);
-
     // 2. 计算天际线与余料评估指标
     _CalculateRemnantMetrics(LastBinBounds, AOptions, Result);
-
     std::cout << "[NEST][EVAL][RETURN] Count=" << Result.FirstBinCount << ", Area=" << Result.FirstBinArea << ", LeastUsedArea=" << (Result.BinAreas.empty() ? 0.0 : *std::min_element(Result.BinAreas.begin(), Result.BinAreas.end())) << ", Layers=" << Result.Layers << ", InternalGapArea=" << Result.InternalGapArea << ", InternalGapCount=" << Result.InternalGapCount << ", LastBinCount=" << Result.LastBinCount << ", RemnantArea=" << Result.ReusableRemnantArea << ", RemnantShortSide=" << Result.ReusableRemnantShortSide << ", SkylineWaste=" << Result.SkylineWasteArea << ", UsedDepth=" << Result.UsedDepth << ", RemnantDirection=" << (Result.RemnantIsTopStrip ? "Top" : "Right") << std::endl;
-
     return Result;
 }
-
 std::vector<TetRemnantPartBounds> ET::NEST2DMANAGERLIB::CetStrategyManager::_ExtractLastBinBounds(const CetTNestItemVector &AItems, const std::vector<TetMetaItem> &AMetaItems, const CetTNestItemVector &AOriginalItems, int ALastBinId, TetTNestEvalResult &AOutResult) const
 {
     std::vector<TetRemnantPartBounds> LastBinBounds;
     LastBinBounds.reserve(AOriginalItems.size());
-
     for (std::size_t PackedIndex = 0; PackedIndex < AItems.size(); ++PackedIndex) {
         const auto &PackedItem = AItems[PackedIndex];
         const auto &Meta = AMetaItems[PackedIndex];
         int PackedBinId = PackedItem.binId();
-
         if (PackedBinId < 0) {
             continue;
         }
-
         const auto PackedTranslation = PackedItem.translation();
         const double PackedX = static_cast<double>(PackedTranslation.X);
         const double PackedY = static_cast<double>(PackedTranslation.Y);
         const double PackedRotation = PackedItem.rotation();
         const double CosRotation = std::cos(PackedRotation);
         const double SinRotation = std::sin(PackedRotation);
-
         for (const auto &Transform : Meta.TransformData) {
             int OriginalId = Transform.OriginalId;
             if (OriginalId < 0 || OriginalId >= static_cast<int>(AOriginalItems.size())) {
                 std::cout << "[NEST][EVAL][WARN] Invalid OriginalId = " << OriginalId << ", OriginalItems.size = " << AOriginalItems.size() << std::endl;
                 continue;
             }
-
             double OriginalArea = std::abs(static_cast<double>(AOriginalItems[OriginalId].area()));
             if (PackedBinId == 0) {
                 AOutResult.FirstBinCount++;
@@ -319,26 +281,21 @@ std::vector<TetRemnantPartBounds> ET::NEST2DMANAGERLIB::CetStrategyManager::_Ext
             if (PackedBinId != ALastBinId) {
                 continue;
             }
-
             AOutResult.LastBinCount++;
             AOutResult.LastBinArea += OriginalArea;
-
             const double RotatedLocalX = Transform.RelativeX * CosRotation - Transform.RelativeY * SinRotation;
             const double RotatedLocalY = Transform.RelativeX * SinRotation + Transform.RelativeY * CosRotation;
-
             CetNestItem ExpandedItem = AOriginalItems[OriginalId];
             ExpandedItem.binId(PackedBinId);
             ExpandedItem.translation(ClipperLib::IntPoint(static_cast<ClipperLib::cInt>(std::llround(PackedX + RotatedLocalX)), static_cast<ClipperLib::cInt>(std::llround(PackedY + RotatedLocalY))));
             ExpandedItem.rotation(PackedRotation + Transform.RelativeRotation);
             ExpandedItem.inflation(0);
-
             const auto Bounds = ExpandedItem.boundingBox();
             TetRemnantPartBounds PartBounds;
             PartBounds.MinX = static_cast<double>(getX(Bounds.minCorner()));
             PartBounds.MinY = static_cast<double>(getY(Bounds.minCorner()));
             PartBounds.MaxX = static_cast<double>(getX(Bounds.maxCorner()));
             PartBounds.MaxY = static_cast<double>(getY(Bounds.maxCorner()));
-
             if (PartBounds.MaxX > PartBounds.MinX && PartBounds.MaxY > PartBounds.MinY) {
                 LastBinBounds.push_back(PartBounds);
             }
@@ -351,16 +308,13 @@ void ET::NEST2DMANAGERLIB::CetStrategyManager::_CalculateRemnantMetrics(const st
     const bool UseRectangleBoard = !AOptions.Board.Enabled || AOptions.Board.Vertices.size() < 3;
     const double BinWidth = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinWidth));
     const double BinHeight = static_cast<double>(NestUtils::ToNestCoord(AOptions.BinHeight));
-
     if (!UseRectangleBoard || BinWidth <= 0.0 || BinHeight <= 0.0 || ALastBinBounds.empty()) {
         return;
     }
-
     std::array<double, CET_REMNANT_SKYLINE_SAMPLES> HorizontalSkyline{};
     std::array<double, CET_REMNANT_SKYLINE_SAMPLES> VerticalSkyline{};
     double UsedMaxX = 0.0;
     double UsedMaxY = 0.0;
-
     for (const TetRemnantPartBounds &Bounds : ALastBinBounds) {
         const double MinX = std::clamp(Bounds.MinX, 0.0, BinWidth);
         const double MaxX = std::clamp(Bounds.MaxX, 0.0, BinWidth);
@@ -368,44 +322,36 @@ void ET::NEST2DMANAGERLIB::CetStrategyManager::_CalculateRemnantMetrics(const st
         const double MaxY = std::clamp(Bounds.MaxY, 0.0, BinHeight);
         UsedMaxX = std::max(UsedMaxX, MaxX);
         UsedMaxY = std::max(UsedMaxY, MaxY);
-
         const std::size_t StartX = std::min(CET_REMNANT_SKYLINE_SAMPLES - 1, static_cast<std::size_t>(std::floor(MinX / BinWidth * CET_REMNANT_SKYLINE_SAMPLES)));
         const std::size_t EndX = std::min(CET_REMNANT_SKYLINE_SAMPLES, static_cast<std::size_t>(std::ceil(MaxX / BinWidth * CET_REMNANT_SKYLINE_SAMPLES)));
         for (std::size_t Sample = StartX; Sample < EndX; ++Sample) {
             HorizontalSkyline[Sample] = std::max(HorizontalSkyline[Sample], MaxY);
         }
-
         const std::size_t StartY = std::min(CET_REMNANT_SKYLINE_SAMPLES - 1, static_cast<std::size_t>(std::floor(MinY / BinHeight * CET_REMNANT_SKYLINE_SAMPLES)));
         const std::size_t EndY = std::min(CET_REMNANT_SKYLINE_SAMPLES, static_cast<std::size_t>(std::ceil(MaxY / BinHeight * CET_REMNANT_SKYLINE_SAMPLES)));
         for (std::size_t Sample = StartY; Sample < EndY; ++Sample) {
             VerticalSkyline[Sample] = std::max(VerticalSkyline[Sample], MaxX);
         }
     }
-
     const double HorizontalStep = BinWidth / static_cast<double>(CET_REMNANT_SKYLINE_SAMPLES);
     const double VerticalStep = BinHeight / static_cast<double>(CET_REMNANT_SKYLINE_SAMPLES);
     const std::size_t UsedHorizontalSamples = std::min(CET_REMNANT_SKYLINE_SAMPLES, static_cast<std::size_t>(std::ceil(UsedMaxX / BinWidth * CET_REMNANT_SKYLINE_SAMPLES)));
     const std::size_t UsedVerticalSamples = std::min(CET_REMNANT_SKYLINE_SAMPLES, static_cast<std::size_t>(std::ceil(UsedMaxY / BinHeight * CET_REMNANT_SKYLINE_SAMPLES)));
-
     double TopSkylineWaste = 0.0;
     for (std::size_t Sample = 0; Sample < UsedHorizontalSamples; ++Sample) {
         TopSkylineWaste += std::max(0.0, UsedMaxY - HorizontalSkyline[Sample]) * HorizontalStep;
     }
-
     double RightSkylineWaste = 0.0;
     for (std::size_t Sample = 0; Sample < UsedVerticalSamples; ++Sample) {
         RightSkylineWaste += std::max(0.0, UsedMaxX - VerticalSkyline[Sample]) * VerticalStep;
     }
-
     const double TopFreeDepth = std::max(0.0, BinHeight - UsedMaxY);
     const double RightFreeDepth = std::max(0.0, BinWidth - UsedMaxX);
     const double TopRemnantArea = BinWidth * TopFreeDepth;
     const double RightRemnantArea = BinHeight * RightFreeDepth;
     const double TopShortSide = std::min(BinWidth, TopFreeDepth);
     const double RightShortSide = std::min(BinHeight, RightFreeDepth);
-
     const bool PreferTop = AreMetricValuesDifferent(TopRemnantArea, RightRemnantArea) ? TopRemnantArea > RightRemnantArea : (AreMetricValuesDifferent(TopShortSide, RightShortSide) ? TopShortSide > RightShortSide : TopSkylineWaste <= RightSkylineWaste);
-
     AOutResult.HasRemnantMetrics = true;
     AOutResult.RemnantIsTopStrip = PreferTop;
     AOutResult.ReusableRemnantArea = PreferTop ? TopRemnantArea : RightRemnantArea;

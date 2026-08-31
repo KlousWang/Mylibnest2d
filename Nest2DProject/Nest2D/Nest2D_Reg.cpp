@@ -19,6 +19,10 @@
 #include"Nest2D_CircleClusterBuilder.h"
 #include"Nest2D_RectangleFillClusterBuilder.h"
 #include"Nest2D_LocalCompactor.h"
+#include"Nest2D_QuarterTurnOptimizer.h"
+#include"Nest2D_RectangleGridOptimizer.h"
+#include"Nest2D_FreeSpaceEvaluator.h"
+#include"Nest2D_RotationUtils.h"
 namespace ET {
 	namespace NEST2DMANAGERLIB {
 		using namespace ET::CORE;
@@ -47,5 +51,9 @@ namespace ET {
 		//Reg_EtCore_Obj_Str(File_Load, CetFile)
 
          Reg_EtCore_Obj_Str(Nest2D_LocalCompactor, CetLocalCompactor)
+		 Reg_EtCore_Obj_Str(Nest2D_QuarterTurnOptimizer, CetQuarterTurnOptimizer)
+		 Reg_EtCore_Obj_Str(Nest2D_RectangleGridOptimizer, CetRectangleGridOptimizer)
+		 Reg_EtCore_Obj_Str(Nest2D_FreeSpaceEvaluator, CetFreeSpaceEvaluator)
+		 Reg_EtCore_Obj_Str(Nest2D_RotationUtils, CetRotationUtils)
 	}
 }

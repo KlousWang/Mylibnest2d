@@ -1,6 +1,9 @@
 #include "pch.h"
 #include "Nest2D_GeometryUtils.h"
 #include "Nest2D_PrivateDataType.h"
+#include "Nest2D_RotationUtils.h"
+#include "NestUtils.h"
+#include <limits>
 
 namespace {
     double CalcContourArea(const std::vector<TetNestPoint> &APoints)
@@ -127,3 +130,6 @@ bool ET::NEST2DMANAGERLIB::CetGeometryUtils::ComparePolygonAreaDesc(const TetNes
         return AreaA > AreaB;
     return BoundingBoxAreaA > BoundingBoxAreaB;
 }
+void ET::NEST2DMANAGERLIB::CetGeometryUtils::AccumulateFreeRegions(const ClipperLib::PolyNode& N,std::size_t& Count,double& Total,double& Largest){if(!N.IsHole()&&N.Contour.size()>=3){double A=std::abs(ClipperLib::Area(N.Contour));if(A>0.0){++Count;Total+=A;Largest=std::max(Largest,A);}}for(const auto* C:N.Childs)if(C)AccumulateFreeRegions(*C,Count,Total,Largest);}
+double ET::NEST2DMANAGERLIB::CetGeometryUtils::GetMinimumPassableWidth(const CetTNestItemVector& Items,const TetNestOptions& O){double M=std::numeric_limits<double>::infinity();for(const auto Rot:CetRotationUtils::BuildAllowedLibRotations(O.Rotations))for(const auto& S:Items){CetNestItem I=S;I.translation(libnest2d::Point(0,0));I.inflation(0);I.rotation(Rot);auto B=I.boundingBox();double W=std::min(std::abs((double)B.width()),std::abs((double)B.height()));if(W>1.0&&std::isfinite(W))M=std::min(M,W);}return std::isfinite(M)?M:0.0;}
+bool ET::NEST2DMANAGERLIB::CetGeometryUtils::BuildInsetBoardContours(const ClipperLib::Paths& Board,libnest2d::Coord Inset,ClipperLib::Paths& Out){Out=Board;if(Inset<=0)return !Out.empty();ClipperLib::ClipperOffset O(2.0,std::max(1.0,(double)Inset*0.02));O.AddPaths(Board,ClipperLib::jtRound,ClipperLib::etClosedPolygon);O.Execute(Out,-(double)Inset);ClipperLib::CleanPolygons(Out,1.0);return !Out.empty();}

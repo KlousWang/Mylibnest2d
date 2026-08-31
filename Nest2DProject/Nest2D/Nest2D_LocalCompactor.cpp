@@ -52,76 +52,19 @@ namespace ET {
         }
         bool CetLocalCompactor::_BuildBoardPath(const std::vector<TetNestPoint> &AVertices, bool AOuter, CetPath &AOutPath)
         {
-            AOutPath.clear();
-            for (const TetNestPoint &Point : AVertices)
-                AOutPath.push_back({NestUtils::ToNestCoord(Point.X), NestUtils::ToNestCoord(Point.Y)});
-            ClipperLib::CleanPolygon(AOutPath, 1.0);
-            if (AOutPath.size() < 3 || std::abs(ClipperLib::Area(AOutPath)) <= 0.0)
-                return false;
-            if (ClipperLib::Orientation(AOutPath) != AOuter)
-                std::reverse(AOutPath.begin(), AOutPath.end());
-            return true;
+            return Nest2DUtils->Nest2DBord->BuildBoardPath(AVertices, AOuter, AOutPath);
         }
         bool CetLocalCompactor::_BuildBoardSubjectContours(const TetNestOptions &AOptions, ClipperLib::Paths &AOutContours)
         {
-            AOutContours.clear();
-            if (AOptions.Board.Enabled && AOptions.Board.Vertices.size() >= 3) {
-                CetPath Outer;
-                if (!_BuildBoardPath(AOptions.Board.Vertices, true, Outer))
-                    return false;
-                AOutContours.push_back(std::move(Outer));
-                for (const auto &HoleVertices : AOptions.Board.Holes) {
-                    CetPath Hole;
-                    if (!_BuildBoardPath(HoleVertices, false, Hole))
-                        return false;
-                    AOutContours.push_back(std::move(Hole));
-                }
-                return true;
-            }
-            const double Width = AOptions.BinWidth;
-            const double Height = AOptions.BinHeight;
-            if (Width <= 0.0 || Height <= 0.0)
-                return false;
-            std::vector<TetNestPoint> Rectangle{{0.0, 0.0}, {Width, 0.0}, {Width, Height}, {0.0, Height}};
-            CetPath Outer;
-            if (!_BuildBoardPath(Rectangle, true, Outer))
-                return false;
-            AOutContours.push_back(std::move(Outer));
-            return true;
+            return Nest2DUtils->Nest2DBord->BuildBoardSubjectContours(AOptions, AOutContours);
         }
         bool CetLocalCompactor::_BuildPlacedReservedContours(const CetTNestItemVector &AItems, int ABinId, double ASpacing, ClipperLib::Paths &AOutContours, libnest2d::Coord AExtraInflation)
         {
-            AOutContours.clear();
-            const auto HalfSpacing = static_cast<libnest2d::Coord>(std::ceil(static_cast<double>(NestUtils::ToNestCoord(std::max(0.0, ASpacing))) * 0.5));
-            for (const CetNestItem &SourceItem : AItems) {
-                if (SourceItem.binId() != ABinId)
-                    continue;
-                CetNestItem Item = SourceItem;
-                Item.inflation(HalfSpacing + std::max<libnest2d::Coord>(0, AExtraInflation));
-                CetPolygonImpl Shape = Item.transformedShape();
-                ClipperLib::CleanPolygon(Shape.Contour, 1.0);
-                if (Shape.Contour.size() < 3 || std::abs(ClipperLib::Area(Shape.Contour)) <= 0.0)
-                    return false;
-                if (!ClipperLib::Orientation(Shape.Contour))
-                    std::reverse(Shape.Contour.begin(), Shape.Contour.end());
-                AOutContours.push_back(std::move(Shape.Contour));
-                for (CetPath Hole : Shape.Holes) {
-                    ClipperLib::CleanPolygon(Hole, 1.0);
-                    if (Hole.size() < 3 || std::abs(ClipperLib::Area(Hole)) <= 0.0)
-                        return false;
-                    if (ClipperLib::Orientation(Hole))
-                        std::reverse(Hole.begin(), Hole.end());
-                    AOutContours.push_back(std::move(Hole));
-                }
-            }
-            return true;
+            return Nest2DUtils->Nest2DBord->BuildPlacedReservedContours(AItems, ABinId, ASpacing, AOutContours, AExtraInflation);
         }
         double CetLocalCompactor::_LocalCompactAngleDistance(double ALeft, double ARight)
         {
-            const double Left = CetRotationUtils::NormalizeAngle(ALeft);
-            const double Right = CetRotationUtils::NormalizeAngle(ARight);
-            const double Delta = std::abs(Left - Right);
-            return std::min(Delta, CET_CLUSTER_TWO_PI - Delta);
+            return Nest2DUtils->Nest2dRotationUtils->AngleDistance(ALeft, ARight);
         }
         bool CetLocalCompactor::_LocalCompactGetBounds(const CetNestItem &AItem, double &AOutMinX, double &AOutMinY, double &AOutMaxX, double &AOutMaxY)
         {
