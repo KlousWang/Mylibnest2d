@@ -130,6 +130,10 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="Nest2D_FreeSpaceEvaluator.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="Nest2D_AutoPairClusterBuilder.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="Nest2D_ClusterTemplateFillOptimizer.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="Nest2D_CircleGapFiller.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="Nest2D_EllipseGapFiller.h"><Filter>Header Files</Filter></ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
@@ -232,6 +236,10 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Nest2D_FreeSpaceEvaluator.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="Nest2D_AutoPairClusterBuilder.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="Nest2D_ClusterTemplateFillOptimizer.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="Nest2D_CircleGapFiller.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="Nest2D_EllipseGapFiller.cpp"><Filter>Source Files</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="cpp.hint" />

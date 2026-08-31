@@ -50,6 +50,10 @@ namespace ET {
             Nest2dRectangleGridOptimizer = (decltype(Nest2dRectangleGridOptimizer))m_LibConfig->GetLocalCoreObjIns("l_RectangleGridOptimizer");
             Nest2dFreeSpaceEvaluator = (decltype(Nest2dFreeSpaceEvaluator))m_LibConfig->GetLocalCoreObjIns("l_FreeSpaceEvaluator");
             Nest2dRotationUtils = (decltype(Nest2dRotationUtils))m_LibConfig->GetLocalCoreObjIns("l_RotationUtils");
+            Nest2dAutoPairClusterBuilder = (decltype(Nest2dAutoPairClusterBuilder))m_LibConfig->GetLocalCoreObjIns("l_AutoPairClusterBuilder");
+            Nest2dClusterTemplateFillOptimizer = (decltype(Nest2dClusterTemplateFillOptimizer))m_LibConfig->GetLocalCoreObjIns("l_ClusterTemplateFillOptimizer");
+            Nest2dCircleGapFiller = (decltype(Nest2dCircleGapFiller))m_LibConfig->GetLocalCoreObjIns("l_CircleGapFiller");
+            Nest2dEllipseGapFiller = (decltype(Nest2dEllipseGapFiller))m_LibConfig->GetLocalCoreObjIns("l_EllipseGapFiller");
             PerformNestingEx.Reload(m_Engine, "RunNesting");
             /* CetNest2DInvokeFunctor::MakeBoardSvgPath.Reload(m_SvgUtils, "MakeBoardSvgPath");
              CetNest2DInvokeFunctor::InsertTextBeforeSvgEnd.Reload(m_SvgUtils, "InsertTextBeforeSvgEnd");*/

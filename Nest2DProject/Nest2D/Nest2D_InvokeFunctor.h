@@ -19,6 +19,10 @@
 #include "Nest2D_RectangleGridOptimizer.h"
 #include "Nest2D_FreeSpaceEvaluator.h"
 #include "Nest2D_RotationUtils.h"
+#include "Nest2D_AutoPairClusterBuilder.h"
+#include "Nest2D_ClusterTemplateFillOptimizer.h"
+#include "Nest2D_CircleGapFiller.h"
+#include "Nest2D_EllipseGapFiller.h"
 #include "NestDataMapper.h"
 
 #include "Nest2D_CircleClusterBuilder.h"
@@ -62,6 +66,10 @@ namespace ET {
             CetRectangleGridOptimizer *Nest2dRectangleGridOptimizer = nullptr;
             CetFreeSpaceEvaluator *Nest2dFreeSpaceEvaluator = nullptr;
             CetRotationUtils *Nest2dRotationUtils = nullptr;
+            CetAutoPairClusterBuilder *Nest2dAutoPairClusterBuilder = nullptr;
+            CetClusterTemplateFillOptimizer *Nest2dClusterTemplateFillOptimizer = nullptr;
+            CetCircleGapFiller *Nest2dCircleGapFiller = nullptr;
+            CetEllipseGapFiller *Nest2dEllipseGapFiller = nullptr;
         protected:
             ET::CORE::CetCoreObject *m_Engine = nullptr;
             //  ET::CORE::CetCoreObject* m_SvgUtils = nullptr;

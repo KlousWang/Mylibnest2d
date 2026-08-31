@@ -24,6 +24,10 @@
 	"Nest2D_RectangleGridOptimizer,Nest2D_RectangleGridOptimizer"
 	,"Nest2D_FreeSpaceEvaluator,Nest2D_FreeSpaceEvaluator"
 	,"Nest2D_RotationUtils,Nest2D_RotationUtils"
+	,"Nest2D_AutoPairClusterBuilder,Nest2D_AutoPairClusterBuilder"
+	,"Nest2D_ClusterTemplateFillOptimizer,Nest2D_ClusterTemplateFillOptimizer"
+	,"Nest2D_CircleGapFiller,Nest2D_CircleGapFiller"
+	,"Nest2D_EllipseGapFiller,Nest2D_EllipseGapFiller"
 	],
   "ComponentClassType": [],
   "LocalObjIns_LocalType": [ 
@@ -46,6 +50,10 @@
 	"l_RectangleGridOptimizer,Nest2D_RectangleGridOptimizer"
 	,"l_FreeSpaceEvaluator,Nest2D_FreeSpaceEvaluator"
 	,"l_RotationUtils,Nest2D_RotationUtils"
+	,"l_AutoPairClusterBuilder,Nest2D_AutoPairClusterBuilder"
+	,"l_ClusterTemplateFillOptimizer,Nest2D_ClusterTemplateFillOptimizer"
+	,"l_CircleGapFiller,Nest2D_CircleGapFiller"
+	,"l_EllipseGapFiller,Nest2D_EllipseGapFiller"
   ],
   "GlobalObjIns_LocalIns": [
 	],

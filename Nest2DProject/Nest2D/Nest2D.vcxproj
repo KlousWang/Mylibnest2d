@@ -197,6 +197,10 @@
     <ClInclude Include="Nest2D_QuarterTurnOptimizer.h" />
     <ClInclude Include="Nest2D_RectangleGridOptimizer.h" />
     <ClInclude Include="Nest2D_FreeSpaceEvaluator.h" />
+    <ClInclude Include="Nest2D_AutoPairClusterBuilder.h" />
+    <ClInclude Include="Nest2D_ClusterTemplateFillOptimizer.h" />
+    <ClInclude Include="Nest2D_CircleGapFiller.h" />
+    <ClInclude Include="Nest2D_EllipseGapFiller.h" />
     <ClInclude Include="Nest2D_RectangleFillClusterBuilder.h" />
     <ClInclude Include="Nest2D_GeometryUtils.h" />
     <ClInclude Include="Nest2D_InvokeFunctor.h" />
@@ -239,6 +243,10 @@
     <ClCompile Include="Nest2D_QuarterTurnOptimizer.cpp" />
     <ClCompile Include="Nest2D_RectangleGridOptimizer.cpp" />
     <ClCompile Include="Nest2D_FreeSpaceEvaluator.cpp" />
+    <ClCompile Include="Nest2D_AutoPairClusterBuilder.cpp" />
+    <ClCompile Include="Nest2D_ClusterTemplateFillOptimizer.cpp" />
+    <ClCompile Include="Nest2D_CircleGapFiller.cpp" />
+    <ClCompile Include="Nest2D_EllipseGapFiller.cpp" />
     <ClCompile Include="Nest2D_RectangleFillClusterBuilder.cpp" />
     <ClCompile Include="Nest2D_GeometryUtils.cpp" />
     <ClCompile Include="Nest2D_InvokeFunctor.cpp" />

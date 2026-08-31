@@ -23,6 +23,10 @@
 #include"Nest2D_RectangleGridOptimizer.h"
 #include"Nest2D_FreeSpaceEvaluator.h"
 #include"Nest2D_RotationUtils.h"
+#include"Nest2D_AutoPairClusterBuilder.h"
+#include"Nest2D_ClusterTemplateFillOptimizer.h"
+#include"Nest2D_CircleGapFiller.h"
+#include"Nest2D_EllipseGapFiller.h"
 namespace ET {
 	namespace NEST2DMANAGERLIB {
 		using namespace ET::CORE;
@@ -55,5 +59,9 @@ namespace ET {
 		 Reg_EtCore_Obj_Str(Nest2D_RectangleGridOptimizer, CetRectangleGridOptimizer)
 		 Reg_EtCore_Obj_Str(Nest2D_FreeSpaceEvaluator, CetFreeSpaceEvaluator)
 		 Reg_EtCore_Obj_Str(Nest2D_RotationUtils, CetRotationUtils)
+			 Reg_EtCore_Obj_Str(Nest2D_AutoPairClusterBuilder, CetAutoPairClusterBuilder)
+				 Reg_EtCore_Obj_Str(Nest2D_ClusterTemplateFillOptimizer, CetClusterTemplateFillOptimizer)
+				 Reg_EtCore_Obj_Str(Nest2D_CircleGapFiller, CetCircleGapFiller)
+				 Reg_EtCore_Obj_Str(Nest2D_EllipseGapFiller, CetEllipseGapFiller)
 	}
 }
