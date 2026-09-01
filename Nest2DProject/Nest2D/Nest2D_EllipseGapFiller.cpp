@@ -253,6 +253,7 @@ int FindAvailableFamilyItem(const std::vector<TetShapeFeature> &AFeatures, const
     }
     return -1;
 }
+/* Legacy geometry helper moved to CetClusterGeometryHelper.
 bool FitsAnyFreeRegion(const TetShapeFeature &AFeature, const std::vector<TetClusterFreeRegion> &AFreeRegions)
 {
     for (const TetClusterFreeRegion &Region : AFreeRegions) {
@@ -263,6 +264,7 @@ bool FitsAnyFreeRegion(const TetShapeFeature &AFeature, const std::vector<TetClu
     }
     return false;
 }
+*/
 std::vector<int> CollectCompatibleFillers(const std::vector<TetShapeFeature> &AFeatures, const TetClusterCandidate &ABaseCandidate, const std::vector<TetClusterFreeRegion> &AFreeRegions, const TetClusterFillSearchConfig &AConfig, bool ADeduplicateFamilies = false)
 {
     std::vector<int> Fillers;
@@ -270,7 +272,7 @@ std::vector<int> CollectCompatibleFillers(const std::vector<TetShapeFeature> &AF
     const double AreaTolerance = std::max(1.0, ABaseCandidate.ProxyArea * CET_CLUSTER_GEOMETRY_RELATIVE_AREA_TOLERANCE);
     for (int Index = 0; Index < static_cast<int>(AFeatures.size()); ++Index) {
         const TetShapeFeature &Feature = AFeatures[Index];
-        if (!ContainsOriginalIndex(ABaseCandidate, Index) && std::isfinite(Feature.Area) && Feature.Area > 0.0 && Feature.Area <= AvailableArea + AreaTolerance && FitsAnyFreeRegion(Feature, AFreeRegions))
+        if (!ContainsOriginalIndex(ABaseCandidate, Index) && std::isfinite(Feature.Area) && Feature.Area > 0.0 && Feature.Area <= AvailableArea + AreaTolerance && CetClusterGeometryHelper::FitsAnyFreeRegion(Feature, AFreeRegions))
             Fillers.push_back(Index);
     }
     std::stable_sort(Fillers.begin(), Fillers.end(), [&](int AFirst, int ASecond) {

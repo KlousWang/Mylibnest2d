@@ -24,8 +24,10 @@ public:
     TetClusterBuildResult BuildTemplateClusters(const CetTNestItemVector&, const std::vector<TetShapeFeature>&, const TetNestOptions&);
 
 protected:
-    void _CollectTemplateShapeIndices(const std::vector<TetShapeFeature>&, std::map<MetShapeType, std::vector<int>>&);
-    void _BuildTemplateCandidates(const CetTNestItemVector&, const std::vector<TetShapeFeature>&, const TetNestOptions&, const std::map<MetShapeType, std::vector<int>>&, std::vector<TetClusterCandidate>&);
+    // Legacy candidate-generation members retained in the implementation comments;
+    // generation now lives in CetTemplateCandidateGenerator.
+    // void _CollectTemplateShapeIndices(const std::vector<TetShapeFeature>&, std::map<MetShapeType, std::vector<int>>&);
+    // void _BuildTemplateCandidates(const CetTNestItemVector&, const std::vector<TetShapeFeature>&, const TetNestOptions&, const std::map<MetShapeType, std::vector<int>>&, std::vector<TetClusterCandidate>&);
     void _BuildFilledTemplateCandidateVariants(const CetTNestItemVector&, const std::vector<TetShapeFeature>&, const TetNestOptions&, const std::vector<TetClusterCandidate>&, std::vector<TetClusterCandidate>&);
     std::vector<TetClusterCandidate> _SelectTemplateCandidates(const CetTNestItemVector&, const std::vector<TetShapeFeature>&, const TetNestOptions&, const std::vector<TetClusterCandidate>&, std::vector<bool>&);
     std::vector<TetClusterCandidate> _SelectAndOptimizeTemplateCandidates(const CetTNestItemVector&, const std::vector<TetShapeFeature>&, const TetNestOptions&, const std::vector<TetClusterCandidate>&, std::vector<bool>&, int);

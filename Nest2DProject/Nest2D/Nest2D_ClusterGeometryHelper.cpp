@@ -11,6 +11,34 @@ namespace ET {
     namespace NEST2DMANAGERLIB {
         CetClusterGeometryHelper::CetClusterGeometryHelper() : CetCoreObject() {}
         CetClusterGeometryHelper::~CetClusterGeometryHelper() {}
+        bool CetClusterGeometryHelper::HasFullRectangleProxy(const TetClusterCandidate &ACandidate)
+        {
+            const double BoundingArea = ACandidate.ClusterWidth * ACandidate.ClusterHeight;
+            const double AreaTolerance = std::max(1.0, BoundingArea * CET_CLUSTER_GEOMETRY_RELATIVE_AREA_TOLERANCE);
+            return ACandidate.Valid && ACandidate.ClusterWidth > 0.0 && ACandidate.ClusterHeight > 0.0 && std::isfinite(BoundingArea) && std::abs(ACandidate.ProxyArea - BoundingArea) <= AreaTolerance;
+        }
+        bool CetClusterGeometryHelper::FitsAnyFreeRegion(const TetShapeFeature &AFeature, const std::vector<TetClusterFreeRegion> &AFreeRegions)
+        {
+            for (const TetClusterFreeRegion &Region : AFreeRegions) {
+                const bool FitsNormal = AFeature.Width <= Region.Width && AFeature.Height <= Region.Height;
+                const bool FitsRotated = AFeature.Height <= Region.Width && AFeature.Width <= Region.Height;
+                if (AFeature.Area <= Region.Area && (FitsNormal || FitsRotated))
+                    return true;
+            }
+            return false;
+        }
+        bool CetClusterGeometryHelper::PreservesBaseTransforms(const TetClusterCandidate &ABaseCandidate, const TetClusterCandidate &ACandidate)
+        {
+            if (ABaseCandidate.Transforms.size() > ACandidate.Transforms.size())
+                return false;
+            for (std::size_t Index = 0; Index < ABaseCandidate.Transforms.size(); ++Index) {
+                const TetItemTransform &Base = ABaseCandidate.Transforms[Index];
+                const TetItemTransform &Current = ACandidate.Transforms[Index];
+                if (Base.OriginalId != Current.OriginalId || std::abs(Base.RelativeX - Current.RelativeX) > CET_RECTANGLE_FILL_POSITION_TOLERANCE || std::abs(Base.RelativeY - Current.RelativeY) > CET_RECTANGLE_FILL_POSITION_TOLERANCE || std::abs(Base.RelativeRotation - Current.RelativeRotation) > CET_CLUSTER_FILL_VARIANT_ROTATION_TOLERANCE)
+                    return false;
+            }
+            return true;
+        }
         CetPath CetClusterGeometryHelper::GetIdentityContour(const CetNestItem &AItem) const
         {
             CetNestItem Temp = AItem;

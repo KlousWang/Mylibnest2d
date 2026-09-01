@@ -59,9 +59,9 @@ namespace ET {
 		 Reg_EtCore_Obj_Str(Nest2D_RectangleGridOptimizer, CetRectangleGridOptimizer)
 		 Reg_EtCore_Obj_Str(Nest2D_FreeSpaceEvaluator, CetFreeSpaceEvaluator)
 		 Reg_EtCore_Obj_Str(Nest2D_RotationUtils, CetRotationUtils)
-			 Reg_EtCore_Obj_Str(Nest2D_AutoPairClusterBuilder, CetAutoPairClusterBuilder)
-				 Reg_EtCore_Obj_Str(Nest2D_ClusterTemplateFillOptimizer, CetClusterTemplateFillOptimizer)
-				 Reg_EtCore_Obj_Str(Nest2D_CircleGapFiller, CetCircleGapFiller)
-				 Reg_EtCore_Obj_Str(Nest2D_EllipseGapFiller, CetEllipseGapFiller)
+		 Reg_EtCore_Obj_Str(Nest2D_AutoPairClusterBuilder, CetAutoPairClusterBuilder)
+		 Reg_EtCore_Obj_Str(Nest2D_ClusterTemplateFillOptimizer, CetClusterTemplateFillOptimizer)
+		 Reg_EtCore_Obj_Str(Nest2D_CircleGapFiller, CetCircleGapFiller)
+		 Reg_EtCore_Obj_Str(Nest2D_EllipseGapFiller, CetEllipseGapFiller)
 	}
 }

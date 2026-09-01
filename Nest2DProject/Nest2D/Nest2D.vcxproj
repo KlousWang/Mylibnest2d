@@ -199,6 +199,9 @@
     <ClInclude Include="Nest2D_FreeSpaceEvaluator.h" />
     <ClInclude Include="Nest2D_AutoPairClusterBuilder.h" />
     <ClInclude Include="Nest2D_ClusterTemplateFillOptimizer.h" />
+    <ClInclude Include="Nest2D_ClusterInventoryRebalancer.h" />
+    <ClInclude Include="Nest2D_ClusterFillSearchEngine.h" />
+    <ClInclude Include="Nest2D_TemplateCandidateGenerator.h" />
     <ClInclude Include="Nest2D_CircleGapFiller.h" />
     <ClInclude Include="Nest2D_EllipseGapFiller.h" />
     <ClInclude Include="Nest2D_RectangleFillClusterBuilder.h" />
@@ -245,6 +248,9 @@
     <ClCompile Include="Nest2D_FreeSpaceEvaluator.cpp" />
     <ClCompile Include="Nest2D_AutoPairClusterBuilder.cpp" />
     <ClCompile Include="Nest2D_ClusterTemplateFillOptimizer.cpp" />
+    <ClCompile Include="Nest2D_ClusterInventoryRebalancer.cpp" />
+    <ClCompile Include="Nest2D_ClusterFillSearchEngine.cpp" />
+    <ClCompile Include="Nest2D_TemplateCandidateGenerator.cpp" />
     <ClCompile Include="Nest2D_CircleGapFiller.cpp" />
     <ClCompile Include="Nest2D_EllipseGapFiller.cpp" />
     <ClCompile Include="Nest2D_RectangleFillClusterBuilder.cpp" />

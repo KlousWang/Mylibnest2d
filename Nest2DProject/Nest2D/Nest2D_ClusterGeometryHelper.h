@@ -38,6 +38,9 @@ namespace ET {
             bool FinalizeCandidate(const CetTNestItemVector &AOriginalItems, const TetNestOptions &AOptions, TetClusterCandidate &ACandidate) const;
             bool FinalizeCandidate(const CetTNestItemVector &AOriginalItems, const TetNestOptions &AOptions, TetClusterCandidate &ACandidate, bool AForceRectangleProxy) const;
             bool FinalizeCandidateInRectangle(const CetTNestItemVector &AOriginalItems, const TetNestOptions &AOptions, TetClusterCandidate &ACandidate, double AEnvelopeWidth, double AEnvelopeHeight) const;
+            static bool HasFullRectangleProxy(const TetClusterCandidate &ACandidate);
+            static bool FitsAnyFreeRegion(const TetShapeFeature &AFeature, const std::vector<TetClusterFreeRegion> &AFreeRegions);
+            static bool PreservesBaseTransforms(const TetClusterCandidate &ABaseCandidate, const TetClusterCandidate &ACandidate);
             bool ValidateCandidateGeometry(const CetTNestItemVector &AOriginalItems, const TetNestOptions &AOptions, const TetClusterCandidate &ACandidate) const;
             bool HasValidTransformSpacing(const CetTNestItemVector &AOriginalItems, const TetNestOptions &AOptions, const std::vector<TetItemTransform> &ATransforms) const;
             bool CanAppendTransformWithSpacing(const CetTNestItemVector &AOriginalItems, const TetNestOptions &AOptions, const std::vector<TetItemTransform> &AExistingTransforms, const TetItemTransform &ANewTransform) const;
