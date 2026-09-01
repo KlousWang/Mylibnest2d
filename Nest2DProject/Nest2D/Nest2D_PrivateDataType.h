@@ -258,6 +258,8 @@ constexpr long long CET_LAST_BIN_MAX_PLACEMENT_CHECKS_PER_ITEM = 30000;
 constexpr long long CET_LAST_BIN_MAX_TOTAL_PLACEMENT_CHECKS = 240000;
 constexpr long long CET_LAST_BIN_MAX_SEARCH_TIME_MS = 15000;
 
+constexpr std::size_t CET_CLUSTER_FILL_TOP_PLACEMENTS_PER_FILLER = 3;
+
 // ============================================================================
 // 第一层级：毫无依赖的底层枚举 (Enums)
 // ============================================================================
@@ -355,6 +357,12 @@ struct TetItemTransform
     double RelativeX = 0.0;
     double RelativeY = 0.0;
     double RelativeRotation = 0.0;
+};
+
+struct TetScoredItemTransform
+{
+    TetItemTransform Transform;
+    double Score = 0.0;
 };
 
 struct TetCustomRotationPose

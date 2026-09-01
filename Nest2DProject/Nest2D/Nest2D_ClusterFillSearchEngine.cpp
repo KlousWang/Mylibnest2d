@@ -342,7 +342,10 @@ namespace ET { namespace NEST2DMANAGERLIB {
     }
     void CetClusterFillSearchEngine::BuildFilledVariantsForBase(const TetClusterFillContext &AContext, const TetClusterFillSearchConfig &AConfig, std::vector<TetClusterCandidate> &AOutVariants, TetClusterFillSearchStats &AStats)
     {
-        const auto &AOriginalItems = AContext.OriginalItems; const auto &AFeatures = AContext.Features; const auto &AOptions = AContext.Options; const auto &ABaseCandidate = AContext.BaseCandidate;
+        const auto &AOriginalItems = AContext.OriginalItems; 
+        const auto &AFeatures = AContext.Features; 
+        const auto &AOptions = AContext.Options; 
+        const auto &ABaseCandidate = AContext.BaseCandidate;
         AOutVariants.clear();
         if (!ABaseCandidate.Valid || ABaseCandidate.OriginalIndices.size() < 2 || ABaseCandidate.ProxyWasteArea <= 0.0)
             return;
@@ -366,13 +369,22 @@ namespace ET { namespace NEST2DMANAGERLIB {
                     if (ContainsOriginalIndex(State.Candidate, FillerIndex))
                         continue;
                     ++AStats.SearchAttempts;
-                    TetClusterCandidate Candidate;
+                   /* TetClusterCandidate Candidate;
                     if (!Builder.TryAppendFillerInFreeRegions({AOriginalItems, AFeatures, AOptions, ABaseCandidate, ABaseCandidate, State.Candidate, &FreeRegions, FillerIndex, ABaseCandidate.ClusterWidth, ABaseCandidate.ClusterHeight}, Candidate))
                         continue;
                     if (!_IsFilledVariantWorthKeeping(ABaseCandidate, Candidate))
                         continue;
                     NextBeam.push_back({std::move(Candidate), State.FillerCount + 1});
-                    ++AStats.GeneratedVariantCount;
+                    ++AStats.GeneratedVariantCount;*/
+                    std::vector<TetClusterCandidate> PlacementCandidates;
+                    Builder.BuildFillerVariantsInFreeRegions({AOriginalItems, AFeatures, AOptions, ABaseCandidate, ABaseCandidate, State.Candidate, &FreeRegions, FillerIndex, ABaseCandidate.ClusterWidth, ABaseCandidate.ClusterHeight}, CET_CLUSTER_FILL_TOP_PLACEMENTS_PER_FILLER, PlacementCandidates);
+                    for (TetClusterCandidate &Candidate : PlacementCandidates) {
+                        if (!_IsFilledVariantWorthKeeping(ABaseCandidate, Candidate)) {
+                            continue;
+                        }
+                        NextBeam.push_back({std::move(Candidate), State.FillerCount + 1});
+                        ++AStats.GeneratedVariantCount;
+                    }
                 }
             }
             if (AConfig.MaxPlacementAttempts > 0 && AStats.SearchAttempts >= AConfig.MaxPlacementAttempts)

@@ -208,7 +208,6 @@
     <ClInclude Include="Nest2D_GeometryUtils.h" />
     <ClInclude Include="Nest2D_InvokeFunctor.h" />
     <ClInclude Include="Nest2D_PolygonBoardRepairer.h" />
-    <ClInclude Include="Nest2D_RectangleClusterBuilder.h" />
     <ClInclude Include="Nest2D_RotationUtils.h" />
     <ClInclude Include="Nest2D_SelfFunction.h" />
     <ClInclude Include="Nest2D_DataConst.h" />

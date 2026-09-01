@@ -159,6 +159,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="..\Nest2D\Nest2D_RectangleClusterBuilder.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="NestGeometryUtils.h" />
     <ClInclude Include="NestProfileInputUtils.h" />
