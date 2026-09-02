@@ -336,6 +336,21 @@ namespace ET {
             AOutCandidate = std::move(Candidate);
             return true;
         }
+        void CetRectangleFillClusterBuilder::BuildFillerVariantsInRectangleEnvelope(const TetRectangleFillRequest &ARequest, std::size_t AMaxCount, std::vector<TetClusterCandidate> &AOutCandidates)
+        {
+            AOutCandidates.clear();
+            if (ARequest.FreeRegions == nullptr || ARequest.FreeRegions->empty() || AMaxCount == 0)
+                return;
+            std::vector<TetScoredItemTransform> Transforms;
+            _CollectFillerTransforms(ARequest, AMaxCount, Transforms);
+            for (const TetScoredItemTransform &Entry : Transforms) {
+                TetClusterCandidate Candidate;
+                if (TryAppendFillerTemplateInRectangleEnvelope(ARequest, Entry.Transform, Candidate)) {
+                    Candidate.Score += Entry.Score;
+                    AOutCandidates.push_back(std::move(Candidate));
+                }
+            }
+        }
         void CetRectangleFillClusterBuilder::BuildFillerVariantsInFreeRegions(const TetRectangleFillRequest &ARequest, std::size_t AMaxCount, std::vector<TetClusterCandidate> &AOutCandidates)
         {
             AOutCandidates.clear();
@@ -655,9 +670,17 @@ namespace ET {
             CenterY *= 0.25;
             const auto AppendCenterProbe = [&](double AX, double AY) { _AppendProbePosition(AOutPositions, AX - ACtx.FillerWidth * 0.5, AY - ACtx.FillerHeight * 0.5, ACtx.MaxX, ACtx.MaxY); };
             AppendCenterProbe(CenterX, CenterY);
-            const double Offset = std::min(MinimumRadius * 0.12, std::min(ACtx.FillerWidth, ACtx.FillerHeight) * 0.35);
-            for (const auto &Direction : {std::pair<double, double>{1.0, 0.0}, std::pair<double, double>{-1.0, 0.0}, std::pair<double, double>{0.0, 1.0}, std::pair<double, double>{0.0, -1.0}}) {
-                AppendCenterProbe(CenterX + Direction.first * Offset, CenterY + Direction.second * Offset);
+            // The center is only one seed.  For a four-circle pocket the
+            // useful two-piece layouts are usually offset from the center;
+            // emit several progressively larger offsets so the exact contour
+            // check can select the largest legal one.
+            const double BaseOffset = std::min(MinimumRadius * 0.12, std::min(ACtx.FillerWidth, ACtx.FillerHeight) * 0.35);
+            const std::vector<double> OffsetScales{1.0, 2.0, 3.0, 4.0};
+            for (double Scale : OffsetScales) {
+                const double Offset = BaseOffset * Scale;
+                for (const auto &Direction : {std::pair<double, double>{1.0, 0.0}, std::pair<double, double>{-1.0, 0.0}, std::pair<double, double>{0.0, 1.0}, std::pair<double, double>{0.0, -1.0}, std::pair<double, double>{0.70710678118, 0.70710678118}, std::pair<double, double>{-0.70710678118, 0.70710678118}, std::pair<double, double>{0.70710678118, -0.70710678118}, std::pair<double, double>{-0.70710678118, -0.70710678118}}) {
+                    AppendCenterProbe(CenterX + Direction.first * Offset, CenterY + Direction.second * Offset);
+                }
             }
         }
         void CetRectangleFillClusterBuilder::_BuildEllipseProbePositions(const TetProbeContext &ACtx, std::vector<std::pair<double, double>> &AOutPositions) const

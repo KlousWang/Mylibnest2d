@@ -30,6 +30,7 @@ namespace ET {
             bool TryAppendFillerInFreeRegions(const TetRectangleFillRequest &ARequest, TetClusterCandidate &AOutCandidate);
             bool TryAppendFillerInRectangleEnvelope(const TetRectangleFillRequest &ARequest, TetClusterCandidate &AOutCandidate);
             bool TryAppendFillerTemplateInRectangleEnvelope(const TetRectangleFillRequest &ARequest, const TetItemTransform &ATemplateTransform, TetClusterCandidate &AOutCandidate);
+            void BuildFillerVariantsInRectangleEnvelope(const TetRectangleFillRequest &ARequest, std::size_t AMaxCount, std::vector<TetClusterCandidate> &AOutCandidates);
             void BuildFillerVariantsInFreeRegions(const TetRectangleFillRequest &ARequest, std::size_t AMaxCount, std::vector<TetClusterCandidate> &AOutCandidates);
         protected:
             void _CollectFillerTransforms(const TetRectangleFillRequest &ARequest, std::size_t AMaxCount, std::vector<TetScoredItemTransform> &AOutTransforms) const;

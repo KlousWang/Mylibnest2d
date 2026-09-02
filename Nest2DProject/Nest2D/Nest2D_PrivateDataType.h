@@ -40,10 +40,10 @@ constexpr std::size_t CET_CIRCLE_FILL_SPECIALIZED_PROBE_THRESHOLD = 36;
 constexpr std::size_t CET_CIRCLE_GAP_TEMPLATE_MAX_COPIES = 6;
 constexpr std::size_t CET_CIRCLE_GAP_FILL_MAX_TEMPLATE_DEPTH = 32;
 constexpr std::size_t CET_CIRCLE_GAP_MAX_NEIGHBORS = 8;
-constexpr std::size_t CET_CIRCLE_GAP_SEARCH_BEAM_WIDTH = 3;
-constexpr std::size_t CET_CIRCLE_GAP_SEARCH_MAX_CANDIDATES = 8;
-constexpr std::size_t CET_CIRCLE_GAP_SEARCH_MAX_ATTEMPTS = 64;
-constexpr long long CET_CIRCLE_GAP_SEARCH_MAX_TIME_MS = 80;
+constexpr std::size_t CET_CIRCLE_GAP_SEARCH_BEAM_WIDTH = 6;
+constexpr std::size_t CET_CIRCLE_GAP_SEARCH_MAX_CANDIDATES = 12;
+constexpr std::size_t CET_CIRCLE_GAP_SEARCH_MAX_ATTEMPTS = 128;
+constexpr long long CET_CIRCLE_GAP_SEARCH_MAX_TIME_MS = 120;
 constexpr long long CET_CIRCLE_GAP_TOTAL_SEARCH_MAX_TIME_MS = 500;
 // A time-limited search still samples this many distinct shape families so a
 // slow failed contour check cannot starve all smaller compatible parts.
@@ -53,7 +53,7 @@ constexpr std::size_t CET_CIRCLE_GAP_SEARCH_MIN_FAMILY_ATTEMPTS = 3;
 constexpr double CET_CIRCLE_GAP_INTERIOR_WINDOW_SPAN_RATIO = 0.5;
 // Keep contour-contact probing bounded when a dense circular frame exposes an
 // internal free region that generic pair probes do not reach.
-constexpr std::size_t CET_CIRCLE_GAP_FREE_REGION_PROBE_COUNT = 16;
+constexpr std::size_t CET_CIRCLE_GAP_FREE_REGION_PROBE_COUNT = 32;
 // Generic free-region templates complement specialized circle and ellipse
 // searches. Keep the classification pass locally bounded for large orders.
 constexpr std::size_t CET_FREE_REGION_TEMPLATE_MAX_WINDOWS = 12;

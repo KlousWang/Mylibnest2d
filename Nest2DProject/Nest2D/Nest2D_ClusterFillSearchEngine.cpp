@@ -461,7 +461,10 @@ namespace ET { namespace NEST2DMANAGERLIB {
         std::vector<TetClusterFillSearchState> Beam = AOutStates;
         Beam.push_back(Initial);
         _DeduplicateFilledStates(Beam);
-        _TrimEnvelopeBeam(Beam, AConfig.BeamWidth, AFeatures, ABaseCandidate.SkeletonChildCount, IsEllipseBase);
+        // Preserve higher-filler states for both circle and ellipse envelopes;
+        // a slightly lower current score can still leave a better pocket for
+        // the next generic filler.
+        _TrimEnvelopeBeam(Beam, AConfig.BeamWidth, AFeatures, ABaseCandidate.SkeletonChildCount, true);
         const std::size_t MaxFillers = ABaseCandidate.Transforms.size() + AConfig.MaxDepth + CET_ELLIPSE_GAP_FILL_MAX_COMPOSITE_DEPTH;
         AOutStates.insert(AOutStates.end(), Beam.begin(), Beam.end());
         for (std::size_t Depth = 0; Depth < AConfig.MaxDepth && !Beam.empty(); ++Depth) {
@@ -485,23 +488,24 @@ namespace ET { namespace NEST2DMANAGERLIB {
                         continue;
                     ++LocalAttempts;
                     ++AStats.EnvelopeSearchAttempts;
-                    TetClusterCandidate Candidate;
-                    if (!Builder.TryAppendFillerInRectangleEnvelope({AOriginalItems, AFeatures, AOptions, ABaseCandidate, AEnvelopeCandidate, State.Candidate, &StateFreeRegions, Filler, AEnvelopeCandidate.ClusterWidth, AEnvelopeCandidate.ClusterHeight}, Candidate))
-                        continue;
-                    std::size_t Copies = 0;
-                    TetClusterCandidate Copied;
-                    const std::size_t Remaining = MaxFillers > State.FillerCount + 1 ? MaxFillers - State.FillerCount - 1 : 0;
-                    const TetClusterFillContext FillContext = AContext;
-                    if (IsCircleBase && ET::NEST2DMANAGERLIB::_GetNest2DInvokeFunctor()->Nest2dCircleGapFiller->CopyCircleGapTemplate(FillContext, Anchors, Candidate, Remaining, Copied, Copies))
-                        Candidate = std::move(Copied);
-                    if (!CetClusterGeometryHelper::PreservesBaseTransforms(ABaseCandidate, Candidate) || !_IsEnvelopeFillStateWorthExpanding(AEnvelopeCandidate, Candidate))
-                        continue;
-                    Next.push_back({std::move(Candidate), State.FillerCount + 1 + Copies});
-                    ++AStats.EnvelopeGeneratedVariantCount;
+                    std::vector<TetClusterCandidate> PlacementCandidates;
+                    Builder.BuildFillerVariantsInRectangleEnvelope({AOriginalItems, AFeatures, AOptions, ABaseCandidate, AEnvelopeCandidate, State.Candidate, &StateFreeRegions, Filler, AEnvelopeCandidate.ClusterWidth, AEnvelopeCandidate.ClusterHeight}, CET_CLUSTER_ENVELOPE_FILL_BEAM_WIDTH, PlacementCandidates);
+                    for (TetClusterCandidate &Candidate : PlacementCandidates) {
+                        std::size_t Copies = 0;
+                        TetClusterCandidate Copied;
+                        const std::size_t Remaining = MaxFillers > State.FillerCount + 1 ? MaxFillers - State.FillerCount - 1 : 0;
+                        const TetClusterFillContext FillContext = AContext;
+                        if (IsCircleBase && ET::NEST2DMANAGERLIB::_GetNest2DInvokeFunctor()->Nest2dCircleGapFiller->CopyCircleGapTemplate(FillContext, Anchors, Candidate, Remaining, Copied, Copies))
+                            Candidate = std::move(Copied);
+                        if (!CetClusterGeometryHelper::PreservesBaseTransforms(ABaseCandidate, Candidate) || !_IsEnvelopeFillStateWorthExpanding(AEnvelopeCandidate, Candidate))
+                            continue;
+                        Next.push_back({std::move(Candidate), State.FillerCount + 1 + Copies});
+                        ++AStats.EnvelopeGeneratedVariantCount;
+                    }
                 }
             }
             _DeduplicateFilledStates(Next);
-            _TrimEnvelopeBeam(Next, AConfig.BeamWidth, AFeatures, ABaseCandidate.SkeletonChildCount, IsEllipseBase);
+            _TrimEnvelopeBeam(Next, AConfig.BeamWidth, AFeatures, ABaseCandidate.SkeletonChildCount, true);
             AOutStates.insert(AOutStates.end(), Next.begin(), Next.end());
             Beam = std::move(Next);
             AStats.EnvelopeMaxDepthReached = std::max(AStats.EnvelopeMaxDepthReached, Depth + 1);

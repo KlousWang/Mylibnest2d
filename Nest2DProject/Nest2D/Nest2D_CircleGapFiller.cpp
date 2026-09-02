@@ -554,6 +554,8 @@ bool IsCircleGapStateBetter(const TetClusterFillSearchState &AFirst, const TetCl
                 return FirstIsCircle;
         }
     }
+    if (AFirst.FillerCount != ASecond.FillerCount)
+        return AFirst.FillerCount > ASecond.FillerCount;
     if (AFirst.FillerCount > 0 && ASecond.FillerCount > 0 && std::abs(AFirst.Candidate.Score - ASecond.Candidate.Score) > 1e-9) {
         return AFirst.Candidate.Score > ASecond.Candidate.Score;
     }
@@ -617,21 +619,25 @@ bool SearchCircleGapTemplate(const TetClusterFillContext &AContext, const TetCir
                     break;
                 ++Attempts;
                 TriedFamilies.insert(Family);
-                TetClusterCandidate Candidate;
-                if (!Builder.TryAppendFillerInRectangleEnvelope({AOriginalItems, AFeatures, AOptions, ABaseCandidate, AEnvelopeCandidate, State.Candidate, &LocalRegions, Index, AEnvelopeCandidate.ClusterWidth, AEnvelopeCandidate.ClusterHeight}, Candidate)) {
+                std::vector<TetClusterCandidate> PlacementCandidates;
+                const TetRectangleFillRequest FillRequest{AOriginalItems, AFeatures, AOptions, ABaseCandidate, AEnvelopeCandidate, State.Candidate, &LocalRegions, Index, AEnvelopeCandidate.ClusterWidth, AEnvelopeCandidate.ClusterHeight};
+                Builder.BuildFillerVariantsInRectangleEnvelope(FillRequest, CET_CIRCLE_GAP_SEARCH_BEAM_WIDTH, PlacementCandidates);
+                if (PlacementCandidates.empty()) {
                     ++ExactRejectCount;
                     continue;
                 }
-                if (!AreLocalGapFillersInsideBaseOutline(AOriginalItems, ABaseCandidate, Candidate)) {
-                    ++ExactRejectCount;
-                    continue;
-                }
-                TetClusterFillSearchState Next{std::move(Candidate), State.FillerCount + 1};
                 const char *Shape = AFeatures[Index].ShapeType == MetShapeType::CircleLike ? "Circle" : (AFeatures[Index].ShapeType == MetShapeType::EllipseLike ? "Ellipse" : (AFeatures[Index].ShapeType == MetShapeType::TriangleLike ? "Triangle" : "Other"));
-                std::cout << "[GAP][PLACE] Class=" << AWindow.ClassKey << " Id=" << Index << " Shape=" << Shape << " Area=" << AFeatures[Index].Area << " Depth=" << Next.FillerCount << std::endl;
-                if (IsCircleGapStateBetter(Next, Best, AFeatures))
-                    Best = Next;
-                NextBeam.push_back(std::move(Next));
+                for (TetClusterCandidate &Candidate : PlacementCandidates) {
+                    if (!AreLocalGapFillersInsideBaseOutline(AOriginalItems, ABaseCandidate, Candidate)) {
+                        ++ExactRejectCount;
+                        continue;
+                    }
+                    TetClusterFillSearchState Next{std::move(Candidate), State.FillerCount + 1};
+                    std::cout << "[GAP][PLACE] Class=" << AWindow.ClassKey << " Id=" << Index << " Shape=" << Shape << " Area=" << AFeatures[Index].Area << " Depth=" << Next.FillerCount << std::endl;
+                    if (IsCircleGapStateBetter(Next, Best, AFeatures))
+                        Best = Next;
+                    NextBeam.push_back(std::move(Next));
+                }
             }
         }
         TrimCircleGapBeam(NextBeam, AFeatures);
